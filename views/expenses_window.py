@@ -216,7 +216,7 @@ class ExpensesWindow:
         
         try:
             amount = float(self.amount_var.get())
-            if not validate_positive(amount):
+            if not validate_positive(amount, "Monto"):
                 messagebox.showerror("Error", "El monto debe ser mayor a 0")
                 return
         except ValueError:
@@ -311,7 +311,7 @@ class ExpensesWindow:
             
             try:
                 amount = float(amount_var.get())
-                if not validate_positive(amount):
+                if not validate_positive(amount, "Monto"):
                     messagebox.showerror("Error", "El monto debe ser mayor a 0")
                     return
             except ValueError:

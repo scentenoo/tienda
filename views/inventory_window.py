@@ -7,111 +7,130 @@ class InventoryWindow:
         self.parent = parent
         self.user = user
         
-        # Crear ventana
+        # Configuración de ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Gestión de Inventario")
-        self.window.geometry("1000x700")
-        self.window.transient(parent)
-        
-        # Centrar ventana
+        self.window.geometry("1100x750")  # Tamaño aumentado
+        self.window.resizable(True, True)
         self.center_window()
         
         # Variables
         self.products = []
         self.selected_product = None
         
-        # Configurar UI
+        # UI
         self.setup_ui()
-        
-        # Cargar productos
         self.refresh_products()
-        
-        # Configurar cierre
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
-    
+
     def center_window(self):
         """Centra la ventana en la pantalla"""
         self.window.update_idletasks()
-        x = (self.window.winfo_screenwidth() - 1000) // 2
-        y = (self.window.winfo_screenheight() - 700) // 2
-        self.window.geometry(f"1000x700+{x}+{y}")
-    
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        x = (self.window.winfo_screenwidth() - width) // 2
+        y = (self.window.winfo_screenheight() - height) // 2
+        self.window.geometry(f"{width}x{height}+{x}+{y}")
+
     def setup_ui(self):
-        """Configura la interfaz de usuario"""
-        # Frame principal
-        main_frame = ttk.Frame(self.window, padding="15")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        """Configuración completa de la UI con los problemas corregidos"""
+        # Frame principal con scroll
+        main_frame = ttk.Frame(self.window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=25, pady=15)  # Reducido pady superior
+        
+        # Configuración de estilos (sin cambios)
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        bg_color = '#f8f9fa'
+        dark_blue = '#2c3e50'
+        accent_color = '#2980b9'
+        
+        self.style.configure('TFrame', background=bg_color)
+        self.style.configure('Header.TLabel', font=('Helvetica', 16, 'bold'), foreground=dark_blue)
+        self.style.configure('Accent.TButton', foreground='white', background=accent_color, padding=8)
         
         # Título
-        title_label = ttk.Label(main_frame, 
-                               text="📦 GESTIÓN DE INVENTARIO", 
-                               font=("Arial", 16, "bold"))
-        title_label.pack(pady=(0, 20))
-        
-        # Frame superior con controles
+        title_frame = ttk.Frame(main_frame)
+        title_frame.pack(fill=tk.X, pady=(0, 15))  # Reducido espacio bajo título
+        ttk.Label(title_frame, text="📦 GESTIÓN DE INVENTARIO", style='Header.TLabel').pack()
+
+        # Controles superiores
         controls_frame = ttk.Frame(main_frame)
         controls_frame.pack(fill=tk.X, pady=(0, 15))
         
-        # Botones de acción
-        ttk.Button(controls_frame, text="➕ Nuevo Producto", 
-                  command=self.add_product).pack(side=tk.LEFT, padx=(0, 10))
+        # Botones de acción (quitado el de ayuda que causaba error)
+        actions = [
+            ("➕ NUEVO", self.add_product, 'Accent.TButton'),
+            ("✏️ EDITAR", self.edit_product),
+            ("🗑️ ELIMINAR", self.delete_product),
+            ("🔄 ACTUALIZAR", self.refresh_products)
+        ]
         
-        ttk.Button(controls_frame, text="✏️ Editar", 
-                  command=self.edit_product).pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Button(controls_frame, text="🗑️ Eliminar", 
-                  command=self.delete_product).pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Button(controls_frame, text="🔄 Actualizar", 
-                  command=self.refresh_products).pack(side=tk.LEFT, padx=(0, 20))
-        
+        for text, cmd, *style in actions:
+            ttk.Button(
+                controls_frame,
+                text=text,
+                command=cmd,
+                style=style[0] if style else 'TButton'
+            ).pack(side=tk.LEFT, padx=5)
+
         # Búsqueda
-        ttk.Label(controls_frame, text="Buscar:").pack(side=tk.LEFT, padx=(20, 5))
+        search_frame = ttk.Frame(controls_frame)
+        search_frame.pack(side=tk.RIGHT)
+        ttk.Label(search_frame, text="🔍").pack(side=tk.LEFT)
         self.search_var = tk.StringVar()
+        ttk.Entry(search_frame, textvariable=self.search_var, width=30).pack(side=tk.LEFT, padx=5)
         self.search_var.trace('w', self.on_search)
-        search_entry = ttk.Entry(controls_frame, textvariable=self.search_var, width=25)
-        search_entry.pack(side=tk.LEFT, padx=(0, 10))
-        
-        # Frame para la tabla
+
+        # Tabla de productos
         table_frame = ttk.Frame(main_frame)
-        table_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        table_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Crear Treeview
         columns = ("ID", "Producto", "Precio", "Stock", "Valor Total")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=20)
+        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=16)
         
-        # Configurar columnas
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("Producto", text="Nombre del Producto")
-        self.tree.heading("Precio", text="Precio Unit.")
-        self.tree.heading("Stock", text="Stock")
-        self.tree.heading("Valor Total", text="Valor Total")
+        # Config columnas
+        col_config = [
+            ("ID", 70, "center"),
+            ("Producto", 350, "w"),
+            ("Precio", 120, "e"),
+            ("Stock", 100, "center"),
+            ("Valor Total", 150, "e")
+        ]
         
-        self.tree.column("ID", width=60, anchor="center")
-        self.tree.column("Producto", width=300, anchor="w")
-        self.tree.column("Precio", width=120, anchor="e")
-        self.tree.column("Stock", width=100, anchor="center")
-        self.tree.column("Valor Total", width=120, anchor="e")
-        
+        for col, width, anchor in col_config:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=width, anchor=anchor)
+
         # Scrollbars
-        v_scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
-        h_scrollbar = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
-        # Empaquetar tabla y scrollbars
-        self.tree.pack(side="left", fill="both", expand=True)
-        v_scrollbar.pack(side="right", fill="y")
-        h_scrollbar.pack(side="bottom", fill="x")
-        
-        # Bind selección
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        table_frame.grid_rowconfigure(0, weight=1)
+        table_frame.grid_columnconfigure(0, weight=1)
+
+        # Eventos
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
         self.tree.bind("<Double-1>", lambda e: self.edit_product())
+
+        # SECCIÓN ESTADÍSTICAS (reposicionada más arriba)
+        stats_frame = ttk.LabelFrame(
+            main_frame,
+            text="📊 RESUMEN",
+            padding=(15, 10)
+        )
+        stats_frame.pack(fill=tk.X, pady=(15, 5))  # Menos espacio inferior
         
-        # Frame inferior con estadísticas
-        stats_frame = ttk.LabelFrame(main_frame, text="Estadísticas", padding="10")
-        stats_frame.pack(fill=tk.X, pady=(15, 0))
-        
-        self.stats_label = ttk.Label(stats_frame, text="", font=("Arial", 10))
+        self.stats_label = ttk.Label(
+            stats_frame,
+            text="Productos: 0 | Valor total: $0.00 | Stock bajo: 0",
+            font=('Helvetica', 10, 'bold'),
+            foreground=dark_blue
+        )
         self.stats_label.pack()
     
     def refresh_products(self):

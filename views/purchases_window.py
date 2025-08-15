@@ -12,102 +12,192 @@ class PurchasesWindow:
         self.parent = parent
         self.user = user
         
-        # Verificar permisos
+        # Verificar permisos PRIMERO
         if self.user.role != 'admin':
             messagebox.showerror("Acceso Denegado", 
-                               "Solo los administradores pueden acceder a este módulo.")
+                            "Solo los administradores pueden acceder a este módulo.")
             return
         
-        # Crear ventana
-        self.window = tk.Toplevel(parent)
-        self.window.title("Gestión de Compras")
-        self.window.geometry("1000x700")
-        self.window.resizable(True, True)
+        # Inicializar atributos esenciales ANTES de cualquier uso
+        self.colors = {
+            'primary': '#2c3e50',
+            'secondary': '#3498db',
+            'success': '#27ae60',
+            'warning': '#f39c12',
+            'danger': '#e74c3c',
+            'light': '#ecf0f1',
+            'dark': '#34495e',
+            'background': '#f8f9fa'
+        }
         
-        # Variables
+        # Variables de datos
         self.products = []
         self.purchases = []
-        self.current_batch = []  # Para manejar lotes de compras
+        self.current_batch = []
         
+        # Crear ventana DESPUÉS de inicializar atributos
+        self.window = tk.Toplevel(parent)
+        self.window.title("Gestión de Compras")
+        self.window.geometry("1100x750")
+        self.window.resizable(True, True)
+        
+        # Configurar estilos (usa self.colors)
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        self.configure_styles()  # Este método usa self.colors
+        
+        # Finalmente configurar la UI
         self.setup_ui()
         self.load_data()
-    
+
+    def configure_styles(self):
+        """Configura los estilos usando self.colors"""
+        try:
+            self.style.configure('TFrame', background=self.colors['background'])
+            self.style.configure('TButton', 
+                            font=('Arial', 10), 
+                            padding=8,
+                            background=self.colors['secondary'],
+                            foreground='white')
+            """Configura los estilos para la interfaz"""
+            self.style.configure('TFrame', background=self.colors['background'])
+            self.style.configure('TButton', 
+                            font=('Arial', 10), 
+                            padding=8,
+                            background=self.colors['secondary'],
+                            foreground='white')
+            self.style.map('TButton',
+                        background=[('active', self.colors['primary'])])
+            self.style.configure('Header.TLabel', 
+                            font=('Arial', 12, 'bold'), 
+                            foreground=self.colors['dark'])
+            self.style.configure('TNotebook', background=self.colors['background'])
+            self.style.configure('TNotebook.Tab', 
+                            font=('Arial', 10, 'bold'), 
+                            padding=[15, 5],
+                            background=self.colors['light'],
+                            foreground=self.colors['dark'])
+            self.style.map('TNotebook.Tab',
+                        background=[('selected', self.colors['primary'])],
+                        foreground=[('selected', 'white')])
+        except AttributeError as e:
+            messagebox.showerror("Error de Configuración", 
+                            f"No se pudo configurar estilos: {str(e)}")
+            # Valores por defecto si colors no está disponible
+            self.style.configure('TFrame', background='#f0f0f0')
+            self.style.configure('TButton', background='#cccccc')
+
     def setup_ui(self):
-        """Configura la interfaz de usuario"""
+        """Configura la interfaz principal"""
+        # Frame principal con fondo claro
+        main_frame = ttk.Frame(self.window, style='TFrame')
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Header con título
+        header = tk.Frame(main_frame, bg=self.colors['primary'], height=60)
+        header.pack(fill=tk.X, pady=(0, 15))
+        
+        ttk.Label(header, 
+                text="Gestión de Compras", 
+                font=("Arial", 18, "bold"),
+                foreground="white",
+                background=self.colors['primary']).pack(side=tk.LEFT, padx=20)
+        
         # Notebook para pestañas
-        notebook = ttk.Notebook(self.window)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        notebook = ttk.Notebook(main_frame)
+        notebook.pack(fill=tk.BOTH, expand=True)
         
         # Pestaña nueva compra
-        self.new_purchase_frame = ttk.Frame(notebook)
-        notebook.add(self.new_purchase_frame, text="Nueva Compra")
+        self.new_purchase_frame = ttk.Frame(notebook, style='TFrame')
+        notebook.add(self.new_purchase_frame, text="➕ Nueva Compra")
         self.setup_new_purchase_ui()
         
         # Pestaña lote actual
-        self.batch_frame = ttk.Frame(notebook)
-        notebook.add(self.batch_frame, text="Lote Actual")
+        self.batch_frame = ttk.Frame(notebook, style='TFrame')
+        notebook.add(self.batch_frame, text="📦 Lote Actual")
         self.setup_batch_ui()
         
         # Pestaña lista de compras
-        self.purchases_list_frame = ttk.Frame(notebook)
-        notebook.add(self.purchases_list_frame, text="Lista de Compras")
+        self.purchases_list_frame = ttk.Frame(notebook, style='TFrame')
+        notebook.add(self.purchases_list_frame, text="📋 Historial")
         self.setup_purchases_list_ui()
 
-        # Añadir botones para editar y eliminar
-        button_frame = ttk.Frame(self.window)
-        button_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        ttk.Button(button_frame, text="Editar Compra", command=self.edit_purchase).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Eliminar Compra", command=self.delete_purchase).pack(side=tk.LEFT, padx=5)
     
     def setup_new_purchase_ui(self):
         """Configura la UI para nueva compra"""
-        main_frame = ttk.Frame(self.new_purchase_frame, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame = ttk.Frame(self.new_purchase_frame, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Título
-        title_label = ttk.Label(main_frame, text="Registrar Nueva Compra", 
-                               font=("Arial", 14, "bold"))
-        title_label.grid(row=0, column=0, columnspan=4, pady=(0, 20))
+        # Frame de formulario con borde
+        form_frame = ttk.LabelFrame(main_frame, text="Datos de Compra", padding=15)
+        form_frame.pack(fill=tk.X, pady=10)
+        
+        # Grid layout para controles
+        form_frame.columnconfigure(1, weight=1)
+        form_frame.columnconfigure(3, weight=1)
         
         # Producto
-        ttk.Label(main_frame, text="Producto:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(form_frame, text="Producto:", font=('Arial', 10, 'bold')).grid(
+            row=0, column=0, sticky=tk.W, pady=8)
+        
         self.product_var = tk.StringVar()
-        self.product_combo = ttk.Combobox(main_frame, textvariable=self.product_var, 
-                                         width=25)
-        self.product_combo.grid(row=1, column=1, pady=5, padx=(5, 20))
+        self.product_combo = ttk.Combobox(
+            form_frame, 
+            textvariable=self.product_var, 
+            font=('Arial', 10),
+            state='readonly',
+            width=30)
+        self.product_combo.grid(row=0, column=1, pady=8, padx=5, sticky=tk.EW)
         
-        # Botón agregar producto
-        add_product_btn = ttk.Button(main_frame, text="Nuevo Producto", 
-                                    command=self.add_new_product)
-        add_product_btn.grid(row=1, column=2, pady=5)
+        add_product_btn = ttk.Button(
+            form_frame, 
+            text="➕ Nuevo Producto", 
+            command=self.add_new_product,
+            style='TButton')
+        add_product_btn.grid(row=0, column=2, columnspan=2, pady=8, padx=10, sticky=tk.E)
         
-        # Cantidad
-        ttk.Label(main_frame, text="Cantidad:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        # Cantidad y Precio
+        ttk.Label(form_frame, text="Cantidad:", font=('Arial', 10, 'bold')).grid(
+            row=1, column=0, sticky=tk.W, pady=8)
+        
         self.quantity_var = tk.StringVar()
-        quantity_entry = ttk.Entry(main_frame, textvariable=self.quantity_var, width=15)
-        quantity_entry.grid(row=2, column=1, pady=5, padx=(5, 0), sticky=tk.W)
+        ttk.Entry(form_frame, 
+                textvariable=self.quantity_var, 
+                font=('Arial', 10),
+                width=15).grid(row=1, column=1, pady=8, padx=5, sticky=tk.W)
         
-        # Precio de compra
-        ttk.Label(main_frame, text="Precio de Compra:").grid(row=2, column=2, sticky=tk.W, pady=5)
+        ttk.Label(form_frame, text="Precio Unitario:", font=('Arial', 10, 'bold')).grid(
+            row=1, column=2, sticky=tk.W, pady=8)
+        
         self.unit_price_var = tk.StringVar()
-        unit_price_entry = ttk.Entry(main_frame, textvariable=self.unit_price_var, width=15)
-        unit_price_entry.grid(row=2, column=3, pady=5)
+        ttk.Entry(form_frame, 
+                textvariable=self.unit_price_var, 
+                font=('Arial', 10),
+                width=15).grid(row=1, column=3, pady=8, padx=5, sticky=tk.W)
         
-        # Número de factura
-        ttk.Label(main_frame, text="No. Factura:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        # Factura
+        ttk.Label(form_frame, text="N° Factura:", font=('Arial', 10, 'bold')).grid(
+            row=2, column=0, sticky=tk.W, pady=8)
+        
         self.invoice_var = tk.StringVar()
-        invoice_entry = ttk.Entry(main_frame, textvariable=self.invoice_var, width=25)
-        invoice_entry.grid(row=3, column=1, pady=5, padx=(5, 0))
+        ttk.Entry(form_frame, 
+                textvariable=self.invoice_var, 
+                font=('Arial', 10),
+                width=30).grid(row=2, column=1, columnspan=3, pady=8, padx=5, sticky=tk.W)
         
         # Botones
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=4, column=0, columnspan=4, pady=20)
+        button_frame.pack(fill=tk.X, pady=20)
         
-        ttk.Button(button_frame, text="Agregar al Lote", 
-                  command=self.add_to_batch).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Limpiar", 
-                  command=self.clear_form).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, 
+                text="🛒 Agregar al Lote", 
+                command=self.add_to_batch,
+                style='TButton').pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(button_frame, 
+                text="🧹 Limpiar Formulario", 
+                command=self.clear_form,
+                style='TButton').pack(side=tk.LEFT, padx=5)
         
     def edit_purchase(self):
         """Edita la compra seleccionada"""
@@ -184,71 +274,89 @@ class PurchasesWindow:
     
     def setup_batch_ui(self):
         """Configura la UI para el lote actual"""
-        main_frame = ttk.Frame(self.batch_frame, padding="10")
+        main_frame = ttk.Frame(self.batch_frame, padding="15")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Título
-        title_label = ttk.Label(main_frame, text="Lote de Compras Actual", 
-                               font=("Arial", 14, "bold"))
-        title_label.pack(pady=(0, 10))
+        # Frame de información
+        info_frame = ttk.LabelFrame(main_frame, text="Información del Lote", padding=10)
+        info_frame.pack(fill=tk.X, pady=(0, 15))
         
-        # Frame para información del lote
-        info_frame = ttk.LabelFrame(main_frame, text="Información del Lote", padding="10")
-        info_frame.pack(fill=tk.X, pady=(0, 10))
+        # Grid para controles de información
+        info_frame.columnconfigure(1, weight=1)
+        info_frame.columnconfigure(3, weight=1)
         
-        # Flete total
-        ttk.Label(info_frame, text="Flete Total:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        # Flete
+        ttk.Label(info_frame, text="Flete Total:", font=('Arial', 10, 'bold')).grid(
+            row=0, column=0, sticky=tk.W, pady=5)
+        
         self.freight_var = tk.StringVar(value="0")
-        freight_entry = ttk.Entry(info_frame, textvariable=self.freight_var, width=15)
-        freight_entry.grid(row=0, column=1, pady=5, padx=(5, 20))
+        ttk.Entry(info_frame, 
+                textvariable=self.freight_var, 
+                font=('Arial', 10),
+                width=15).grid(row=0, column=1, pady=5, padx=5, sticky=tk.W)
         
         # IVA
-        ttk.Label(info_frame, text="IVA (%):").grid(row=0, column=2, sticky=tk.W, pady=5)
+        ttk.Label(info_frame, text="IVA Total:", font=('Arial', 10, 'bold')).grid(
+            row=0, column=2, sticky=tk.W, pady=5)
+        
         self.tax_var = tk.StringVar(value="0")
-        tax_entry = ttk.Entry(info_frame, textvariable=self.tax_var, width=15)
-        tax_entry.grid(row=0, column=3, pady=5)
+        ttk.Entry(info_frame, 
+                textvariable=self.tax_var, 
+                font=('Arial', 10),
+                width=15).grid(row=0, column=3, pady=5, padx=5, sticky=tk.W)
         
-        # Treeview para mostrar artículos del lote
+        # Treeview para artículos del lote
+        tree_frame = ttk.Frame(main_frame)
+        tree_frame.pack(fill=tk.BOTH, expand=True)
+        
         columns = ('Producto', 'Cantidad', 'Precio Unit.', 'Subtotal')
-        self.batch_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=10)
+        self.batch_tree = ttk.Treeview(
+            tree_frame, 
+            columns=columns, 
+            show='headings',
+            style='Treeview')
         
+        # Configurar columnas
+        col_widths = {'Producto': 250, 'Cantidad': 100, 'Precio Unit.': 120, 'Subtotal': 120}
         for col in columns:
             self.batch_tree.heading(col, text=col)
-            if col == 'Cantidad':
-                self.batch_tree.column(col, width=100)
-            elif col in ['Precio Unit.', 'Subtotal']:
-                self.batch_tree.column(col, width=120)
-            else:
-                self.batch_tree.column(col, width=200)
+            self.batch_tree.column(col, width=col_widths.get(col, 100))
         
-        # Scrollbar para el treeview
-        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.batch_tree.yview)
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.batch_tree.yview)
         self.batch_tree.configure(yscrollcommand=scrollbar.set)
         
         self.batch_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Frame para totales y botones
+        # Frame inferior con total y botones
         bottom_frame = ttk.Frame(main_frame)
         bottom_frame.pack(fill=tk.X, pady=(10, 0))
         
         # Total del lote
-        self.total_label = ttk.Label(bottom_frame, text="Total del Lote: $0.00", 
-                                    font=("Arial", 12, "bold"))
-        self.total_label.pack(side=tk.LEFT)
+        self.total_label = ttk.Label(
+            bottom_frame, 
+            text="Total del Lote: $0.00", 
+            font=("Arial", 12, "bold"),
+            foreground=self.colors['primary'])
+        self.total_label.pack(side=tk.LEFT, padx=10)
         
         # Botones
         button_frame = ttk.Frame(bottom_frame)
         button_frame.pack(side=tk.RIGHT)
         
-        ttk.Button(button_frame, text="Calcular Total", 
-                  command=self.calculate_batch_total).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Guardar Lote", 
-                  command=self.save_batch).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Limpiar Lote", 
-                  command=self.clear_batch).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Eliminar Seleccionado", 
-                  command=self.remove_from_batch).pack(side=tk.LEFT, padx=5)
+        buttons = [
+            ("🧮 Calcular Total", self.calculate_batch_total),
+            ("🗑️ Eliminar Selección", self.remove_from_batch),
+            ("🧹 Limpiar Lote", self.clear_batch),
+            ("💾 Guardar Lote", self.save_batch)
+        ]
+        
+        for text, cmd in buttons:
+            ttk.Button(button_frame, 
+                    text=text, 
+                    command=cmd,
+                    style='TButton').pack(side=tk.LEFT, padx=5)
     
     def setup_purchases_list_ui(self):
         """Configura la UI para lista de compras"""
@@ -257,8 +365,25 @@ class PurchasesWindow:
         
         # Título
         title_label = ttk.Label(main_frame, text="Lista de Compras", 
-                               font=("Arial", 14, "bold"))
+                            font=("Arial", 14, "bold"))
         title_label.pack(pady=(0, 10))
+        
+        # Frame para controles
+        controls_frame = ttk.Frame(main_frame)
+        controls_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Button(controls_frame, text="Actualizar", 
+                command=self.load_purchases).pack(side=tk.LEFT, padx=5)
+        
+        # AGREGAR AQUÍ LOS BOTONES DE EDITAR Y ELIMINAR
+        ttk.Button(controls_frame, text="Editar Compra", 
+                command=self.edit_purchase).pack(side=tk.LEFT, padx=5)
+        ttk.Button(controls_frame, text="Eliminar Compra", 
+                command=self.delete_purchase).pack(side=tk.LEFT, padx=5)
+        
+        """Configura la UI para lista de compras"""
+        main_frame = ttk.Frame(self.purchases_list_frame, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Frame para controles
         controls_frame = ttk.Frame(main_frame)
@@ -292,7 +417,10 @@ class PurchasesWindow:
         self.purchases_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
-    
+
+        """Configura la UI para el lote actual"""
+        main_frame = ttk.Frame(self.batch_frame, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
     def load_data(self):
         """Carga los datos necesarios"""
         self.load_products()
@@ -412,8 +540,6 @@ class PurchasesWindow:
         self.current_batch.append(item)
         self.update_batch_tree()
         self.clear_form()
-        
-        messagebox.showinfo("Éxito", f"Artículo agregado al lote. Total de artículos: {len(self.current_batch)}")
     
     def update_batch_tree(self):
         """Actualiza el árbol del lote actual"""
@@ -431,35 +557,17 @@ class PurchasesWindow:
             ))
     
     def calculate_batch_total(self):
-        """Calcula el total del lote con flete e IVA"""
+        """Calcula el total del lote con flete e IVA total distribuido"""
         if not self.current_batch:
             self.total_label.config(text="Total del Lote: $0.00")
             return
         
         try:
-            # Subtotal de todos los artículos
             subtotal = sum(item['subtotal'] for item in self.current_batch)
-            
-            # Flete total
             freight = float(self.freight_var.get() or 0)
+            tax_total = float(self.tax_var.get() or 0)
             
-            # IVA
-            tax_percentage = float(self.tax_var.get() or 0) / 100
-            tax_amount = subtotal * tax_percentage
-            
-            # Distribuir flete entre artículos
-            freight_per_item = freight / len(self.current_batch) if self.current_batch else 0
-            
-            # Distribuir IVA entre artículos
-            tax_per_item = tax_amount / len(self.current_batch) if self.current_batch else 0
-            
-            # Actualizar items con flete e IVA distribuidos
-            for item in self.current_batch:
-                item['freight'] = freight_per_item
-                item['tax'] = tax_per_item
-                item['total'] = item['subtotal'] + freight_per_item + tax_per_item
-            
-            total = subtotal + freight + tax_amount
+            total = subtotal + freight + tax_total
             self.total_label.config(text=f"Total del Lote: ${total:.2f}")
             
         except ValueError:
@@ -555,9 +663,44 @@ class PurchasesWindow:
         
         except Exception as e:
             messagebox.showerror("Error", f"Error al eliminar la compra: {str(e)}")
+
+    def show_distribution_info(self):
+        """Muestra información detallada de la distribución de costos"""
+        if not self.current_batch:
+            return
+        
+        try:
+            tax_total = float(self.tax_var.get() or 0)
+            freight_total = float(self.freight_var.get() or 0)
+            num_items = len(self.current_batch)
+            
+            tax_per_item = tax_total / num_items if num_items > 0 else 0
+            freight_per_item = freight_total / num_items if num_items > 0 else 0
+            
+            info_window = tk.Toplevel(self.window)
+            info_window.title("Distribución de Costos")
+            info_window.geometry("400x200")
+            info_window.resizable(False, False)
+            
+            main_frame = ttk.Frame(info_window, padding=20)
+            main_frame.pack(fill=tk.BOTH, expand=True)
+            
+            ttk.Label(main_frame, text="Distribución de Costos por Producto", 
+                    font=("Arial", 12, "bold")).pack(pady=(0, 10))
+            
+            ttk.Label(main_frame, text=f"Número de productos en lote: {num_items}").pack(anchor=tk.W)
+            ttk.Label(main_frame, text=f"IVA total: ${tax_total:.2f}").pack(anchor=tk.W)
+            ttk.Label(main_frame, text=f"IVA por producto: ${tax_per_item:.2f}").pack(anchor=tk.W)
+            ttk.Label(main_frame, text=f"Flete total: ${freight_total:.2f}").pack(anchor=tk.W)
+            ttk.Label(main_frame, text=f"Flete por producto: ${freight_per_item:.2f}").pack(anchor=tk.W)
+            
+            ttk.Button(main_frame, text="Cerrar", command=info_window.destroy).pack(pady=10)
+            
+        except ValueError:
+            messagebox.showerror("Error", "Por favor ingrese valores numéricos válidos")
     
     def save_batch(self):
-        """Guarda todo el lote de compras"""
+        """Guarda todo el lote de compras con IVA distribuido correctamente"""
         if not self.current_batch:
             messagebox.showwarning("Advertencia", "No hay artículos en el lote")
             return
@@ -581,12 +724,12 @@ class PurchasesWindow:
                         messagebox.showerror("Error", f"No se pudo crear el producto {item['product_name']}")
                         continue
                 
-                # Crear compra
+                # CAMBIO: Crear compra con IVA ya distribuido por producto
                 purchase = Purchase(
                     user_id=self.user.id,
                     total=item.get('total', item['subtotal']),
-                    iva=float(self.tax_var.get() or 0) / 100 * item['subtotal'],
-                    shipping=float(self.freight_var.get() or 0),
+                    iva=item.get('tax', 0),  # IVA distribuido por producto
+                    shipping=item.get('freight', 0),  # Flete distribuido por producto
                     date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     invoice_number=invoice_number,
                     supplier="Sin proveedor"
@@ -616,7 +759,18 @@ class PurchasesWindow:
                     messagebox.showerror("Error", f"No se pudo guardar la compra de {item['product_name']}")
             
             if saved_count > 0:
-                messagebox.showinfo("Éxito", f"Se guardaron {saved_count} compras correctamente")
+                # CAMBIO: Mostrar información de cómo se distribuyó el IVA
+                tax_total = float(self.tax_var.get() or 0)
+                freight_total = float(self.freight_var.get() or 0)
+                tax_per_item = tax_total / len(self.current_batch) if self.current_batch else 0
+                freight_per_item = freight_total / len(self.current_batch) if self.current_batch else 0
+                
+                messagebox.showinfo("Éxito", 
+                    f"Se guardaron {saved_count} compras correctamente.\n\n"
+                    f"Distribución realizada:\n"
+                    f"• IVA total: ${tax_total:.2f} → ${tax_per_item:.2f} por producto\n"
+                    f"• Flete total: ${freight_total:.2f} → ${freight_per_item:.2f} por producto")
+                
                 self.clear_batch()
                 self.load_data()
             
@@ -628,7 +782,7 @@ class PurchasesWindow:
         self.current_batch = []
         self.update_batch_tree()
         self.freight_var.set("0")
-        self.tax_var.set("0")
+        self.tax_var.set("0")  # Limpiar también el IVA
         self.total_label.config(text="Total del Lote: $0.00")
     
     def remove_from_batch(self):

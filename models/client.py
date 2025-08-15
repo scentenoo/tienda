@@ -110,58 +110,107 @@ class Client:
         conn.commit()
         conn.close()
     
-    def add_debt(self, amount, description):
-        """Agrega deuda al cliente"""
+    def add_debt(self, amount, description=""):
+        """Añade deuda y la registra en rojo en el historial."""
+        if amount <= 0:
+            raise ValueError("El monto debe ser positivo")
+        
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Actualizar deuda total del cliente
-        cursor.execute('''
-            UPDATE clients 
-            SET total_debt = total_debt + ?
-            WHERE id = ?
-        ''', (amount, self.id))
-        
-        # Registrar transacción
-        cursor.execute('''
-            INSERT INTO client_transactions (client_id, transaction_type, amount, description)
-            VALUES (?, 'debit', ?, ?)
-        ''', (self.id, amount, description))
-        
-        conn.commit()
-        conn.close()
-        
-        self.total_debt = (self.total_debt or 0.0) + amount
+        try:
+            # Aumentar deuda total
+            cursor.execute('''
+                UPDATE clients 
+                SET total_debt = total_debt + ? 
+                WHERE id = ?
+            ''', (amount, self.id))
+            
+            # Registrar transacción (en rojo, tipo 'debit')
+            cursor.execute('''
+                INSERT INTO client_transactions (
+                    client_id, transaction_type, amount, description
+                ) VALUES (?, 'debit', ?, ?)
+            ''', (self.id, amount, description))
+            
+            conn.commit()
+            self.total_debt += amount
+            return True
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Error al añadir deuda: {e}")
+            return False
+        finally:
+            conn.close()
     
-    def pay_debt(self, amount, description):
-        """Registra un pago (reduce la deuda)"""
+    def pay_debt(self, amount, description=""):
+        """Reduce la deuda y registra el pago en el historial."""
+        if amount <= 0:
+            raise ValueError("El monto debe ser positivo")
+        
         conn = get_connection()
         cursor = conn.cursor()
         
-        # No permitir pago mayor a la deuda
-        current_debt = self.total_debt or 0.0
-        if amount > current_debt:
-            amount = current_debt
-        
-        # Actualizar deuda del cliente
-        cursor.execute('''
-            UPDATE clients 
-            SET total_debt = total_debt - ?
-            WHERE id = ?
-        ''', (amount, self.id))
-        
-        # Registrar transacción
-        cursor.execute('''
-            INSERT INTO client_transactions (client_id, transaction_type, amount, description)
-            VALUES (?, 'credit', ?, ?)
-        ''', (self.id, amount, description))
-        
-        conn.commit()
-        conn.close()
-        
-        self.total_debt = current_debt - amount
-        return amount
-    
+        try:
+            # Reducir deuda (no puede quedar negativa)
+            cursor.execute('''
+                UPDATE clients 
+                SET total_debt = MAX(0, total_debt - ?)
+                WHERE id = ?
+            ''', (amount, self.id))
+            
+            # Registrar transacción (pago, tipo 'credit')
+            cursor.execute('''
+                INSERT INTO client_transactions (
+                    client_id, transaction_type, amount, description
+                ) VALUES (?, 'credit', ?, ?)
+            ''', (self.id, -amount, description))
+            
+            conn.commit()
+            
+            # Actualizar objeto
+            self.total_debt = max(0, self.total_debt - amount)
+            return True
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Error al pagar deuda: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def register_sale_transaction(self, sale_id, amount, description):
+        """Registra una transacción de venta a crédito correctamente"""
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            
+            # Registrar como DEUDA (debit) no como pago
+            cursor.execute('''
+                INSERT INTO client_transactions 
+                (client_id, transaction_type, amount, description, sale_id)
+                VALUES (?, 'debit', ?, ?, ?)
+            ''', (self.id, amount, description, sale_id))
+            
+            # Actualizar deuda del cliente
+            cursor.execute('''
+                UPDATE clients 
+                SET total_debt = total_debt + ?
+                WHERE id = ?
+            ''', (amount, self.id))
+            
+            conn.commit()
+            self.total_debt += amount
+            return True
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Error al registrar venta a crédito: {e}")
+            return False
+        finally:
+            conn.close()
+
     def get_transactions(self, limit=50):
         """Obtiene el historial de transacciones del cliente"""
         conn = get_connection()

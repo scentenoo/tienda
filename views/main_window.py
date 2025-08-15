@@ -1,11 +1,14 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from views.users_window import UsersWindow
+from views.losses_window import LossesWindow
 
 class MainWindow:
     def __init__(self, parent, user):
         self.parent = parent
         self.user = user
+        self.sales_window = None  # Referencia a la ventana de ventas
+        self.clients_window = None  # Referencia a la ventana de clientes
         
         # Limpiar la ventana principal
         for widget in self.parent.winfo_children():
@@ -32,105 +35,67 @@ class MainWindow:
     
     def setup_ui(self):
         """Configura la interfaz de usuario"""
-        # Crear menú
         self.create_menu()
         
+        # Configuración de estilos
+        self.style = ttk.Style()
+        self.style.configure('TFrame', background='#f5f5f5')
+        self.style.configure('TButton', font=('Arial', 11), padding=10)
+        self.style.configure('Header.TLabel', font=('Arial', 12, 'bold'), foreground='#495057')
+        
         # Frame principal
-        main_frame = ttk.Frame(self.parent, padding="30")
+        main_frame = ttk.Frame(self.parent, style='TFrame')
         main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Header
+        header = tk.Frame(main_frame, bg='#343a40', height=60)
+        header.pack(fill=tk.X)
         
-        # Título de bienvenida
-        welcome_label = ttk.Label(main_frame, 
-                                 text="Sistema de Gestión de Charcuteria HYE",
-                                 font=("Arial", 20, "bold"))
-        welcome_label.pack(pady=(0, 10))
+        # Botón de logout
+        logout_btn = ttk.Button(header, text="Cerrar Sesión", command=self.logout, style='Header.TButton')
+        logout_btn.pack(side=tk.RIGHT, padx=20, pady=10)
         
-        # Subtitle con info del usuario
-        user_label = ttk.Label(main_frame, 
-                              text=f"Bienvenido: {self.user.username} | Rol: {self.user.role}",
-                              font=("Arial", 12), 
-                              foreground="blue")
-        user_label.pack(pady=(0, 40))
+        # Contenido principal
+        content_frame = ttk.Frame(main_frame)
+        content_frame.pack(pady=40, padx=30, fill=tk.BOTH, expand=True)
         
-        # Frame para botones principales
-        buttons_container = ttk.Frame(main_frame)
-        buttons_container.pack(expand=True)
+        # Título
+        ttk.Label(content_frame, 
+                text="Sistema de Gestión Charcutería HYE",
+                font=("Arial", 20, "bold")).pack(pady=(0, 20))
         
-        # Primera fila de botones
-        row1_frame = ttk.Frame(buttons_container)
-        row1_frame.pack(pady=20)
-        
-        # Estilo de botones
+        # Botones principales
         button_style = {
-            "width": 25,
-            "padding": (20, 10)
+            "width": 20,
+            "padding": 15,
+            "font": ('Arial', 11, 'bold')
         }
         
-        # Modificar esta parte en setup_ui() de MainWindow
-        sales_btn = ttk.Button(row1_frame, text="💰 VENTAS", 
-                            command=self.open_sales, **button_style)
-        sales_btn.pack(side=tk.LEFT, padx=15)
-
-        # Solo mostrar botón de compras a administradores
+        buttons = [
+            ("💰 VENTAS", self.open_sales),
+            ("👥 CLIENTES", self.open_clients),
+            ("📦 INVENTARIO", self.open_inventory)
+        ]
+        
         if self.user.role == 'admin':
-            purchases_btn = ttk.Button(row1_frame, text="🛒 COMPRAS", 
-                                    command=self.open_purchases, **button_style)
-            purchases_btn.pack(side=tk.LEFT, padx=15)
-
-        clients_btn = ttk.Button(row1_frame, text="👥 CLIENTES", 
-                                command=self.open_clients, **button_style)
-        clients_btn.pack(side=tk.LEFT, padx=15)
+            buttons.extend([
+                ("🛒 COMPRAS", self.open_purchases),
+                ("📉 PÉRDIDAS", self.open_losses),
+                ("⚙️ USUARIOS", self.open_users)
+            ])
         
-        # Segunda fila de botones
-        row2_frame = ttk.Frame(buttons_container)
-        row2_frame.pack(pady=20)
+        for text, command in buttons:
+            btn = tk.Button(content_frame, text=text, command=command,
+                        bg='#4a6baf', fg='white', bd=0,
+                        font=('Arial', 11, 'bold'),
+                        padx=20, pady=10)
+            btn.pack(pady=10, fill=tk.X)
         
-        inventory_btn = ttk.Button(row2_frame, text="📦 INVENTARIO", 
-                                  command=self.open_inventory, **button_style)
-        inventory_btn.pack(side=tk.LEFT, padx=15)
-        
-        # Solo mostrar opciones de admin para administradores
-        if self.user.role == 'admin':
-            expenses_btn = ttk.Button(row2_frame, text="💸 GASTOS", 
-                                     command=self.open_expenses, **button_style)
-            expenses_btn.pack(side=tk.LEFT, padx=15)
-            
-            reports_btn = ttk.Button(row2_frame, text="📊 REPORTES", 
-                                    command=self.open_reports, **button_style)
-            reports_btn.pack(side=tk.LEFT, padx=15)
-        
-        # Separador
-        ttk.Separator(main_frame, orient='horizontal').pack(fill=tk.X, pady=40)
-        
-        # Información del sistema
-        info_frame = ttk.Frame(main_frame)
-        info_frame.pack(side=tk.BOTTOM)
-        
-        status_label = ttk.Label(info_frame, 
-                               text="✅ Sistema listo para usar", 
-                               font=("Arial", 11), 
-                               foreground="green")
-        status_label.pack()
-        
-        version_label = ttk.Label(info_frame, 
-                                text="Versión 1.0 | Sistema de Gestión Comercial", 
-                                font=("Arial", 9), 
-                                foreground="gray")
-        version_label.pack(pady=5)
-
-        # Agregar botón de cierre de sesión en la parte superior
-        header_frame = ttk.Frame(main_frame)
-        header_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        # Información del usuario
-        user_info = ttk.Label(header_frame, 
-                            text=f"Usuario: {self.user.name} | Rol: {self.user.role.capitalize()}", 
-                            font=("Arial", 10))
-        user_info.pack(side=tk.LEFT, padx=10)
-        
-        # Botón de cierre de sesión
-        logout_btn = ttk.Button(header_frame, text="Cerrar Sesión", command=self.logout)
-        logout_btn.pack(side=tk.RIGHT, padx=10)
+        # Footer
+        footer = tk.Frame(main_frame, bg='#343a40', height=40)
+        footer.pack(fill=tk.X, side=tk.BOTTOM)
+        ttk.Label(footer, text="© 2023 Charcutería HYE - Versión 1.0", 
+                foreground="white", background="#343a40").pack(pady=10)
     
     def create_menu(self):
         """Crea el menú de la aplicación"""
@@ -149,9 +114,9 @@ class MainWindow:
         menubar.add_cascade(label="Operaciones", menu=operations_menu)
         operations_menu.add_command(label="Ventas", command=self.open_sales)
         
-        # Solo mostrar Compras a los administradores
         if self.user.role == 'admin':
             operations_menu.add_command(label="Compras", command=self.open_purchases)
+            operations_menu.add_command(label="Pérdidas y Mermas", command=self.open_losses)
         
         operations_menu.add_command(label="Clientes", command=self.open_clients)
         operations_menu.add_command(label="Inventario", command=self.open_inventory)
@@ -202,12 +167,40 @@ class MainWindow:
                            "Desarrollado en Python con Tkinter")
     
     def open_sales(self):
-        """Abre la ventana de ventas"""
+        """Abre la ventana de ventas y guarda la referencia"""
         try:
+            # Si ya existe una ventana, verificar si sigue abierta
+            if self.sales_window and hasattr(self.sales_window, 'window'):
+                try:
+                    if self.sales_window.window.winfo_exists():
+                        self.sales_window.window.lift()  # Traer al frente
+                        return
+                except:
+                    pass  # La ventana no existe, crear nueva
+            
             from views.sales_window import SalesWindow
-            SalesWindow(self.parent, self.user)
+            self.sales_window = SalesWindow(self.parent, self.user)
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo abrir ventas: {e}")
+
+    def open_losses(self):
+        """Abre la ventana de pérdidas y mermas"""
+        if self.user.role != 'admin':
+            messagebox.showwarning("Acceso Denegado", 
+                                "Solo los administradores pueden acceder a este módulo.")
+            return
+            
+        try:
+            from models.product import Product
+            if not Product.get_all():
+                messagebox.showwarning("Sin productos", "Debe registrar productos primero")
+                return
+                
+            from views.losses_window import LossesWindow
+            LossesWindow(self.parent, self.user)
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo abrir pérdidas: {e}")
+            print(f"Error detallado: {e}")  # Para diagnóstico
         
     def open_purchases(self):
         """Abre la ventana de compras"""
@@ -224,10 +217,47 @@ class MainWindow:
             messagebox.showerror("Error", f"No se pudo abrir compras: {e}")
 
     def open_clients(self):
-        """Abre la ventana de clientes"""
-        from views.clients_window import ClientsWindow
-        ClientsWindow(self.parent, self.user)
+        """Abre la ventana de clientes y guarda la referencia"""
+        try:
+            if self.clients_window and hasattr(self.clients_window, 'window'):
+                try:
+                    if self.clients_window.window.winfo_exists():
+                        self.clients_window.window.lift()
+                        return
+                except:
+                    pass
+                
+            from views.clients_window import ClientsWindow
+            self.clients_window = ClientsWindow(self.parent, self.user)  # Elimina main_window=self
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo abrir clientes: {e}")
     
+    def refresh_all_windows(self):
+        """Refresca todas las ventanas abiertas"""
+        try:
+            # Refrescar ventana de ventas
+            if self.sales_window and hasattr(self.sales_window, 'window'):
+                try:
+                    if self.sales_window.window.winfo_exists():
+                        if hasattr(self.sales_window, 'refresh_sales'):
+                            self.sales_window.refresh_sales()
+                            print("✅ Ventana de ventas actualizada")
+                except:
+                    self.sales_window = None
+            
+            # Refrescar ventana de clientes
+            if self.clients_window and hasattr(self.clients_window, 'window'):
+                try:
+                    if self.clients_window.window.winfo_exists():
+                        if hasattr(self.clients_window, 'refresh_clients'):
+                            self.clients_window.refresh_clients()
+                            print("✅ Ventana de clientes actualizada")
+                except:
+                    self.clients_window = None
+                    
+        except Exception as e:
+            print(f"Error al refrescar ventanas: {e}")
+
     def open_inventory(self):
         """Abre la ventana de inventario"""
         from views.inventory_window import InventoryWindow

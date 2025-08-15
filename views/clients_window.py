@@ -1,33 +1,39 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from models.client import Client
+from config.database import get_connection
 
 class ClientsWindow:
-    def __init__(self, parent, user):
+    def __init__(self, parent, user, main_window=None):
         self.parent = parent
         self.user = user
-        
-        # Crear ventana
-        self.window = tk.Toplevel(parent)
-        self.window.title("Gestión de Clientes")
-        self.window.geometry("1000x650")
-        self.window.transient(parent)
-        
-        # Centrar ventana
-        self.center_window()
-        
-        # Variables
+        self.main_window = main_window
         self.clients = []
         self.selected_client = None
-        
-        # Configurar UI
+
+        # Ventana
+        self.window = tk.Toplevel(parent)
+        self.window.title("Clientes")
+        self.window.geometry("1000x650")
+        self.window.resizable(False, False)
+        self.center_window()
+
+        # UI
         self.setup_ui()
-        
-        # Cargar clientes
         self.refresh_clients()
-        
-        # Configurar cierre
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+
+    
+    def manage_credit(self):
+        """Abre ventana para gestionar crédito del cliente"""
+        if not self.selected_client:
+            messagebox.showwarning("Selección requerida", 
+                                 "Por favor seleccione un cliente")
+            return
+        
+        # Pasar referencia del main_window
+        CreditManagementWindow(self.window, self, self.selected_client, self.main_window)
     
     def center_window(self):
         """Centra la ventana en la pantalla"""
@@ -38,91 +44,73 @@ class ClientsWindow:
     
     def setup_ui(self):
         """Configura la interfaz de usuario"""
-        # Frame principal
-        main_frame = ttk.Frame(self.window, padding="15")
+        # 1. Frame principal (base para todo)
+        main_frame = ttk.Frame(self.window, padding=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Título
-        title_label = ttk.Label(main_frame, 
-                               text="👥 GESTIÓN DE CLIENTES", 
-                               font=("Arial", 16, "bold"))
-        title_label.pack(pady=(0, 20))
-        
-        # Frame superior con controles
+        self.main_frame = main_frame  # Guardar como atributo si lo necesitas después
+
+        # 2. Título
+        ttk.Label(
+            main_frame, 
+            text="👥 GESTIÓN DE CLIENTES", 
+            font=("Helvetica", 16, "bold"),
+            foreground="#333"
+        ).pack(pady=(0, 20))
+
+        # 3. Frame de controles (búsqueda/botones)
         controls_frame = ttk.Frame(main_frame)
         controls_frame.pack(fill=tk.X, pady=(0, 15))
+
+        # Botones
+        actions = [
+            ("➕ Nuevo", self.add_client),
+            ("✏️ Editar", self.edit_client),
+            ("💰 Crédito", self.manage_credit),
+            ("📋 Historial", self.view_history),
+            ("🗑️ Eliminar", self.delete_client)
+        ]
         
-        # Botones de acción
-        ttk.Button(controls_frame, text="➕ Nuevo Cliente", 
-                  command=self.add_client).pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Button(controls_frame, text="✏️ Editar", 
-                  command=self.edit_client).pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Button(controls_frame, text="💰 Gestionar Crédito", 
-                  command=self.manage_credit).pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Button(controls_frame, text="📋 Historial", 
-                  command=self.view_history).pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Button(controls_frame, text="🗑️ Eliminar", 
-                  command=self.delete_client).pack(side=tk.LEFT, padx=(0, 20))
-        
-        ttk.Button(controls_frame, text="🔄 Actualizar", 
-                  command=self.refresh_clients).pack(side=tk.LEFT, padx=(0, 20))
-        
+        for text, cmd in actions:
+            ttk.Button(
+                controls_frame,
+                text=text,
+                command=cmd
+            ).pack(side=tk.LEFT, padx=5)
+
         # Búsqueda
-        ttk.Label(controls_frame, text="Buscar:").pack(side=tk.LEFT, padx=(20, 5))
+        ttk.Label(controls_frame, text="🔍 Buscar:").pack(side=tk.LEFT, padx=(20, 5))
         self.search_var = tk.StringVar()
+        ttk.Entry(controls_frame, textvariable=self.search_var, width=25).pack(side=tk.LEFT)
         self.search_var.trace('w', self.on_search)
-        search_entry = ttk.Entry(controls_frame, textvariable=self.search_var, width=25)
-        search_entry.pack(side=tk.LEFT, padx=(0, 10))
-        
-        # Frame para la tabla
+
+        # 4. Tabla de clientes
         table_frame = ttk.Frame(main_frame)
-        table_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        table_frame.pack(fill=tk.BOTH, expand=True)
+
+        columns = ("ID", "Nombre", "Teléfono", "Límite", "Deuda", "Estado")
+        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=15)
         
-        # Crear Treeview
-        columns = ("ID", "Nombre", "Teléfono", "Límite Crédito", "Deuda", "Disponible", "Estado")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=16)
-        
-        # Configurar columnas
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("Nombre", text="Nombre del Cliente")
-        self.tree.heading("Teléfono", text="Teléfono")
-        self.tree.heading("Límite Crédito", text="Límite Crédito")
-        self.tree.heading("Deuda", text="Deuda Actual")
-        self.tree.heading("Disponible", text="Crédito Disponible")
-        self.tree.heading("Estado", text="Estado")
-        
-        self.tree.column("ID", width=60, anchor="center")
-        self.tree.column("Nombre", width=200, anchor="w")
-        self.tree.column("Teléfono", width=120, anchor="center")
-        self.tree.column("Límite Crédito", width=120, anchor="e")
-        self.tree.column("Deuda", width=120, anchor="e")
-        self.tree.column("Disponible", width=120, anchor="e")
-        self.tree.column("Estado", width=100, anchor="center")
-        
+        for col in columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=100, anchor="center")
+
         # Scrollbars
-        v_scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
-        h_scrollbar = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
-        # Empaquetar tabla y scrollbars
-        self.tree.pack(side="left", fill="both", expand=True)
-        v_scrollbar.pack(side="right", fill="y")
-        h_scrollbar.pack(side="bottom", fill="x")
-        
-        # Bind selección
-        self.tree.bind("<<TreeviewSelect>>", self.on_select)
-        self.tree.bind("<Double-1>", lambda e: self.manage_credit())
-        
-        # Frame inferior con estadísticas
-        stats_frame = ttk.LabelFrame(main_frame, text="Estadísticas", padding="10")
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        hsb.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # 5. Frame de estadísticas (¡Ahora con main_frame definido!)
+        stats_frame = ttk.LabelFrame(main_frame, text="📊 Estadísticas", padding=10)
         stats_frame.pack(fill=tk.X, pady=(15, 0))
-        
-        self.stats_label = ttk.Label(stats_frame, text="", font=("Arial", 10))
+        self.stats_label = ttk.Label(stats_frame, text="Cargando datos...")
         self.stats_label.pack()
+
+        # Configurar eventos
+        self.tree.bind("<<TreeviewSelect>>", self.on_select)
     
     def refresh_clients(self):
         """Recarga la lista de clientes"""
@@ -477,15 +465,17 @@ class ClientFormWindow:
 
 
 class CreditManagementWindow:
-    def __init__(self, parent, clients_window, client):
+    def __init__(self, parent, clients_window, client, main_window=None):
         self.parent = parent
         self.clients_window = clients_window
         self.client = client
+        self.main_window = main_window  # Nueva referencia
         
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title(f"Gestión de Crédito - {client.name}")
-        self.window.geometry("600x450")
+        self.window.geometry("700x650")  # Más ancho y más alto
+        self.window.minsize(700, 550)   # Tamaño mínimo
         self.window.transient(parent)
         self.window.grab_set()
         
@@ -494,6 +484,18 @@ class CreditManagementWindow:
         
         # Configurar UI
         self.setup_ui()
+
+    def refresh_and_close(self):
+        """Actualiza todas las ventanas y cierra esta ventana"""
+        # Actualizar ventana de clientes
+        self.clients_window.refresh_clients()
+        
+        # Actualizar todas las ventanas desde main_window
+        if self.main_window:
+            self.main_window.refresh_all_windows()
+        
+        # Cerrar ventana actual
+        self.window.destroy()
     
     def center_window(self):
         """Centra la ventana en la pantalla"""
@@ -636,14 +638,16 @@ class CreditManagementWindow:
         except ValueError:
             messagebox.showerror("Error", "Ingrese un monto válido")
     
-    def register_payment(self):
-        """Registra un pago del cliente"""
+    # En CreditManagementWindow, modifica el método register_payment:
+
+    def add_debt(self):
+        """Agrega deuda al cliente"""
         try:
-            amount_str = self.payment_amount_entry.get().strip()
-            description = self.payment_desc_entry.get().strip()
+            amount_str = self.debt_amount_entry.get().strip()
+            description = self.debt_desc_entry.get().strip()
             
             if not amount_str:
-                messagebox.showerror("Error", "Ingrese el monto del pago")
+                messagebox.showerror("Error", "Ingrese el monto de la deuda")
                 return
             
             if not description:
@@ -655,27 +659,282 @@ class CreditManagementWindow:
                 messagebox.showerror("Error", "El monto debe ser mayor a cero")
                 return
             
-            if amount > self.client.total_debt:
-                result = messagebox.askyesno("Monto mayor a la deuda", 
-                                           f"El monto de ${amount:,.2f} es mayor a la deuda de ${self.client.total_debt:,.2f}\n"
-                                           f"¿Desea registrar un pago de ${self.client.total_debt:,.2f} para saldar la deuda?")
-                if result:
-                    amount = self.client.total_debt
-                else:
-                    return
+            if amount > self.client.available_credit():
+                messagebox.showerror("Error", 
+                                f"El monto excede el crédito disponible\n"
+                                f"Disponible: ${self.client.available_credit():,.2f}")
+                return
             
             # Confirmar operación
             result = messagebox.askyesno("Confirmar", 
-                                       f"¿Registrar pago de ${amount:,.2f}?\n"
-                                       f"Descripción: {description}")
+                                    f"¿Agregar deuda de ${amount:,.2f}?\n"
+                                    f"Descripción: {description}")
             
             if result:
-                paid_amount = self.client.pay_debt(amount, description)
-                messagebox.showinfo("Éxito", f"Pago de ${paid_amount:,.2f} registrado correctamente")
+                self.client.add_debt(amount, description)
+                messagebox.showinfo("Éxito", "Deuda agregada correctamente")
                 self.refresh_and_close()
                 
         except ValueError:
             messagebox.showerror("Error", "Ingrese un monto válido")
+
+    def register_payment(self):
+        """Registra un pago del cliente y actualiza ventas pendientes"""
+        try:
+            # Obtener y validar datos de entrada
+            amount_str = self.payment_amount_entry.get().strip()
+            description = self.payment_desc_entry.get().strip()
+            
+            # Validaciones de entrada
+            if not amount_str:
+                messagebox.showerror("Error", "Ingrese el monto del pago")
+                self.payment_amount_entry.focus()
+                return
+                
+            if not description:
+                messagebox.showerror("Error", "Ingrese una descripción")
+                self.payment_desc_entry.focus()
+                return
+            
+            # Convertir y validar monto
+            try:
+                amount = float(amount_str)
+            except ValueError:
+                messagebox.showerror("Error", "Ingrese un monto válido (solo números)")
+                self.payment_amount_entry.focus()
+                return
+            
+            if amount <= 0:
+                messagebox.showerror("Error", "El monto debe ser mayor a cero")
+                self.payment_amount_entry.focus()
+                return
+            
+            # Verificar que no exceda la deuda actual
+            if amount > self.client.total_debt:
+                messagebox.showerror("Error", 
+                    f"El monto excede la deuda actual\n"
+                    f"Deuda actual: ${self.client.total_debt:,.2f}\n"
+                    f"Monto ingresado: ${amount:,.2f}")
+                self.payment_amount_entry.focus()
+                return
+            
+            # Mostrar distribución del pago
+            allocation_info = self.show_payment_allocation(amount)
+            
+            # Confirmar operación
+            result = messagebox.askyesno("Confirmar Pago", 
+                f"¿Desea registrar este pago?\n\n"
+                f"Cliente: {self.client.name}\n"
+                f"Monto: ${amount:,.2f}\n"
+                f"Descripción: {description}\n\n"
+                f"Deuda actual: ${self.client.total_debt:,.2f}\n"
+                f"Deuda después del pago: ${self.client.total_debt - amount:,.2f}\n\n"
+                f"--- DISTRIBUCIÓN DEL PAGO ---\n"
+                f"{allocation_info}")
+            
+            if result:
+                # Marcar ventas específicas como pagadas
+                updated_sales = self.mark_specific_sales_as_paid(amount)
+                
+                # Registrar el pago en el cliente
+                self.client.pay_debt(amount, description)
+                
+                # Limpiar campos
+                self.payment_amount_entry.delete(0, tk.END)
+                self.payment_desc_entry.delete(0, tk.END)
+                
+                # Mostrar mensaje de éxito con detalles
+                remaining_debt = self.client.total_debt
+                success_message = f"¡Pago registrado correctamente!\n\n"
+                success_message += f"Monto pagado: ${amount:,.2f}\n"
+                
+                if remaining_debt == 0:
+                    success_message += "¡La deuda ha sido saldada completamente!\n\n"
+                else:
+                    success_message += f"Deuda restante: ${remaining_debt:,.2f}\n\n"
+                
+                # Agregar información de ventas actualizadas
+                if updated_sales:
+                    success_message += "📋 Ventas actualizadas:\n"
+                    for sale in updated_sales:
+                        if sale['status'] == 'paid_complete':
+                            success_message += f"✅ Venta #{sale['id']}: ${sale['amount']:,.2f} - PAGADA\n"
+                        elif sale['status'] == 'paid_partial':
+                            success_message += f"⚠️ Venta #{sale['id']}: ${sale['amount']:,.2f} pagado, ${sale['remaining']:,.2f} pendiente\n"
+                
+                messagebox.showinfo("Pago Registrado", success_message)
+                
+                # Actualizar la interfaz y cerrar si es necesario
+                self.refresh_and_close()
+                
+        except Exception as e:
+            # Manejo de errores inesperados
+            messagebox.showerror("Error", 
+                f"Ocurrió un error inesperado:\n{str(e)}")
+            print(f"Error en register_payment: {e}")
+
+    def update_pending_sales_to_paid(self):
+        """Actualiza las ventas pendientes a pagadas cuando la deuda se salda"""
+        try:
+            from config.database import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Si el cliente no tiene deuda restante, marcar todas las ventas pendientes como pagadas
+            if self.client.total_debt == 0:
+                cursor.execute('''
+                    UPDATE sales 
+                    SET payment_status = 'paid', 
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE client_id = ? AND payment_status = 'pending'
+                ''', (self.client.id,))
+                
+                updated_sales = cursor.rowcount
+                conn.commit()
+                
+                if updated_sales > 0:
+                    print(f"✅ {updated_sales} ventas marcadas como pagadas para el cliente {self.client.name}")
+            
+            conn.close()
+            
+        except Exception as e:
+            print(f"Error al actualizar ventas pendientes: {e}")
+            # No mostrar error al usuario, es un proceso interno
+
+    # Agregar estos métodos a la clase CreditManagementWindow
+
+    def get_pending_sales(self):
+        """Obtiene las ventas pendientes del cliente"""
+        try:
+            from config.database import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, sale_date, total_amount, notes
+                FROM sales 
+                WHERE client_id = ? AND payment_status = 'pending'
+                ORDER BY sale_date ASC
+            ''', (self.client.id,))
+            
+            pending_sales = cursor.fetchall()
+            conn.close()
+            
+            return pending_sales
+            
+        except Exception as e:
+            print(f"Error al obtener ventas pendientes: {e}")
+            return []
+
+    def mark_specific_sales_as_paid(self, payment_amount):
+        """Marca ventas específicas como pagadas basándose en el monto del pago"""
+        try:
+            from config.database import get_connection
+            
+            pending_sales = self.get_pending_sales()
+            if not pending_sales:
+                return []
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            remaining_payment = payment_amount
+            updated_sales = []
+            
+            # Marcar ventas más antiguas primero (FIFO)
+            for sale in pending_sales:
+                if remaining_payment <= 0:
+                    break
+                    
+                sale_total = sale['total_amount']
+                
+                if remaining_payment >= sale_total:
+                    # Pago completo de esta venta
+                    cursor.execute('''
+                        UPDATE sales 
+                        SET payment_status = 'paid',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ''', (sale['id'],))
+                    
+                    remaining_payment -= sale_total
+                    updated_sales.append({
+                        'id': sale['id'],
+                        'amount': sale_total,
+                        'date': sale['sale_date'],
+                        'status': 'paid_complete'
+                    })
+                else:
+                    # Pago parcial - crear nueva venta con el monto restante
+                    paid_amount = remaining_payment
+                    remaining_amount = sale_total - paid_amount
+                    
+                    # Marcar la venta original como pagada
+                    cursor.execute('''
+                        UPDATE sales 
+                        SET payment_status = 'paid',
+                            total_amount = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ''', (paid_amount, sale['id']))
+                    
+                    # Crear nueva venta con el monto pendiente
+                    cursor.execute('''
+                        INSERT INTO sales (client_id, total_amount, payment_status, notes, sale_date)
+                        VALUES (?, ?, 'pending', ?, ?)
+                    ''', (self.client.id, remaining_amount, 
+                        f"Pago parcial - Restante de venta #{sale['id']}", 
+                        sale['sale_date']))
+                    
+                    updated_sales.append({
+                        'id': sale['id'],
+                        'amount': paid_amount,
+                        'date': sale['sale_date'],
+                        'status': 'paid_partial',
+                        'remaining': remaining_amount
+                    })
+                    
+                    remaining_payment = 0
+            
+            conn.commit()
+            conn.close()
+            
+            return updated_sales
+            
+        except Exception as e:
+            print(f"Error al marcar ventas específicas como pagadas: {e}")
+            return []
+
+    def show_payment_allocation(self, amount):
+        """Muestra cómo se distribuirá el pago entre las ventas pendientes"""
+        pending_sales = self.get_pending_sales()
+        if not pending_sales:
+            return "No hay ventas pendientes"
+        
+        allocation_text = f"Distribución del pago de ${amount:,.2f}:\n\n"
+        remaining_payment = amount
+        
+        for i, sale in enumerate(pending_sales, 1):
+            if remaining_payment <= 0:
+                break
+                
+            sale_total = sale['total_amount']
+            sale_date = sale['sale_date']
+            
+            if remaining_payment >= sale_total:
+                allocation_text += f"• Venta #{sale['id']} ({sale_date}): ${sale_total:,.2f} - ✅ PAGADA COMPLETA\n"
+                remaining_payment -= sale_total
+            else:
+                allocation_text += f"• Venta #{sale['id']} ({sale_date}): ${remaining_payment:,.2f} de ${sale_total:,.2f} - ⚠️ PAGO PARCIAL\n"
+                allocation_text += f"  Restante: ${sale_total - remaining_payment:,.2f}\n"
+                remaining_payment = 0
+        
+        if remaining_payment > 0:
+            allocation_text += f"\n💰 Sobrante: ${remaining_payment:,.2f} (se aplicará como crédito a favor)"
+        
+        return allocation_text
     
     def view_history(self):
         """Muestra el historial del cliente"""
@@ -694,23 +953,31 @@ class CreditManagementWindow:
 class ClientHistoryWindow:
     def __init__(self, parent, client):
         self.parent = parent
-        self.client = client
+        self.selected_client = client
         
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title(f"Historial - {client.name}")
-        self.window.geometry("700x500")
+        self.window.geometry("800x600")
         self.window.transient(parent)
         self.window.grab_set()
         
-        # Centrar ventana
-        self.center_window()
+        # Configurar el evento de cerrar ventana
+        self.window.protocol("WM_DELETE_WINDOW", self.close_window)
         
         # Configurar UI
         self.setup_ui()
         
         # Cargar historial
         self.load_history()
+
+    def close_window(self):
+        """Cierra la ventana del historial del cliente"""
+        self.window.destroy()
+
+    def on_closing(self):
+        """Maneja el evento de cerrar la ventana"""
+        self.window.destroy()
     
     def center_window(self):
         """Centra la ventana en la pantalla"""
@@ -731,8 +998,9 @@ class ClientHistoryWindow:
                                font=("Arial", 14, "bold"))
         title_label.pack(pady=(0, 10))
         
+        # CORRECCIÓN: Usar self.selected_client.name en lugar de diccionario
         client_label = ttk.Label(main_frame, 
-                                text=f"Cliente: {self.client.name}", 
+                                text=f"Cliente: {self.selected_client.name}", 
                                 font=("Arial", 12, "bold"))
         client_label.pack(pady=(0, 20))
         
@@ -766,48 +1034,87 @@ class ClientHistoryWindow:
         # Configurar colores para diferentes tipos
         self.tree.tag_configure("debit", background="#ffebee")  # Rojo claro para débitos
         self.tree.tag_configure("credit", background="#e8f5e8")  # Verde claro para créditos
+        self.tree.tag_configure('deuda', background='#ffdddd', foreground='black')  # Rojo claro
+        self.tree.tag_configure('pago', background='#ddffdd', foreground='black')   # Verde claro
+
+        # Frame para botones
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=(15, 0))
         
-        # Botón cerrar
-        ttk.Button(main_frame, text="Cerrar", 
-                  command=self.close_window).pack(side=tk.BOTTOM, pady=(15, 0))
-    
+        # Botón de cerrar
+        ttk.Button(
+            button_frame, 
+            text="Cerrar", 
+            command=self.close_window
+        ).pack(side=tk.RIGHT)
+        
     def load_history(self):
-        """Carga el historial de transacciones"""
+        conn = None
         try:
-            transactions = self.client.get_transactions()
+            conn = get_connection()
+            cursor = conn.cursor()
             
-            # Limpiar árbol
-            for item in self.tree.get_children():
-                self.tree.delete(item)
-            
-            if not transactions:
-                self.tree.insert("", "end", values=(
-                    "No hay transacciones", "", "", "Este cliente no tiene historial de crédito"
-                ))
-                return
-            
-            # Agregar transacciones
-            for transaction in transactions:
-                # Formatear fecha
-                fecha = transaction['created_at'].split(' ')[0]  # Solo la fecha
+            cursor.execute('''
+                SELECT  
+                    date(created_at) as fecha,
+                    transaction_type,
+                    amount,
+                    description
+                FROM client_transactions
+                WHERE client_id = ?
+                ORDER BY created_at DESC
+            ''', (self.selected_client.id,))
+
+            # Limpiar tabla
+            self.tree.delete(*self.tree.get_children())
+
+            # Configurar tags para colores
+            self.tree.tag_configure('debit', foreground='red')      # Rojo para deudas
+            self.tree.tag_configure('credit', foreground='green')   # Verde para pagos
+            self.tree.tag_configure('adjustment', foreground='orange')  # Amarillo/naranja para ajustes
+            self.tree.tag_configure('debit_reversal', foreground='orange')  # Amarillo/naranja para reversiones
+
+            # Añadir filas con colores
+            for row in cursor.fetchall():
+                fecha = row['fecha'] if row['fecha'] is not None else "N/A"
+                transaction_type = row['transaction_type'] if row['transaction_type'] is not None else ""
+                amount = row['amount'] if row['amount'] is not None else 0
+                descripcion = row['description'] if row['description'] is not None else "Sin descripción"
                 
-                # Tipo y formato
-                if transaction['transaction_type'] == 'debit':
-                    tipo = "📈 Deuda"
-                    monto = f"+${transaction['amount']:,.2f}"
-                    tag = "debit"
+                # Determinar tipo, monto y tag según el tipo de transacción
+                if transaction_type == 'debit':
+                    tipo = 'DEUDA'
+                    monto = f"${abs(amount):,.2f}"
+                    tag = 'debit'
+                elif transaction_type == 'credit':
+                    tipo = 'PAGO'
+                    monto = f"${abs(amount):,.2f}"
+                    tag = 'credit'
+                elif transaction_type == 'adjustment':
+                    tipo = 'AJUSTE'
+                    monto = f"${abs(amount):,.2f}"
+                    tag = 'adjustment'
+                elif transaction_type == 'debit_reversal':
+                    tipo = 'REVERSIÓN'
+                    monto = f"${abs(amount):,.2f}"
+                    tag = 'debit_reversal'
                 else:
-                    tipo = "💰 Pago"
-                    monto = f"-${transaction['amount']:,.2f}"
-                    tag = "credit"
+                    tipo = 'OTRO'
+                    monto = f"${abs(amount):,.2f}" if amount else "$0.00"
+                    tag = ''
                 
-                self.tree.insert("", "end", values=(
-                    fecha, tipo, monto, transaction['description']
-                ), tags=[tag])
+                self.tree.insert('', 'end', 
+                    values=(
+                        fecha,
+                        tipo,
+                        monto,
+                        descripcion
+                    ),
+                    tags=(tag,)
+                )
                 
         except Exception as e:
-            messagebox.showerror("Error", f"Error al cargar historial: {e}")
-    
-    def close_window(self):
-        """Cierra la ventana"""
-        self.window.destroy()
+            messagebox.showerror("Error", f"Error al cargar historial: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
