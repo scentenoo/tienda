@@ -125,12 +125,24 @@ class ReportsWindow:
         self.create_summary_row(profit_frame, "🏪 Gastos Operativos:", 'profit_expenses', "red")
         self.create_summary_row(profit_frame, "💎 UTILIDAD NETA:", 'net_profit', "darkgreen", bold=True)
         
-        # Botón de actualización
-        ttk.Button(scrollable_frame, 
+        """Agrega los botones al final de setup_summary_tab"""
+    
+        # Frame para botones
+        buttons_frame = ttk.Frame(scrollable_frame)
+        buttons_frame.pack(pady=10)
+        
+        # Botón de actualización normal
+        ttk.Button(buttons_frame, 
                 text="🔄 Actualizar Datos", 
                 command=self.load_financial_summary,
-                style='TButton').pack(pady=10)
-
+                style='TButton').pack(side=tk.LEFT, padx=5)
+        
+        # Botón de sincronización
+        ttk.Button(buttons_frame, 
+                text="🔄 Sincronizar Estados", 
+                command=self.sync_sales_status_with_debt,
+                style='TButton').pack(side=tk.LEFT, padx=5)
+        
     def create_summary_row(self, parent, label_text, key, color, bold=False):
         """Crea una fila de resumen financiero"""
         frame = ttk.Frame(parent)
@@ -270,80 +282,493 @@ class ReportsWindow:
                   command=self.load_losses_analysis).pack(pady=5)
     
     def load_financial_summary(self):
-        """Carga el resumen financiero separando efectivo e inventario"""
+        """Carga y actualiza el resumen financiero con manejo mejorado de errores"""
         try:
-            # FLUJO DE EFECTIVO (movimientos reales de dinero)
-            total_sales = Sale.get_total_sales()
-            total_purchases = Purchase.get_total_purchases()
-            total_expenses = Expense.get_total_expenses()
-            cash_in_hand = total_sales - total_purchases - total_expenses  # SIN pérdidas
-            
-            # VALOR DEL INVENTARIO
-            total_losses = Loss.get_total_losses()
-            
-            # Calcular valor del inventario actual
-            # (Compras - Valor vendido al costo - Pérdidas)
-            inventory_sold_at_cost = self.get_inventory_sold_at_cost()
-            current_inventory_value = total_purchases - inventory_sold_at_cost - total_losses
-            
-            # Actualizar etiquetas de efectivo
-            self.financial_labels['sales'].config(text=format_currency(total_sales))
-            self.financial_labels['purchases'].config(text=format_currency(total_purchases))
-            self.financial_labels['expenses'].config(text=format_currency(total_expenses))
-            self.financial_labels['cash'].config(text=format_currency(cash_in_hand))
-            
-            # Actualizar etiquetas de inventario
-            self.financial_labels['inventory_purchases'].config(text=format_currency(total_purchases))
-            self.financial_labels['inventory_sold'].config(text=format_currency(inventory_sold_at_cost))
-            self.financial_labels['losses'].config(text=format_currency(total_losses))
-            self.financial_labels['current_inventory'].config(text=format_currency(current_inventory_value))
-
-            # UTILIDAD NETA
-            # Costo de productos vendidos (usando cost_price de sale_details o products)
             conn = get_connection()
             cursor = conn.cursor()
-
-            # Obtener costo de productos vendidos
-            cursor.execute('''
-            SELECT SUM(sd.quantity * pd.unit_price) as cogs
-            FROM sale_details sd
-            JOIN sales s ON sd.sale_id = s.id
-            JOIN purchase_details pd ON sd.product_id = pd.product_id
-            WHERE s.status = 'paid'
-        ''')
-            result = cursor.fetchone()
-            cogs = float(result['cogs']) if result and result['cogs'] else 0.0
-
-            conn.close()
-
-            # Calcular utilidad neta = Ingresos - Costo productos vendidos - Gastos operativos
-            net_profit = total_sales - cogs - total_expenses
-
-            # Actualizar etiquetas de utilidad
-            self.financial_labels['profit_sales'].config(text=format_currency(total_sales))
-            self.financial_labels['cogs'].config(text=format_currency(cogs))
-            self.financial_labels['profit_expenses'].config(text=format_currency(total_expenses))
-            self.financial_labels['net_profit'].config(text=format_currency(net_profit))
-
-            # Color según ganancia/pérdida
-            if net_profit >= 0:
-                self.financial_labels['net_profit'].config(foreground="darkgreen")
-            else:
-                self.financial_labels['net_profit'].config(foreground="red")
             
-            # Cambiar colores según el estado
-            if cash_in_hand >= 0:
-                self.financial_labels['cash'].config(foreground="green")
-            else:
-                self.financial_labels['cash'].config(foreground="red")
-                
-            if current_inventory_value >= 0:
-                self.financial_labels['current_inventory'].config(foreground="purple")
-            else:
-                self.financial_labels['current_inventory'].config(foreground="red")
-                
+            # Obtener totales diferenciados
+            cursor.execute('''
+                SELECT 
+                    SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END) as paid_sales,
+                    SUM(CASE WHEN status = 'pending' THEN total ELSE 0 END) as credit_sales,
+                    SUM(total) as total_sales
+                FROM sales
+            ''')
+            sales_data = cursor.fetchone()
+            
+            # Resto de cálculos
+            total_purchases = Purchase.get_total_purchases()
+            total_expenses = Expense.get_total_expenses()
+            total_losses = Loss.get_total_losses()
+            
+            # Actualizar UI con ambos tipos de ventas
+            self.financial_labels['sales'].config(
+                text=f"{format_currency(sales_data['paid_sales'])} (Pagadas)",
+                foreground="green"
+            )
+            
+            if 'credit_sales' in self.financial_labels:
+                self.financial_labels['credit_sales'].config(
+                    text=f"{format_currency(sales_data['credit_sales'])} (Fiadas)",
+                    foreground="orange"
+                )
+
+
+            # Obtener datos financieros básicos
+            financial_data = self._fetch_financial_data()
+            
+            # Calcular valores derivados
+            calculations = self._perform_calculations(financial_data)
+            
+            # Actualizar la interfaz de usuario
+            self._update_ui(financial_data, calculations)
+            
         except Exception as e:
-            messagebox.showerror("Error", f"Error al cargar resumen financiero: {str(e)}")
+            messagebox.showerror("Error", f"Error al cargar resumen: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
+
+    def _fetch_financial_data(self):
+        """Obtiene los datos financieros con cálculo corregido de inventario"""
+        conn = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # 1. Datos de ventas (sin cambios)
+            cursor.execute('''
+                SELECT 
+                    COALESCE(SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END), 0) as paid_sales,
+                    COALESCE(SUM(CASE WHEN status = 'pending' THEN total ELSE 0 END), 0) as credit_sales,
+                    COALESCE(SUM(total), 0) as total_sales
+                FROM sales
+            ''')
+            sales_data = cursor.fetchone()
+            
+            # 2. Deuda actual
+            cursor.execute('SELECT COALESCE(SUM(total_debt), 0) as current_debt FROM clients')
+            debt_result = cursor.fetchone()
+            current_debt = float(debt_result[0] if debt_result else 0)
+            
+            # 3. Otros totales
+            total_purchases = float(Purchase.get_total_purchases() or 0)
+            total_expenses = float(Expense.get_total_expenses() or 0)
+            total_losses = float(Loss.get_total_losses() or 0)
+            
+            # 4. COGS solo para ventas pagadas (sin cambios)
+            cursor.execute('''
+                SELECT COALESCE(SUM(sd.quantity * p.cost_price), 0) as cogs
+                FROM sale_details sd
+                JOIN sales s ON sd.sale_id = s.id
+                JOIN products p ON sd.product_id = p.id
+                WHERE s.status = 'paid'
+            ''')
+            cogs_result = cursor.fetchone()
+            cogs = float(cogs_result[0] if cogs_result and cogs_result[0] else 0)
+            
+            # 5. INVENTARIO VENDIDO CORREGIDO - NOMBRES DE COLUMNAS ARREGLADOS
+            cursor.execute('''
+                SELECT 
+                    SUM(
+                        sd.quantity * (
+                            p.cost_price + 
+                            -- Agregar flete proporcional por unidad (CORREGIDO: freight no freight_cost)
+                            COALESCE(
+                                (SELECT AVG(CAST(pur.freight AS REAL) / pur.subtotal * pd.unit_cost)
+                                FROM purchase_details pd 
+                                JOIN purchases pur ON pd.purchase_id = pur.id
+                                WHERE pd.product_id = p.id 
+                                AND pur.freight IS NOT NULL 
+                                AND pur.freight != ''
+                                AND CAST(pur.subtotal AS REAL) > 0), 0
+                            ) +
+                            -- Agregar IVA proporcional por unidad (CORREGIDO: tax no tax_amount)
+                            COALESCE(
+                                (SELECT AVG(CAST(pur.tax AS REAL) / pur.subtotal * pd.unit_cost)
+                                FROM purchase_details pd 
+                                JOIN purchases pur ON pd.purchase_id = pur.id
+                                WHERE pd.product_id = p.id 
+                                AND pur.tax IS NOT NULL 
+                                AND pur.tax != ''
+                                AND CAST(pur.subtotal AS REAL) > 0), 0
+                            )
+                        )
+                    ) as corrected_inventory_sold
+                FROM sale_details sd
+                JOIN products p ON sd.product_id = p.id
+            ''')
+            
+            inventory_result = cursor.fetchone()
+            inventory_sold_corrected = float(inventory_result[0] if inventory_result and inventory_result[0] else 0)
+            
+            return {
+                'total_sales': float(sales_data[2] if sales_data else 0),
+                'paid_sales': float(sales_data[0] if sales_data else 0),
+                'credit_sales': float(sales_data[1] if sales_data else 0),
+                'total_purchases': total_purchases,
+                'total_expenses': total_expenses,
+                'total_losses': total_losses,
+                'cogs': cogs,
+                'inventory_sold': inventory_sold_corrected,  # CORREGIDO
+                'current_debt': current_debt
+            }
+            
+        except Exception as e:
+            print(f"Error detallado: {str(e)}")
+            return {
+                'total_sales': 0.0, 'paid_sales': 0.0, 'credit_sales': 0.0,
+                'total_purchases': 0.0, 'total_expenses': 0.0, 'total_losses': 0.0,
+                'cogs': 0.0, 'inventory_sold': 0.0, 'current_debt': 0.0
+            }
+        finally:
+            if conn:
+                conn.close()
+
+    def _perform_calculations(self, data):
+        """Realiza los cálculos derivados"""
+        # Efectivo = ventas pagadas - compras - gastos
+        cash_in_hand = data['paid_sales'] - data['total_purchases'] - data['total_expenses']
+        
+        # Inventario actual = compras - inventario vendido - pérdidas
+        current_inventory_value = data['total_purchases'] - data['inventory_sold'] - data['total_losses']
+        
+        # Utilidad neta = ventas pagadas - costo vendido - gastos
+        net_profit = data['paid_sales'] - data['cogs'] - data['total_expenses']
+        
+        return {
+            'cash_in_hand': cash_in_hand,
+            'current_inventory_value': max(0, current_inventory_value),  # No negativo
+            'net_profit': net_profit
+        }
+
+    def force_refresh_all_data(self):
+        """Fuerza la actualización de todos los datos y ventanas"""
+        try:
+            print("🔄 Forzando actualización completa...")
+            
+            # 1. Recalcular deudas de clientes
+            self.recalculate_client_debts()
+            
+            # 2. Actualizar todas las ventanas abiertas
+            if hasattr(self, 'refresh_all_windows'):
+                self.refresh_all_windows()
+            
+            # 3. Limpiar caché de reportes si existe
+            if hasattr(self, 'reports_cache'):
+                self.reports_cache = {}
+            
+            # 4. Forzar recálculo de estadísticas
+            if hasattr(self, 'update_dashboard_stats'):
+                self.update_dashboard_stats()
+            
+            print("✅ Actualización completa terminada")
+            
+        except Exception as e:
+            print(f"Error en actualización completa: {e}")
+
+    def recalculate_client_debts(self):
+        """Recalcula todas las deudas de clientes basándose en transacciones"""
+        try:
+            from config.database import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Obtener todos los clientes
+            cursor.execute("SELECT id FROM clients")
+            client_ids = [row[0] for row in cursor.fetchall()]
+            
+            for client_id in client_ids:
+                # Calcular deuda real basada en transacciones
+                cursor.execute("""
+                    SELECT 
+                        COALESCE(SUM(CASE WHEN transaction_type = 'debit' THEN amount ELSE 0 END), 0) as debits,
+                        COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE 0 END), 0) as credits
+                    FROM client_transactions 
+                    WHERE client_id = ?
+                """, (client_id,))
+                
+                result = cursor.fetchone()
+                debits = float(result[0])
+                credits = float(result[1])
+                calculated_debt = max(0, debits - credits)
+                
+                # Actualizar cliente
+                cursor.execute("""
+                    UPDATE clients 
+                    SET total_debt = ?, updated_at = datetime('now', 'localtime')
+                    WHERE id = ?
+                """, (calculated_debt, client_id))
+            
+            conn.commit()
+            conn.close()
+            
+            print(f"✅ Deudas recalculadas para {len(client_ids)} clientes")
+            
+        except Exception as e:
+            print(f"Error recalculando deudas: {e}")
+
+    def fix_sales_payment_status(self):
+        """Corrige el estado de pago de las ventas"""
+        try:
+            from config.database import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Obtener clientes sin deuda
+            cursor.execute("SELECT id FROM clients WHERE total_debt = 0")
+            clients_no_debt = [row[0] for row in cursor.fetchall()]
+            
+            # Marcar todas las ventas de estos clientes como pagadas
+            for client_id in clients_no_debt:
+                cursor.execute("""
+                    UPDATE sales 
+                    SET status = 'paid', updated_at = datetime('now', 'localtime')
+                    WHERE client_id = ? AND status = 'pending'
+                """, (client_id,))
+                
+                updated = cursor.rowcount
+                if updated > 0:
+                    print(f"✅ {updated} ventas marcadas como 'paid' para cliente {client_id}")
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            print(f"Error corrigiendo estados de venta: {e}")
+
+    def fix_all_sales_status():
+        """Función simple para arreglar estados de ventas"""
+        try:
+            from config.database import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print("🔄 Arreglando estados de ventas...")
+            
+            # Marcar como pagadas todas las ventas de clientes sin deuda
+            cursor.execute('''
+                UPDATE sales 
+                SET status = 'paid'
+                WHERE client_id IN (
+                    SELECT id FROM clients WHERE total_debt = 0 OR total_debt IS NULL
+                ) AND status = 'pending'
+            ''')
+            
+            updated = cursor.rowcount
+            conn.commit()
+            conn.close()
+            
+            print(f"✅ {updated} ventas marcadas como pagadas")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            return False
+
+    # Método para agregar a tu CreditManagementWindow
+    def refresh_and_close_fixed(self):
+        """Versión mejorada del refresh_and_close"""
+        try:
+            # 1. Forzar recálculo de deuda del cliente específico
+            self.recalculate_single_client_debt()
+            
+            # 2. Actualizar cliente desde BD
+            from models.client import Client
+            self.client = Client.get_by_id(self.client.id)
+            
+            # 3. Actualizar ventana de clientes
+            if hasattr(self, 'clients_window') and self.clients_window:
+                self.clients_window.refresh_clients()
+            
+            # 4. Actualizar todas las ventanas
+            if hasattr(self, 'main_window') and self.main_window:
+                if hasattr(self.main_window, 'force_refresh_all_data'):
+                    self.main_window.force_refresh_all_data()
+                elif hasattr(self.main_window, 'refresh_all_windows'):
+                    self.main_window.refresh_all_windows()
+            
+            print(f"🔄 Cliente actualizado: {self.client.name} - Deuda: ${self.client.total_debt:,.2f}")
+            
+        except Exception as e:
+            print(f"Error en refresh_and_close: {e}")
+        finally:
+            self.window.destroy()
+
+    def recalculate_single_client_debt(self):
+        """Recalcula la deuda de un cliente específico"""
+        try:
+            from config.database import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Calcular deuda basada en transacciones
+            cursor.execute("""
+                SELECT 
+                    COALESCE(SUM(CASE WHEN transaction_type = 'debit' THEN amount ELSE 0 END), 0) as debits,
+                    COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE 0 END), 0) as credits
+                FROM client_transactions 
+                WHERE client_id = ?
+            """, (self.client.id,))
+            
+            result = cursor.fetchone()
+            debits = float(result[0])
+            credits = float(result[1])
+            calculated_debt = max(0, debits - credits)
+            
+            # Actualizar cliente
+            cursor.execute("""
+                UPDATE clients 
+                SET total_debt = ?, updated_at = datetime('now', 'localtime')
+                WHERE id = ?
+            """, (calculated_debt, self.client.id))
+            
+            # Si no hay deuda, marcar ventas como pagadas
+            if calculated_debt == 0:
+                cursor.execute("""
+                    UPDATE sales 
+                    SET status = 'paid', updated_at = datetime('now', 'localtime')
+                    WHERE client_id = ? AND status = 'pending'
+                """, (self.client.id,))
+                
+                updated_sales = cursor.rowcount
+                if updated_sales > 0:
+                    print(f"✅ {updated_sales} ventas marcadas como 'paid'")
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            print(f"Error recalculando deuda del cliente: {e}")
+
+    def _update_ui(self, data, calculations):
+        """Actualiza la UI con validaciones"""
+        try:
+            # Flujo de efectivo
+            sales_text = f"{format_currency(data['total_sales'])} (P:{format_currency(data['paid_sales'])}, F:{format_currency(data['credit_sales'])}, Deben:{format_currency(data['current_debt'])})"
+            self.financial_labels['sales'].config(text=sales_text, foreground="green")
+            self.financial_labels['purchases'].config(text=format_currency(data['total_purchases']), foreground="red")
+            self.financial_labels['expenses'].config(text=format_currency(data['total_expenses']), foreground="red")
+            self.financial_labels['cash'].config(
+                text=format_currency(calculations['cash_in_hand']), 
+                foreground="green" if calculations['cash_in_hand'] >= 0 else "red"
+            )
+            
+            # Inventario
+            self.financial_labels['inventory_purchases'].config(text=format_currency(data['total_purchases']), foreground="blue")
+            self.financial_labels['inventory_sold'].config(text=format_currency(data['inventory_sold']), foreground="green")
+            self.financial_labels['losses'].config(text=format_currency(data['total_losses']), foreground="orange")
+            self.financial_labels['current_inventory'].config(
+                text=format_currency(calculations['current_inventory_value']), 
+                foreground="purple" if calculations['current_inventory_value'] >= 0 else "red"
+            )
+            
+            # Utilidad (SOLO ventas pagadas)
+            self.financial_labels['profit_sales'].config(text=format_currency(data['paid_sales']), foreground="green")
+            self.financial_labels['cogs'].config(text=format_currency(data['cogs']), foreground="red")
+            self.financial_labels['profit_expenses'].config(text=format_currency(data['total_expenses']), foreground="red")
+            self.financial_labels['net_profit'].config(
+                text=format_currency(calculations['net_profit']), 
+                foreground="darkgreen" if calculations['net_profit'] >= 0 else "red"
+            )
+            
+            print(f"DEBUG - Datos actualizados:")
+            print(f"COGS: {data['cogs']}")
+            print(f"Inventory sold: {data['inventory_sold']}")
+            print(f"Losses: {data['total_losses']}")
+            
+        except Exception as e:
+            print(f"Error al actualizar UI: {str(e)}")
+            messagebox.showerror("Error", f"No se pudo actualizar la interfaz: {str(e)}")
+
+    def _update_ui(self, data, calculations):
+        """Actualiza la UI usando los labels existentes en self.financial_labels"""
+        try:
+            # Verificar datos
+            required_keys = ['paid_sales', 'credit_sales', 'total_sales']
+            if not all(key in data for key in required_keys):
+                raise ValueError("Datos de ventas incompletos")
+            
+            # Actualizar directamente aquí
+            # Flujo de efectivo
+            sales_text = f"{format_currency(data['total_sales'])} (P:{format_currency(data['paid_sales'])}, F:{format_currency(data['credit_sales'])})"
+            self.financial_labels['sales'].config(text=sales_text, foreground="green")
+            self.financial_labels['purchases'].config(text=format_currency(data['total_purchases']), foreground="red")
+            self.financial_labels['expenses'].config(text=format_currency(data['total_expenses']), foreground="red")
+            self.financial_labels['cash'].config(text=format_currency(calculations['cash_in_hand']), 
+                                            foreground="green" if calculations['cash_in_hand'] >= 0 else "red")
+            
+            # Inventario
+            self.financial_labels['inventory_purchases'].config(text=format_currency(data['total_purchases']), foreground="blue")
+            self.financial_labels['inventory_sold'].config(text=format_currency(data['inventory_sold']), foreground="green")
+            self.financial_labels['losses'].config(text=format_currency(data['total_losses']), foreground="orange")
+            self.financial_labels['current_inventory'].config(text=format_currency(calculations['current_inventory_value']), 
+                                                            foreground="purple" if calculations['current_inventory_value'] >= 0 else "red")
+            
+            # Utilidad
+            self.financial_labels['profit_sales'].config(text=format_currency(data['paid_sales']), foreground="green")  # Era: data['total_sales']
+            self.financial_labels['cogs'].config(text=format_currency(data['cogs']), foreground="red")
+            self.financial_labels['profit_expenses'].config(text=format_currency(data['total_expenses']), foreground="red")
+            self.financial_labels['net_profit'].config(text=format_currency(calculations['net_profit']), 
+                                                    foreground="darkgreen" if calculations['net_profit'] >= 0 else "red")
+            
+        except Exception as e:
+            print(f"Error al actualizar UI: {str(e)}")
+            messagebox.showerror("Error", f"No se pudo actualizar la interfaz: {str(e)}")
+
+    def _update_inventory_section(self, data, calculations):
+        """Actualiza la sección de valor del inventario"""
+        self.financial_labels['inventory_purchases'].config(
+            text=format_currency(data['total_purchases']),
+            foreground="blue"
+        )
+        self.financial_labels['inventory_sold'].config(
+            text=format_currency(data['inventory_sold']),
+            foreground="green" if data['inventory_sold'] > 0 else "black"
+        )
+        self.financial_labels['losses'].config(
+            text=format_currency(data['total_losses']),
+            foreground="orange" if data['total_losses'] > 0 else "black"
+        )
+        self.financial_labels['current_inventory'].config(
+            text=format_currency(calculations['current_inventory_value']),
+            foreground="purple" if calculations['current_inventory_value'] >= 0 else "red"
+        )
+
+    def _update_profit_section(self, data, calculations):
+        """Actualiza la sección de utilidad neta"""
+        # USAR SOLO VENTAS PAGADAS para utilidad
+        self.financial_labels['profit_sales'].config(
+            text=format_currency(data['paid_sales']),  # Era: data['total_sales']
+            foreground="green"
+        )
+        self.financial_labels['cogs'].config(
+            text=format_currency(data['cogs']),
+            foreground="red"
+        )
+        self.financial_labels['profit_expenses'].config(
+            text=format_currency(data['total_expenses']),
+            foreground="red"
+        )
+        
+        # Recalcular utilidad neta SOLO con ventas pagadas
+        net_profit = data['paid_sales'] - data['cogs'] - data['total_expenses']
+        self.financial_labels['net_profit'].config(
+            text=format_currency(net_profit),
+            foreground="darkgreen" if net_profit >= 0 else "red",
+            font=("Arial", 12, "bold")
+        )
+
+    def _handle_error(self, error):
+        """Maneja errores y muestra mensajes al usuario"""
+        error_msg = f"Error al cargar resumen financiero: {str(error)}"
+        print(error_msg)  # Log para depuración
+        messagebox.showerror("Error", error_msg)
 
     def get_inventory_sold_at_cost(self):
         """Calcula el valor del inventario vendido al precio de costo"""
@@ -351,14 +776,13 @@ class ReportsWindow:
             conn = get_connection()
             cursor = conn.cursor()
             
-            # Obtener el costo de los productos vendidos
+            # Consulta mejorada que considera TODAS las ventas (pagadas y fiadas)
             cursor.execute('''
                 SELECT SUM(sd.quantity * p.cost_price) as total_cost
                 FROM sale_details sd
                 JOIN products p ON sd.product_id = p.id
                 JOIN sales s ON sd.sale_id = s.id
-                WHERE LOWER(s.type) != 'ajuste'
-                AND s.status = 'paid'
+                WHERE s.status IN ('paid', 'pending')  -- Incluye tanto pagadas como fiadas
             ''')
             
             result = cursor.fetchone()
@@ -682,3 +1106,406 @@ class ReportsWindow:
                     
         except Exception as e:
             messagebox.showerror("Error", f"Error al exportar reportes: {str(e)}")
+
+    def sync_sales_status_with_debt(self):
+        """Sincroniza el estado de las ventas con la deuda real de los clientes"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # 1. Marcar como 'paid' todas las ventas de clientes sin deuda
+            cursor.execute('''
+                UPDATE sales 
+                SET status = 'paid', 
+                    paid_amount = total, 
+                    remaining_debt = 0
+                WHERE client_id IN (
+                    SELECT id FROM clients WHERE total_debt = 0
+                ) AND status = 'pending'
+            ''')
+            
+            updated_sales = cursor.rowcount
+            print(f"✅ {updated_sales} ventas marcadas como 'paid'")
+            
+            # 2. Para clientes con deuda > 0, marcar las ventas más antiguas como pagadas
+            # hasta que la suma coincida con la deuda real
+            cursor.execute('''
+                SELECT c.id, c.name, c.total_debt
+                FROM clients c
+                WHERE c.total_debt > 0
+            ''')
+            
+            clients_with_debt = cursor.fetchall()
+            
+            for client in clients_with_debt:
+                client_id = client['id']
+                current_debt = client['total_debt']
+                
+                # Obtener ventas pendientes ordenadas por fecha (más antiguas primero)
+                cursor.execute('''
+                    SELECT id, total, COALESCE(paid_amount, 0) as paid_amount
+                    FROM sales 
+                    WHERE client_id = ? AND status = 'pending'
+                    ORDER BY created_at ASC
+                ''', (client_id,))
+                
+                pending_sales = cursor.fetchall()
+                total_pending = sum(sale['total'] - sale['paid_amount'] for sale in pending_sales)
+                
+                if total_pending > current_debt:
+                    # Hay más ventas pendientes que deuda real
+                    # Marcar algunas como pagadas
+                    remaining_debt = current_debt
+                    
+                    for sale in pending_sales:
+                        sale_balance = sale['total'] - sale['paid_amount']
+                        
+                        if remaining_debt <= 0:
+                            # Esta venta debe estar completamente pagada
+                            cursor.execute('''
+                                UPDATE sales 
+                                SET status = 'paid', 
+                                    paid_amount = total, 
+                                    remaining_debt = 0
+                                WHERE id = ?
+                            ''', (sale['id'],))
+                            
+                        elif remaining_debt < sale_balance:
+                            # Esta venta está parcialmente pagada
+                            new_paid_amount = sale['total'] - remaining_debt
+                            cursor.execute('''
+                                UPDATE sales 
+                                SET paid_amount = ?, 
+                                    remaining_debt = ?
+                                WHERE id = ?
+                            ''', (new_paid_amount, remaining_debt, sale['id']))
+                            remaining_debt = 0
+                            
+                        else:
+                            # Esta venta sigue pendiente completamente
+                            remaining_debt -= sale_balance
+            
+            conn.commit()
+            conn.close()
+            
+            print(f"✅ Estados de ventas sincronizados para {len(clients_with_debt)} clientes con deuda")
+            
+            # Recargar el resumen financiero
+            self.load_financial_summary()
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error al sincronizar estados: {e}")
+            if conn:
+                conn.rollback()
+                conn.close()
+            return False
+    
+    def diagnose_inventory_discrepancy(self):
+        """Diagnostica discrepancias en el inventario y ofrece soluciones"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print("🔍 DIAGNÓSTICO DE INVENTARIO")
+            print("=" * 50)
+            
+            # 1. Verificar productos con stock vs ventas
+            cursor.execute('''
+                SELECT 
+                    p.id,
+                    p.name,
+                    p.cost_price,
+                    COALESCE(SUM(pd.quantity), 0) as purchased_qty,
+                    COALESCE(SUM(sd.quantity), 0) as sold_qty,
+                    COALESCE(SUM(l.quantity), 0) as lost_qty,
+                    (COALESCE(SUM(pd.quantity), 0) - COALESCE(SUM(sd.quantity), 0) - COALESCE(SUM(l.quantity), 0)) as calculated_stock
+                FROM products p
+                LEFT JOIN purchase_details pd ON p.id = pd.product_id
+                LEFT JOIN sale_details sd ON p.id = sd.product_id
+                LEFT JOIN losses l ON p.id = l.product_id
+                GROUP BY p.id
+                HAVING calculated_stock > 0
+            ''')
+            
+            stock_discrepancies = cursor.fetchall()
+            
+            print("📦 PRODUCTOS CON STOCK APARENTE:")
+            for product in stock_discrepancies:
+                print(f"  • {product['name']}")
+                print(f"    - Comprado: {product['purchased_qty']}")
+                print(f"    - Vendido: {product['sold_qty']}")
+                print(f"    - Perdido: {product['lost_qty']}")
+                print(f"    - Stock calculado: {product['calculated_stock']}")
+                print(f"    - Valor stock: ${product['calculated_stock'] * product['cost_price']:,.2f}")
+                print()
+            
+            # 2. Verificar inconsistencias en precios de costo
+            cursor.execute('''
+                SELECT DISTINCT p.id, p.name, p.cost_price,
+                    AVG(pd.unit_cost) as avg_purchase_price
+                FROM products p
+                JOIN purchase_details pd ON p.id = pd.product_id
+                GROUP BY p.id
+                HAVING ABS(p.cost_price - AVG(pd.unit_cost)) > 0.01
+            ''')
+            
+            price_discrepancies = cursor.fetchall()
+            
+            if price_discrepancies:
+                print("💰 INCONSISTENCIAS EN PRECIOS DE COSTO:")
+                for product in price_discrepancies:
+                    print(f"  • {product['name']}")
+                    print(f"    - Precio en producto: ${product['cost_price']:,.2f}")
+                    print(f"    - Precio promedio compras: ${product['avg_purchase_price']:,.2f}")
+                    print()
+            
+            # 3. Calcular el verdadero valor del inventario
+            total_purchases = 0
+            total_sold_at_cost = 0
+            total_losses = 0
+            
+            cursor.execute('SELECT SUM(total_cost) FROM purchases')
+            result = cursor.fetchone()
+            total_purchases = float(result[0] if result[0] else 0)
+            
+            cursor.execute('''
+                SELECT SUM(sd.quantity * p.cost_price)
+                FROM sale_details sd
+                JOIN products p ON sd.product_id = p.id
+            ''')
+            result = cursor.fetchone()
+            total_sold_at_cost = float(result[0] if result[0] else 0)
+            
+            cursor.execute('SELECT SUM(total_cost) FROM losses')
+            result = cursor.fetchone()
+            total_losses = float(result[0] if result[0] else 0)
+            
+            calculated_inventory = total_purchases - total_sold_at_cost - total_losses
+            
+            print("📊 RESUMEN FINANCIERO:")
+            print(f"  Total compras: ${total_purchases:,.2f}")
+            print(f"  Vendido (a costo): ${total_sold_at_cost:,.2f}")
+            print(f"  Pérdidas: ${total_losses:,.2f}")
+            print(f"  Inventario calculado: ${calculated_inventory:,.2f}")
+            print()
+            
+            # 4. Proponer soluciones
+            if calculated_inventory > 100:  # Si hay más de $100 en inventario
+                print("🔧 SOLUCIONES RECOMENDADAS:")
+                print("  1. Verificar que todos los productos vendidos estén registrados")
+                print("  2. Registrar pérdidas/mermas no contabilizadas")
+                print("  3. Actualizar stock_quantity en productos a 0")
+                print("  4. Revisar precios de costo inconsistentes")
+                
+                if messagebox.askyesno("Corregir Stock", 
+                                    f"¿Desea poner en 0 el stock de todos los productos?\n"
+                                    f"Inventario actual calculado: ${calculated_inventory:,.2f}"):
+                    self.zero_out_all_stock()
+            
+            conn.close()
+            return calculated_inventory
+            
+        except Exception as e:
+            print(f"Error en diagnóstico: {e}")
+            if conn:
+                conn.close()
+            return None
+
+    def zero_out_all_stock(self):
+        """Registra diferencias como pérdidas en lugar de modificar stock"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Encontrar productos con stock calculado > 0
+            cursor.execute('''
+                SELECT 
+                    p.id, p.name, p.cost_price,
+                    (COALESCE(SUM(pd.quantity), 0) - COALESCE(SUM(sd.quantity), 0) - COALESCE(SUM(l.quantity), 0)) as stock_diff
+                FROM products p
+                LEFT JOIN purchase_details pd ON p.id = pd.product_id
+                LEFT JOIN sale_details sd ON p.id = sd.product_id  
+                LEFT JOIN losses l ON p.id = l.product_id
+                GROUP BY p.id
+                HAVING stock_diff > 0
+            ''')
+            
+            products = cursor.fetchall()
+            total_registered = 0
+            
+            for product in products:
+                loss_value = product['stock_diff'] * product['cost_price']
+                cursor.execute('''
+                    INSERT INTO losses (product_id, quantity, unit_cost, total_cost, loss_type, reason, created_at)
+                    VALUES (?, ?, ?, ?, 'adjustment', 'Ajuste inventario', datetime('now', 'localtime'))
+                ''', (product['id'], product['stock_diff'], product['cost_price'], loss_value))
+                total_registered += 1
+            
+            conn.commit()
+            conn.close()
+            
+            messagebox.showinfo("Éxito", f"Se registraron {total_registered} ajustes como pérdidas")
+            self.load_financial_summary()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error: {e}")
+
+    def register_inventory_loss_bulk(self):
+        """Registra las diferencias de inventario como pérdidas"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Obtener productos con stock calculado > 0
+            cursor.execute('''
+                SELECT 
+                    p.id, p.name, p.cost_price,
+                    (COALESCE(SUM(pd.quantity), 0) - COALESCE(SUM(sd.quantity), 0) - COALESCE(SUM(l.quantity), 0)) as stock_diff
+                FROM products p
+                LEFT JOIN purchase_details pd ON p.id = pd.product_id
+                LEFT JOIN sale_details sd ON p.id = sd.product_id
+                LEFT JOIN losses l ON p.id = l.product_id
+                GROUP BY p.id
+                HAVING stock_diff > 0
+            ''')
+            
+            products_with_stock = cursor.fetchall()
+            
+            if not products_with_stock:
+                messagebox.showinfo("Info", "No hay discrepancias de inventario para registrar")
+                return
+            
+            total_loss_value = 0
+            registered_losses = 0
+            
+            for product in products_with_stock:
+                if product['stock_diff'] > 0:
+                    loss_value = product['stock_diff'] * product['cost_price']
+                    total_loss_value += loss_value
+                    
+                    # Registrar la pérdida
+                    cursor.execute('''
+                        INSERT INTO losses (product_id, quantity, unit_cost, total_cost, loss_type, reason, created_at)
+                        VALUES (?, ?, ?, ?, 'inventory_adjustment', 'Ajuste por diferencia de inventario', datetime('now', 'localtime'))
+                    ''', (product['id'], product['stock_diff'], product['cost_price'], loss_value))
+                    
+                    registered_losses += 1
+            
+            conn.commit()
+            conn.close()
+            
+            messagebox.showinfo("Éxito", 
+                            f"Se registraron {registered_losses} pérdidas por ajuste de inventario\n"
+                            f"Valor total: ${total_loss_value:,.2f}")
+            
+            # Recargar datos
+            self.load_financial_summary()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error registrando pérdidas: {e}")
+
+    def get_inventory_sold_with_proportional_costs(self):
+        """
+        Calcula el valor del inventario vendido incluyendo proporcionalmente
+        flete e IVA basado en las compras originales
+        """
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Obtener todas las ventas con sus detalles y calcular costo real
+            cursor.execute('''
+                SELECT 
+                    sd.product_id,
+                    sd.quantity as sold_qty,
+                    p.cost_price as base_cost,
+                    -- Calcular costo total promedio por producto (incluyendo flete/IVA)
+                    AVG(pd.unit_cost + 
+                        COALESCE(pd.unit_freight, 0) + 
+                        COALESCE(pd.unit_tax, 0)) as avg_total_cost_per_unit
+                FROM sale_details sd
+                JOIN products p ON sd.product_id = p.id
+                JOIN purchase_details pd ON pd.product_id = p.id
+                GROUP BY sd.sale_id, sd.product_id
+            ''')
+            
+            sales_data = cursor.fetchall()
+            total_inventory_sold = 0
+            
+            for sale in sales_data:
+                # Usar el costo total promedio (base + flete + IVA proporcional)
+                real_unit_cost = sale['avg_total_cost_per_unit']
+                sold_value = sale['sold_qty'] * real_unit_cost
+                total_inventory_sold += sold_value
+            
+            conn.close()
+            return total_inventory_sold
+            
+        except Exception as e:
+            print(f"Error calculando inventario vendido con costos reales: {e}")
+            return 0.0
+
+    def calculate_real_inventory_value(self):
+        """
+        Calcula el valor real del inventario considerando todos los costos
+        """
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # 1. Total invertido en compras (precio + flete + IVA)
+            cursor.execute('''
+                SELECT SUM(total_cost) as total_purchases
+                FROM purchases
+            ''')
+            total_purchases = cursor.fetchone()['total_purchases'] or 0
+            
+            # 2. Inventario vendido con costos proporcionales
+            cursor.execute('''
+                SELECT 
+                    p.id,
+                    p.cost_price,
+                    SUM(sd.quantity) as total_sold,
+                    -- Calcular costo promedio real por unidad para este producto
+                    (SELECT AVG(
+                        pd.unit_cost + 
+                        COALESCE((pd.unit_cost * pur.freight_cost / pur.subtotal), 0) +
+                        COALESCE((pd.unit_cost * pur.tax_amount / pur.subtotal), 0)
+                    ) 
+                    FROM purchase_details pd 
+                    JOIN purchases pur ON pd.purchase_id = pur.id
+                    WHERE pd.product_id = p.id) as real_avg_cost
+                FROM products p
+                JOIN sale_details sd ON p.id = sd.product_id
+                GROUP BY p.id
+            ''')
+            
+            products_sold = cursor.fetchall()
+            total_sold_value = 0
+            
+            for product in products_sold:
+                if product['real_avg_cost']:
+                    sold_value = product['total_sold'] * product['real_avg_cost']
+                    total_sold_value += sold_value
+            
+            # 3. Total de pérdidas
+            cursor.execute('SELECT SUM(total_cost) FROM losses')
+            total_losses = cursor.fetchone()[0] or 0
+            
+            # 4. Inventario real
+            real_inventory = total_purchases - total_sold_value - total_losses
+            
+            conn.close()
+            
+            return {
+                'total_purchases': total_purchases,
+                'inventory_sold_real': total_sold_value,
+                'total_losses': total_losses,
+                'real_inventory_value': max(0, real_inventory)
+            }
+            
+        except Exception as e:
+            print(f"Error calculando inventario real: {e}")
+            return None

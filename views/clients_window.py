@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from models.client import Client
 from config.database import get_connection
+import sqlite3
 
 class ClientsWindow:
     def __init__(self, parent, user, main_window=None):
@@ -15,7 +16,7 @@ class ClientsWindow:
         self.window = tk.Toplevel(parent)
         self.window.title("Clientes")
         self.window.geometry("1000x650")
-        self.window.resizable(False, False)
+        self.window.resizable(True, True)
         self.center_window()
 
         # UI
@@ -718,9 +719,6 @@ class CreditManagementWindow:
                 self.payment_amount_entry.focus()
                 return
             
-            # Mostrar distribución del pago
-            allocation_info = self.show_payment_allocation(amount)
-            
             # Confirmar operación
             result = messagebox.askyesno("Confirmar Pago", 
                 f"¿Desea registrar este pago?\n\n"
@@ -728,22 +726,23 @@ class CreditManagementWindow:
                 f"Monto: ${amount:,.2f}\n"
                 f"Descripción: {description}\n\n"
                 f"Deuda actual: ${self.client.total_debt:,.2f}\n"
-                f"Deuda después del pago: ${self.client.total_debt - amount:,.2f}\n\n"
-                f"--- DISTRIBUCIÓN DEL PAGO ---\n"
-                f"{allocation_info}")
+                f"Deuda después del pago: ${self.client.total_debt - amount:,.2f}")
             
             if result:
-                # Marcar ventas específicas como pagadas
-                updated_sales = self.mark_specific_sales_as_paid(amount)
+                # PRIMERO: Actualizar ventas pendientes
+                updated_sales = self.update_sales_payment_status(amount)
                 
-                # Registrar el pago en el cliente
+                # SEGUNDO: Registrar el pago en el cliente
                 self.client.pay_debt(amount, description)
+                
+                # TERCERO: Actualizar el cliente desde la base de datos
+                self.client = Client.get_by_id(self.client.id)
                 
                 # Limpiar campos
                 self.payment_amount_entry.delete(0, tk.END)
                 self.payment_desc_entry.delete(0, tk.END)
                 
-                # Mostrar mensaje de éxito con detalles
+                # Mostrar mensaje de éxito
                 remaining_debt = self.client.total_debt
                 success_message = f"¡Pago registrado correctamente!\n\n"
                 success_message += f"Monto pagado: ${amount:,.2f}\n"
@@ -754,24 +753,121 @@ class CreditManagementWindow:
                     success_message += f"Deuda restante: ${remaining_debt:,.2f}\n\n"
                 
                 # Agregar información de ventas actualizadas
-                if updated_sales:
-                    success_message += "📋 Ventas actualizadas:\n"
-                    for sale in updated_sales:
-                        if sale['status'] == 'paid_complete':
-                            success_message += f"✅ Venta #{sale['id']}: ${sale['amount']:,.2f} - PAGADA\n"
-                        elif sale['status'] == 'paid_partial':
-                            success_message += f"⚠️ Venta #{sale['id']}: ${sale['amount']:,.2f} pagado, ${sale['remaining']:,.2f} pendiente\n"
-                
+                if updated_sales['total_updated'] > 0:
+                    success_message += f"📋 {updated_sales['total_updated']} ventas actualizadas a estado 'paid'\n"
+                    
                 messagebox.showinfo("Pago Registrado", success_message)
                 
-                # Actualizar la interfaz y cerrar si es necesario
+                # Actualizar la interfaz y cerrar
                 self.refresh_and_close()
                 
         except Exception as e:
-            # Manejo de errores inesperados
-            messagebox.showerror("Error", 
-                f"Ocurrió un error inesperado:\n{str(e)}")
+            messagebox.showerror("Error", f"Ocurrió un error inesperado:\n{str(e)}")
             print(f"Error en register_payment: {e}")
+
+    def update_sales_payment_status(self, payment_amount):
+        """Actualiza el estado de las ventas pendientes a 'paid' basándose en el pago"""
+        try:
+            from config.database import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Obtener ventas pendientes ordenadas por fecha
+            cursor.execute('''
+                SELECT id, total, created_at 
+                FROM sales 
+                WHERE client_id = ? AND status = 'pending'
+                ORDER BY created_at ASC
+            ''', (self.client.id,))
+            
+            pending_sales = cursor.fetchall()
+            
+            if not pending_sales:
+                conn.close()
+                return {'total_updated': 0, 'sales_updated': []}
+            
+            remaining_payment = payment_amount
+            updated_sales = []
+            
+            # Procesar cada venta pendiente
+            for sale in pending_sales:
+                if remaining_payment <= 0:
+                    break
+                    
+                sale_id = sale[0]
+                sale_total = float(sale[1])
+                
+                if remaining_payment >= sale_total:
+                    # Pago completo de esta venta
+                    cursor.execute('''
+                        UPDATE sales 
+                        SET status = 'paid', updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    ''', (sale_id,))
+                    
+                    remaining_payment -= sale_total
+                    updated_sales.append({
+                        'id': sale_id,
+                        'amount_paid': sale_total,
+                        'status': 'paid_complete'
+                    })
+                    
+                    print(f"✅ Venta #{sale_id} marcada como 'paid' - Monto: ${sale_total:,.2f}")
+                    
+                else:
+                    # Pago parcial - dividir la venta
+                    paid_amount = remaining_payment
+                    remaining_amount = sale_total - paid_amount
+                    
+                    # Actualizar la venta original con el monto pagado
+                    cursor.execute('''
+                        UPDATE sales 
+                        SET total = ?, status = 'paid', updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    ''', (paid_amount, sale_id))
+                    
+                    # Crear nueva venta con el monto restante
+                    cursor.execute('''
+                        INSERT INTO sales (client_id, total, status, notes, created_at, updated_at)
+                        VALUES (?, ?, 'pending', ?, ?, datetime('now', 'localtime'))
+                    ''', (
+                        self.client.id, 
+                        remaining_amount, 
+                        f"Saldo pendiente de venta #{sale_id}", 
+                        sale[2]  # Mantener la fecha original
+                    ))
+                    
+                    updated_sales.append({
+                        'id': sale_id,
+                        'amount_paid': paid_amount,
+                        'remaining': remaining_amount,
+                        'status': 'paid_partial'
+                    })
+                    
+                    remaining_payment = 0
+                    print(f"⚠️ Venta #{sale_id} pago parcial - Pagado: ${paid_amount:,.2f}, Restante: ${remaining_amount:,.2f}")
+            
+            # Confirmar cambios
+            conn.commit()
+            conn.close()
+            
+            print(f"🔄 Total de ventas actualizadas: {len(updated_sales)}")
+            
+            return {
+                'total_updated': len(updated_sales),
+                'sales_updated': updated_sales,
+                'remaining_payment': remaining_payment
+            }
+            
+        except Exception as e:
+            print(f"❌ Error al actualizar estado de ventas: {e}")
+            if conn:
+                conn.rollback()
+                conn.close()
+            return {'total_updated': 0, 'sales_updated': [], 'error': str(e)}
+
+
 
     def update_pending_sales_to_paid(self):
         """Actualiza las ventas pendientes a pagadas cuando la deuda se salda"""
@@ -805,22 +901,34 @@ class CreditManagementWindow:
     # Agregar estos métodos a la clase CreditManagementWindow
 
     def get_pending_sales(self):
-        """Obtiene las ventas pendientes del cliente"""
+        """Obtiene las ventas pendientes del cliente - VERSIÓN CORREGIDA"""
         try:
             from config.database import get_connection
             
             conn = get_connection()
             cursor = conn.cursor()
             
+            # CORRECCIÓN: Usar los nombres correctos de columnas
             cursor.execute('''
-                SELECT id, sale_date, total_amount, notes
+                SELECT id, total, created_at, notes
                 FROM sales 
-                WHERE client_id = ? AND payment_status = 'pending'
-                ORDER BY sale_date ASC
+                WHERE client_id = ? AND status = 'pending'
+                ORDER BY created_at ASC
             ''', (self.client.id,))
             
-            pending_sales = cursor.fetchall()
+            # Convertir a diccionarios para fácil acceso
+            columns = [description[0] for description in cursor.description]
+            pending_sales = []
+            
+            for row in cursor.fetchall():
+                sale_dict = dict(zip(columns, row))
+                pending_sales.append(sale_dict)
+            
             conn.close()
+            
+            print(f"📊 Ventas pendientes encontradas: {len(pending_sales)}")
+            for sale in pending_sales:
+                print(f"   - Venta #{sale['id']}: ${sale['total']:,.2f}")
             
             return pending_sales
             
@@ -843,19 +951,16 @@ class CreditManagementWindow:
             remaining_payment = payment_amount
             updated_sales = []
             
-            # Marcar ventas más antiguas primero (FIFO)
             for sale in pending_sales:
                 if remaining_payment <= 0:
                     break
                     
-                sale_total = sale['total_amount']
+                sale_total = sale['total']  # Usar 'total' en lugar de 'total_amount'
                 
                 if remaining_payment >= sale_total:
-                    # Pago completo de esta venta
                     cursor.execute('''
                         UPDATE sales 
-                        SET payment_status = 'paid',
-                            updated_at = CURRENT_TIMESTAMP
+                        SET status = 'paid'
                         WHERE id = ?
                     ''', (sale['id'],))
                     
@@ -863,35 +968,31 @@ class CreditManagementWindow:
                     updated_sales.append({
                         'id': sale['id'],
                         'amount': sale_total,
-                        'date': sale['sale_date'],
+                        'date': sale['created_at'],
                         'status': 'paid_complete'
                     })
                 else:
-                    # Pago parcial - crear nueva venta con el monto restante
                     paid_amount = remaining_payment
                     remaining_amount = sale_total - paid_amount
                     
-                    # Marcar la venta original como pagada
                     cursor.execute('''
                         UPDATE sales 
-                        SET payment_status = 'paid',
-                            total_amount = ?,
-                            updated_at = CURRENT_TIMESTAMP
+                        SET status = 'paid',
+                            total = ?
                         WHERE id = ?
                     ''', (paid_amount, sale['id']))
                     
-                    # Crear nueva venta con el monto pendiente
                     cursor.execute('''
-                        INSERT INTO sales (client_id, total_amount, payment_status, notes, sale_date)
+                        INSERT INTO sales (client_id, total, status, notes, created_at)
                         VALUES (?, ?, 'pending', ?, ?)
                     ''', (self.client.id, remaining_amount, 
                         f"Pago parcial - Restante de venta #{sale['id']}", 
-                        sale['sale_date']))
+                        sale['created_at']))
                     
                     updated_sales.append({
                         'id': sale['id'],
                         'amount': paid_amount,
-                        'date': sale['sale_date'],
+                        'date': sale['created_at'],
                         'status': 'paid_partial',
                         'remaining': remaining_amount
                     })
@@ -908,33 +1009,32 @@ class CreditManagementWindow:
             return []
 
     def show_payment_allocation(self, amount):
-        """Muestra cómo se distribuirá el pago entre las ventas pendientes"""
+        """Muestra cómo se distribuirá el pago entre las ventas pendientes - VERSIÓN CORREGIDA"""
         pending_sales = self.get_pending_sales()
         if not pending_sales:
             return "No hay ventas pendientes"
         
-        allocation_text = f"Distribución del pago de ${amount:,.2f}:\n\n"
+        allocation_text = ""
         remaining_payment = amount
         
         for i, sale in enumerate(pending_sales, 1):
             if remaining_payment <= 0:
                 break
                 
-            sale_total = sale['total_amount']
-            sale_date = sale['sale_date']
+            sale_total = float(sale['total'])
+            sale_date = sale['created_at'][:16]  # Solo fecha y hora sin segundos
             
             if remaining_payment >= sale_total:
-                allocation_text += f"• Venta #{sale['id']} ({sale_date}): ${sale_total:,.2f} - ✅ PAGADA COMPLETA\n"
+                allocation_text += f"✅ Venta #{sale['id']} ({sale_date}): ${sale_total:,.2f} - PAGADA COMPLETA\n"
                 remaining_payment -= sale_total
             else:
-                allocation_text += f"• Venta #{sale['id']} ({sale_date}): ${remaining_payment:,.2f} de ${sale_total:,.2f} - ⚠️ PAGO PARCIAL\n"
-                allocation_text += f"  Restante: ${sale_total - remaining_payment:,.2f}\n"
+                allocation_text += f"⚠️ Venta #{sale['id']} ({sale_date}): ${remaining_payment:,.2f} de ${sale_total:,.2f} - PAGO PARCIAL\n"
                 remaining_payment = 0
         
         if remaining_payment > 0:
-            allocation_text += f"\n💰 Sobrante: ${remaining_payment:,.2f} (se aplicará como crédito a favor)"
+            allocation_text += f"\n💰 Sobrante: ${remaining_payment:,.2f}"
         
-        return allocation_text
+        return allocation_text.strip()
     
     def view_history(self):
         """Muestra el historial del cliente"""
@@ -952,6 +1052,9 @@ class CreditManagementWindow:
 
 class ClientHistoryWindow:
     def __init__(self, parent, client):
+        # Validación inicial del cliente
+        if not client or not hasattr(client, 'id') or not hasattr(client, 'name'):
+            raise ValueError("Cliente inválido: faltan atributos requeridos")
         self.parent = parent
         self.selected_client = client
         
@@ -1049,72 +1152,171 @@ class ClientHistoryWindow:
         ).pack(side=tk.RIGHT)
         
     def load_history(self):
+        """Carga el historial de transacciones con orden cronológico preciso"""
+        if not hasattr(self.selected_client, 'id'):
+            messagebox.showerror("Error", "Cliente no válido")
+            return
+
+        conn = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            # CORRECCIÓN: Incluir segundos en la fecha mostrada
+            cursor.execute('''
+                SELECT 
+                    strftime('%Y-%m-%d %H:%M:%S', created_at) as fecha_completa,
+                    transaction_type as tipo,
+                    amount as monto,
+                    description as descripcion,
+                    sale_id,
+                    created_at
+                FROM client_transactions
+                WHERE client_id = ?
+                ORDER BY datetime(created_at) ASC
+            ''', (self.selected_client.id,))
+
+            self.tree.delete(*self.tree.get_children())
+            self.configure_tree_styles()
+
+            for row in cursor.fetchall():
+                self.process_transaction_row(row)
+
+        except sqlite3.Error as e:
+            messagebox.showerror("Error de BD", f"No se pudo cargar el historial:\n{str(e)}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error inesperado:\n{str(e)}")
+        finally:
+            if conn:
+                conn.close()
+
+    def configure_tree_styles(self):
+        """Configura los estilos visuales para diferentes tipos de transacciones"""
+        style = ttk.Style()
+        style.configure('Debit.Treeview', foreground='red')
+        style.configure('Credit.Treeview', foreground='green')
+        style.configure('Reversal.Treeview', foreground='orange')
+        
+        self.tree.tag_configure('deuda', background='#ffeeee')
+        self.tree.tag_configure('pago', background='#eeffee')
+        self.tree.tag_configure('reversion', background='#fff8e8')
+
+    def process_transaction_row(self, row):
+        """Procesa y muestra una fila individual del historial"""
+        try:
+            tipo_map = {
+                'debit': ('DEUDA', 'deuda'),
+                'credit': ('PAGO', 'pago'),
+                'debit_reversal': ('REVERSIÓN', 'reversion'),
+                'payment': ('PAGO', 'pago'),
+                'adjustment': ('AJUSTE', 'ajuste')
+            }
+            
+            # Obtener datos de la fila
+            fecha_completa = str(row[0]) if row[0] else 'Fecha desconocida'
+            raw_type = str(row[1]).lower() if row[1] else ''
+            monto = float(row[2]) if row[2] else 0.0
+            descripcion = str(row[3]) if row[3] else 'Sin descripción'
+            sale_id = row[4] if len(row) > 4 and row[4] else None
+            
+            tipo_display, tag = tipo_map.get(raw_type, (raw_type.upper(), ''))
+            
+            # Formato de monto
+            if raw_type in ['credit', 'debit_reversal', 'payment']:
+                monto_formateado = f"-${abs(monto):,.2f}"
+            else:
+                monto_formateado = f"${abs(monto):,.2f}"
+            
+            # Descripción con sale_id
+            if sale_id:
+                descripcion = f"{descripcion.strip()} (Venta #{sale_id})"
+            
+            # CORRECCIÓN: Mostrar fecha completa con segundos
+            fecha_display = fecha_completa  # Ya incluye segundos del SELECT
+            
+            self.tree.insert('', 'end',
+                values=(
+                    fecha_display,
+                    tipo_display,
+                    monto_formateado,
+                    descripcion.strip()
+                ),
+                tags=(tag,)
+            )
+        except Exception as e:
+            print(f"Error al procesar transacción: {e}")
+            self.tree.insert('', 'end',
+                values=("Error", "Error", "$0.00", f"Error: {str(e)}"),
+                tags=('error',)
+            )
+            
+    def configure_tree_tags(self):
+        """Configura los estilos para diferentes tipos de transacciones"""
+        self.tree.tag_configure('deuda', background='#ffdddd', foreground='black')
+        self.tree.tag_configure('pago', background='#ddffdd', foreground='black')
+        self.tree.tag_configure('reversion', background='#fff3e0', foreground='black')
+        self.tree.tag_configure('ajuste', background='#e3f2fd', foreground='black')
+        self.tree.tag_configure('info', background='#f5f5f5', foreground='gray')
+
+    def add_transaction_to_tree(self, row):
+        """Añade transacciones manteniendo el orden cronológico"""
+        # Convertir tipos de transacción a español
+        tipo_map = {
+            'debit': 'DEUDA',
+            'credit': 'PAGO',
+            'debit_reversal': 'REVERSIÓN',
+            'payment': 'PAGO'
+        }
+        
+        tipo = tipo_map.get(row['tipo'].lower(), row['tipo'])
+        monto = f"${abs(float(row['monto'])):,.2f}" if row['monto'] else "$0.00"
+        
+        self.tree.insert('', 'end', 
+            values=(
+                row['fecha'],
+                tipo,
+                monto,
+                row['descripcion']
+            ),
+            tags=(tipo.lower(),)
+        )
+
+    def get_transaction_style(self, transaction_type):
+        """Devuelve el estilo y texto a mostrar para cada tipo de transacción"""
+        transaction_type = (transaction_type or "").lower()
+        
+        if transaction_type == 'debit':
+            return 'deuda', 'DEUDA'
+        elif transaction_type == 'credit':
+            return 'pago', 'PAGO'
+        elif transaction_type == 'reversal':
+            return 'reversion', 'REVERSIÓN'
+        elif transaction_type == 'adjustment':
+            return 'ajuste', 'AJUSTE'
+        else:
+            return '', transaction_type.upper()
+        
+    def create_transaction(client_id, transaction_type, amount, description):
+        """Crea una transacción con timestamp local correcto"""
         conn = None
         try:
             conn = get_connection()
             cursor = conn.cursor()
             
+            # CORRECCIÓN: Usar 'localtime' para hora local correcta
             cursor.execute('''
-                SELECT  
-                    date(created_at) as fecha,
-                    transaction_type,
-                    amount,
-                    description
-                FROM client_transactions
-                WHERE client_id = ?
-                ORDER BY created_at DESC
-            ''', (self.selected_client.id,))
-
-            # Limpiar tabla
-            self.tree.delete(*self.tree.get_children())
-
-            # Configurar tags para colores
-            self.tree.tag_configure('debit', foreground='red')      # Rojo para deudas
-            self.tree.tag_configure('credit', foreground='green')   # Verde para pagos
-            self.tree.tag_configure('adjustment', foreground='orange')  # Amarillo/naranja para ajustes
-            self.tree.tag_configure('debit_reversal', foreground='orange')  # Amarillo/naranja para reversiones
-
-            # Añadir filas con colores
-            for row in cursor.fetchall():
-                fecha = row['fecha'] if row['fecha'] is not None else "N/A"
-                transaction_type = row['transaction_type'] if row['transaction_type'] is not None else ""
-                amount = row['amount'] if row['amount'] is not None else 0
-                descripcion = row['description'] if row['description'] is not None else "Sin descripción"
-                
-                # Determinar tipo, monto y tag según el tipo de transacción
-                if transaction_type == 'debit':
-                    tipo = 'DEUDA'
-                    monto = f"${abs(amount):,.2f}"
-                    tag = 'debit'
-                elif transaction_type == 'credit':
-                    tipo = 'PAGO'
-                    monto = f"${abs(amount):,.2f}"
-                    tag = 'credit'
-                elif transaction_type == 'adjustment':
-                    tipo = 'AJUSTE'
-                    monto = f"${abs(amount):,.2f}"
-                    tag = 'adjustment'
-                elif transaction_type == 'debit_reversal':
-                    tipo = 'REVERSIÓN'
-                    monto = f"${abs(amount):,.2f}"
-                    tag = 'debit_reversal'
-                else:
-                    tipo = 'OTRO'
-                    monto = f"${abs(amount):,.2f}" if amount else "$0.00"
-                    tag = ''
-                
-                self.tree.insert('', 'end', 
-                    values=(
-                        fecha,
-                        tipo,
-                        monto,
-                        descripcion
-                    ),
-                    tags=(tag,)
-                )
-                
+                INSERT INTO client_transactions 
+                    (client_id, transaction_type, amount, description, created_at)
+                VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+            ''', (client_id, transaction_type.lower(), abs(amount), description.strip()))
+            
+            conn.commit()
+            return True
         except Exception as e:
-            messagebox.showerror("Error", f"Error al cargar historial: {str(e)}")
+            print(f"Error al crear transacción: {e}")
+            if conn:
+                conn.rollback()
+            return False
         finally:
             if conn:
                 conn.close()

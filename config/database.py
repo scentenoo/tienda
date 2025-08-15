@@ -73,6 +73,7 @@ def migrate_sales_table():
     finally:
         if conn:
             conn.close()
+            
 
 def init_database():
     """Inicializa la base de datos con las tablas necesarias - VERSIÓN CORREGIDA"""
@@ -142,8 +143,10 @@ def init_database():
                 transaction_type TEXT NOT NULL,
                 amount REAL NOT NULL,
                 description TEXT NOT NULL,
+                sale_id INTEGER NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (client_id) REFERENCES clients (id)
+                FOREIGN KEY (client_id) REFERENCES clients (id),
+                FOREIGN KEY (sale_id) REFERENCES sales (id)
             )
         ''')
         
@@ -281,11 +284,8 @@ def init_database():
         print("Base de datos inicializada correctamente")
         
         # Cerrar conexión antes de llamar a migrate_sales_table
-        conn.close()
-        
-        # Ejecutar migración con nueva conexión
-        migrate_sales_table()
-        
+        migrate_client_transactions_table() 
+
     except Exception as e:
         print(f"Error al inicializar base de datos: {e}")
         if conn:
@@ -296,6 +296,81 @@ def init_database():
                 conn.close()
             except sqlite3.ProgrammingError:
                 pass  # Ya estaba cerrada
+
+
+def migrate_client_transactions_table():
+    """Agrega la columna sale_id a client_transactions si no existe"""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar si la columna sale_id ya existe
+        cursor.execute("PRAGMA table_info(client_transactions)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'sale_id' not in columns:
+            cursor.execute('''
+                ALTER TABLE client_transactions 
+                ADD COLUMN sale_id INTEGER NULL
+            ''')
+            print("Columna sale_id agregada a client_transactions")
+            
+            # Agregar la foreign key constraint si no existe
+            cursor.execute('''
+                PRAGMA foreign_key_list(client_transactions)
+            ''')
+            fks = cursor.fetchall()
+            sale_id_fk_exists = any(fk[3] == 'sales' for fk in fks)
+            
+            if not sale_id_fk_exists:
+                # SQLite no permite agregar FK constraints con ALTER TABLE,
+                # así que necesitamos recrear la tabla
+                print("Recreando tabla client_transactions con FK constraint...")
+                
+                # 1. Crear tabla temporal
+                cursor.execute('''
+                    CREATE TABLE temp_client_transactions AS
+                    SELECT * FROM client_transactions
+                ''')
+                
+                # 2. Eliminar tabla original
+                cursor.execute('DROP TABLE client_transactions')
+                
+                # 3. Crear nueva tabla con la estructura correcta
+                cursor.execute('''
+                    CREATE TABLE client_transactions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        client_id INTEGER NOT NULL,
+                        transaction_type TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        description TEXT NOT NULL,
+                        sale_id INTEGER NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (client_id) REFERENCES clients (id),
+                        FOREIGN KEY (sale_id) REFERENCES sales (id)
+                    )
+                ''')
+                
+                # 4. Copiar datos de vuelta
+                cursor.execute('''
+                    INSERT INTO client_transactions
+                    SELECT * FROM temp_client_transactions
+                ''')
+                
+                # 5. Eliminar tabla temporal
+                cursor.execute('DROP TABLE temp_client_transactions')
+                
+        conn.commit()
+        print("Migración de client_transactions completada")
+        
+    except Exception as e:
+        print(f"Error al migrar client_transactions: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
 
 def update_client_debt_on_payment(client_id, payment_amount, sale_id):
     """Actualiza la deuda del cliente cuando se realiza un pago"""
@@ -313,9 +388,10 @@ def update_client_debt_on_payment(client_id, payment_amount, sale_id):
         
         # Registrar transacción de pago
         cursor.execute('''
-            INSERT INTO client_transactions (client_id, transaction_type, amount, description)
-            VALUES (?, 'payment', ?, ?)
-        ''', (client_id, -payment_amount, f"Pago de venta #{sale_id}"))
+            INSERT INTO client_transactions 
+                (client_id, transaction_type, amount, description, sale_id)  # sale_id agregado
+            VALUES (?, 'payment', ?, ?, ?)  # Un parámetro más
+        ''', (client_id, -payment_amount, f"Pago de venta #{sale_id}", sale_id))  # sale_id incluido
         
         # Actualizar status de la venta si está completamente pagada
         cursor.execute('''
@@ -384,6 +460,191 @@ def verify_data_integrity():
             
     except Exception as e:
         print(f"Error al verificar integridad: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_datetime_precision():
+    """Asegura que created_at tenga precisión de tiempo"""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar el tipo de dato actual
+        cursor.execute("PRAGMA table_info(client_transactions)")
+        columns = cursor.fetchall()
+        created_at_type = next((col[2] for col in columns if col[1] == 'created_at'), '')
+        
+        if 'TIMESTAMP' not in created_at_type.upper():
+            # Migrar a TIMESTAMP si no lo es
+            cursor.executescript('''
+                BEGIN;
+                CREATE TABLE temp_transactions AS SELECT * FROM client_transactions;
+                DROP TABLE client_transactions;
+                CREATE TABLE client_transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    client_id INTEGER NOT NULL,
+                    transaction_type TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    description TEXT NOT NULL,
+                    sale_id INTEGER NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (client_id) REFERENCES clients (id),
+                    FOREIGN KEY (sale_id) REFERENCES sales (id)
+                );
+                INSERT INTO client_transactions 
+                SELECT * FROM temp_transactions;
+                DROP TABLE temp_transactions;
+                COMMIT;
+            ''')
+            print("Migración a TIMESTAMP completada")
+        
+        conn.commit()
+    except Exception as e:
+        print(f"Error en migrate_datetime_precision: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+def fix_all_client_debts():
+    """Función para ejecutar una vez y arreglar todo"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        print("🔄 Iniciando corrección completa...")
+        
+        # 1. Recalcular todas las deudas basándose en transacciones
+        cursor.execute("SELECT id FROM clients")
+        client_ids = [row[0] for row in cursor.fetchall()]
+        
+        for client_id in client_ids:
+            # Calcular deuda real
+            cursor.execute("""
+                SELECT 
+                    COALESCE(SUM(CASE WHEN transaction_type = 'debit' THEN amount ELSE 0 END), 0) as debits,
+                    COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE 0 END), 0) as credits
+                FROM client_transactions 
+                WHERE client_id = ?
+            """, (client_id,))
+            
+            result = cursor.fetchone()
+            debits = float(result[0])
+            credits = float(result[1])
+            real_debt = max(0, debits - credits)
+            
+            # Actualizar cliente
+            cursor.execute("""
+                UPDATE clients 
+                SET total_debt = ?, updated_at = datetime('now', 'localtime')
+                WHERE id = ?
+            """, (real_debt, client_id))
+        
+        # 2. Sincronizar estados de ventas
+        # Marcar como pagadas las ventas de clientes sin deuda
+        cursor.execute('''
+            UPDATE sales 
+            SET status = 'paid', 
+                paid_amount = total, 
+                remaining_debt = 0,
+                updated_at = datetime('now', 'localtime')
+            WHERE client_id IN (
+                SELECT id FROM clients WHERE total_debt = 0
+            ) AND status = 'pending'
+        ''')
+        
+        updated_sales = cursor.rowcount
+        
+        # 3. Para clientes con deuda, ajustar estados de ventas
+        cursor.execute('''
+            SELECT c.id, c.total_debt
+            FROM clients c
+            WHERE c.total_debt > 0
+        ''')
+        
+        clients_with_debt = cursor.fetchall()
+        
+        for client in clients_with_debt:
+            client_id = client['id']
+            current_debt = client['total_debt']
+            
+            # Obtener ventas pendientes (más antiguas primero)
+            cursor.execute('''
+                SELECT id, total
+                FROM sales 
+                WHERE client_id = ? AND status = 'pending'
+                ORDER BY created_at ASC
+            ''', (client_id,))
+            
+            pending_sales = cursor.fetchall()
+            
+            # Distribuir la deuda en las ventas
+            remaining_debt = current_debt
+            for sale in pending_sales:
+                if remaining_debt <= 0:
+                    # Esta venta está pagada
+                    cursor.execute('''
+                        UPDATE sales 
+                        SET status = 'paid', paid_amount = total, remaining_debt = 0
+                        WHERE id = ?
+                    ''', (sale['id'],))
+                elif remaining_debt >= sale['total']:
+                    # Esta venta sigue pendiente completa
+                    remaining_debt -= sale['total']
+                    cursor.execute('''
+                        UPDATE sales 
+                        SET paid_amount = 0, remaining_debt = ?
+                        WHERE id = ?
+                    ''', (sale['total'], sale['id']))
+                else:
+                    # Esta venta está parcialmente pagada
+                    paid_amount = sale['total'] - remaining_debt
+                    cursor.execute('''
+                        UPDATE sales 
+                        SET paid_amount = ?, remaining_debt = ?
+                        WHERE id = ?
+                    ''', (paid_amount, remaining_debt, sale['id']))
+                    remaining_debt = 0
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Corrección completa terminada. {updated_sales} ventas actualizadas")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error en corrección: {e}")
+        if conn:
+            conn.rollback()
+            conn.close()
+        return False
+
+def migrate_transaction_times():
+    """Corrige las horas incorrectas en transacciones existentes"""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # 1. Identificar transacciones con horas incorrectas (ej: 19:16 cuando deberían ser 14:16)
+        cursor.execute('''
+            UPDATE client_transactions
+            SET created_at = datetime(created_at, '-5 hours')
+            WHERE strftime('%H', created_at) = '19'
+              AND strftime('%d', created_at) = '11'
+              AND strftime('%m', created_at) = '08'
+              AND strftime('%Y', created_at) = '2025'
+        ''')
+        
+        conn.commit()
+        print(f"Transacciones corregidas: {cursor.rowcount}")
+    except Exception as e:
+        print(f"Error en migración: {e}")
+        if conn:
+            conn.rollback()
     finally:
         if conn:
             conn.close()

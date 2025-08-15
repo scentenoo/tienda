@@ -709,6 +709,15 @@ class PurchasesWindow:
         self.calculate_batch_total()
         
         try:
+            # OBTENER VALORES TOTALES
+            freight_total = float(self.freight_var.get() or 0)
+            tax_total = float(self.tax_var.get() or 0)
+            
+            # DISTRIBUIR POR PRODUCTO
+            num_products = len(self.current_batch)
+            freight_per_item = freight_total / num_products if num_products > 0 else 0
+            tax_per_item = tax_total / num_products if num_products > 0 else 0
+            
             saved_count = 0
             invoice_number = self.current_batch[0].get('invoice_number', '') if self.current_batch else ''
             
@@ -716,38 +725,42 @@ class PurchasesWindow:
                 # Buscar o crear producto
                 product = Product.get_by_name(item['product_name'])
                 if not product:
-                    # Crear producto nuevo con precio de venta estimado
-                    estimated_sale_price = item['unit_price'] * 1.3  # 30% de margen
+                    estimated_sale_price = item['unit_price'] * 1.3
                     product = Product(name=item['product_name'], 
                                     price=estimated_sale_price, stock=0)
                     if not product.save():
                         messagebox.showerror("Error", f"No se pudo crear el producto {item['product_name']}")
                         continue
                 
-                # CAMBIO: Crear compra con IVA ya distribuido por producto
+                # CALCULAR TOTAL POR PRODUCTO
+                product_total = item['subtotal'] + freight_per_item + tax_per_item
+                
+                # Crear compra con valores distribuidos
                 purchase = Purchase(
                     user_id=self.user.id,
-                    total=item.get('total', item['subtotal']),
-                    iva=item.get('tax', 0),  # IVA distribuido por producto
-                    shipping=item.get('freight', 0),  # Flete distribuido por producto
+                    total=product_total,  # TOTAL CON FLETE E IVA
+                    iva=tax_per_item,     # IVA DISTRIBUIDO
+                    shipping=freight_per_item,  # FLETE DISTRIBUIDO
                     date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     invoice_number=invoice_number,
                     supplier="Sin proveedor"
                 )
                 
                 if purchase.save():
+                    # Guardar detalles y actualizar stock
                     conn = None
                     try:
-                        # Guardar detalles de la compra
                         conn = get_connection()
                         cursor = conn.cursor()
                         cursor.execute('''
-                            INSERT INTO purchase_details (purchase_id, product_id, quantity, unit_price, subtotal)
-                            VALUES (?, ?, ?, ?, ?)
-                        ''', (purchase.id, product.id, item['quantity'], item['unit_price'], item['subtotal']))
+                        INSERT INTO purchase_details (purchase_id, product_id, quantity, unit_cost, unit_price, subtotal)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (purchase.id, product.id, item['quantity'], item['unit_price'], item['unit_price'], item['subtotal']))
+                        cursor.execute('''
+                            UPDATE products SET cost_price = ? WHERE id = ?
+                        ''', (item['unit_price'], product.id))
                         conn.commit()
-
-                        # Actualizar stock del producto
+                        
                         product.update_stock(item['quantity'])
                         saved_count += 1
                     except Exception as e:
@@ -755,21 +768,13 @@ class PurchasesWindow:
                     finally:
                         if conn:
                             conn.close()
-                else:
-                    messagebox.showerror("Error", f"No se pudo guardar la compra de {item['product_name']}")
             
             if saved_count > 0:
-                # CAMBIO: Mostrar información de cómo se distribuyó el IVA
-                tax_total = float(self.tax_var.get() or 0)
-                freight_total = float(self.freight_var.get() or 0)
-                tax_per_item = tax_total / len(self.current_batch) if self.current_batch else 0
-                freight_per_item = freight_total / len(self.current_batch) if self.current_batch else 0
-                
                 messagebox.showinfo("Éxito", 
                     f"Se guardaron {saved_count} compras correctamente.\n\n"
-                    f"Distribución realizada:\n"
-                    f"• IVA total: ${tax_total:.2f} → ${tax_per_item:.2f} por producto\n"
-                    f"• Flete total: ${freight_total:.2f} → ${freight_per_item:.2f} por producto")
+                    f"Distribución:\n"
+                    f"• IVA: ${tax_total:.2f} → ${tax_per_item:.2f} por producto\n"
+                    f"• Flete: ${freight_total:.2f} → ${freight_per_item:.2f} por producto")
                 
                 self.clear_batch()
                 self.load_data()

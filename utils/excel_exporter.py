@@ -226,7 +226,7 @@ class ExcelExporter:
             # Agregar ventas como ingresos
             sales = Sale.get_all()
             for sale in sales:
-                if sale.status == 'paid' or sale.payment_method == 'cash':  # Solo ventas pagadas
+                if sale.status == 'paid':  # Solo ventas realmente pagadas
                     # Obtener detalles de la venta
                     conn = get_connection()
                     cursor = conn.cursor()
@@ -367,11 +367,15 @@ class ExcelExporter:
                 
                 # Hoja de resumen - ACTUALIZADA para incluir pérdidas
                 try:
-                    total_sales = Sale.get_total_sales()
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT SUM(total) FROM sales WHERE status = 'paid'")
+                    total_sales = cursor.fetchone()[0] or 0.0
+                    conn.close()
                     total_purchases = Purchase.get_total_purchases()
                     total_expenses = Expense.get_total_expenses()
                     total_losses = Loss.get_total_losses()  # NUEVO
-                    cash_in_hand = total_sales - total_purchases - total_expenses - total_losses  # ACTUALIZADO
+                    cash_in_hand = total_sales - total_purchases - total_expenses
                     
                     summary_data = {
                         'Concepto': ['Total Ventas', 'Total Compras', 'Total Gastos Operativos', 'Total Pérdidas', 'Efectivo en Posesión'],
@@ -440,7 +444,6 @@ class ExcelExporter:
             # Agregar ventas como salidas de inventario (al costo)
             sales = Sale.get_all()
             for sale in sales:
-                if sale.status == 'paid' or sale.payment_method == 'cash':  # Solo ventas pagadas
                     # Obtener detalles de la venta con el costo del producto
                     conn = get_connection()
                     cursor = conn.cursor()
@@ -551,7 +554,7 @@ class ExcelExporter:
                             SELECT sd.product_id, SUM(sd.quantity) as total_vendido
                             FROM sale_details sd
                             JOIN sales s ON sd.sale_id = s.id
-                            WHERE s.status = 'paid' OR s.payment_method = 'cash'
+                            WHERE s.status IN ('paid', 'pending')
                             GROUP BY sd.product_id
                         ) ventas ON p.id = ventas.product_id
                         LEFT JOIN (

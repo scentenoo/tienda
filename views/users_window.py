@@ -16,7 +16,7 @@ class UsersWindow:
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Gestión de Usuarios")
-        self.window.geometry("800x500")
+        self.window.geometry("1300x500")
         self.window.resizable(True, True)
         
         # Centrar ventana

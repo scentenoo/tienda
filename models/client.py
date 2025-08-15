@@ -126,11 +126,11 @@ class Client:
                 WHERE id = ?
             ''', (amount, self.id))
             
-            # Registrar transacción (en rojo, tipo 'debit')
+            # CORRECCIÓN: Agregar timestamp local explícito
             cursor.execute('''
                 INSERT INTO client_transactions (
-                    client_id, transaction_type, amount, description
-                ) VALUES (?, 'debit', ?, ?)
+                    client_id, transaction_type, amount, description, created_at
+                ) VALUES (?, 'debit', ?, ?, datetime('now', 'localtime'))
             ''', (self.id, amount, description))
             
             conn.commit()
@@ -160,11 +160,11 @@ class Client:
                 WHERE id = ?
             ''', (amount, self.id))
             
-            # Registrar transacción (pago, tipo 'credit')
+            # CORRECCIÓN: Agregar timestamp local explícito
             cursor.execute('''
                 INSERT INTO client_transactions (
-                    client_id, transaction_type, amount, description
-                ) VALUES (?, 'credit', ?, ?)
+                    client_id, transaction_type, amount, description, created_at
+                ) VALUES (?, 'credit', ?, ?, datetime('now', 'localtime'))
             ''', (self.id, -amount, description))
             
             conn.commit()

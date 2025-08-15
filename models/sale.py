@@ -421,9 +421,30 @@ class Sale:
     # MÉTODOS ADICIONALES PARA MEJOR FUNCIONALIDAD
     
     @staticmethod
-    def get_pending_sales():
-        """Obtiene solo las ventas pendientes (fiadas)"""
-        return Sale.get_filtered_sales(status='pending')
+    def get_pending_sales(self):
+        """Obtiene las ventas pendientes del cliente"""
+        try:
+            from config.database import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # CORRECCIÓN: Usar 'created_at' en lugar de 'sale_date'
+            cursor.execute('''
+                SELECT id, created_at, total, notes
+                FROM sales 
+                WHERE client_id = ? AND status = 'pending'
+                ORDER BY created_at ASC
+            ''', (self.client.id,))
+            
+            pending_sales = cursor.fetchall()
+            conn.close()
+            
+            return pending_sales
+            
+        except Exception as e:
+            print(f"Error al obtener ventas pendientes: {e}")
+            return []
     
     @staticmethod
     def get_paid_sales():

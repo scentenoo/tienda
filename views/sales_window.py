@@ -4,7 +4,7 @@ from models.product import Product
 from models.client import Client
 from models.sale import Sale
 from utils.validators import validate_number, validate_positive
-from datetime import datetime
+from datetime import datetime, timedelta
 from tkinter import simpledialog
 from utils.formatters import format_number, format_currency
 from utils.validators import safe_float_conversion
@@ -17,7 +17,7 @@ class SalesWindow:
         self.user = user
         self.window = tk.Toplevel(parent)
         self.window.title("Gestión de Ventas")
-        self.window.geometry("1400x800")
+        self.window.geometry("1100x800")
         self.window.resizable(True, True)
         
         # Variables
@@ -376,6 +376,11 @@ class SalesWindow:
                                font=("Arial", 14, "bold"))
         title_label.pack(pady=(0, 10))
         
+        # Configurar estilos para el treeview
+        self.style.configure('Treeview', rowheight=25)
+        self.style.configure('credit.Treeview', foreground='#E65100', background='#FFF3E0')
+        self.style.configure('paid.Treeview', foreground='#2E7D32', background='#E8F5E9')
+
         # Frame para botones
         controls_frame = ttk.Frame(main_frame)
         controls_frame.pack(fill=tk.X, pady=(0, 10))
@@ -653,7 +658,7 @@ class SalesWindow:
         """Abre diálogo para agregar nuevo cliente"""
         dialog = tk.Toplevel(self.window)
         dialog.title("Nuevo Cliente")
-        dialog.geometry("300x150")
+        dialog.geometry("300x300")
         dialog.resizable(False, False)
         dialog.transient(self.window)
         dialog.grab_set()
@@ -701,104 +706,100 @@ class SalesWindow:
         dialog.bind('<Return>', lambda e: save_client())
     
     def save_complete_sale(self):
-        """Guarda la venta completa con todos sus productos"""
+        """Guarda la venta y actualiza la deuda del cliente inmediatamente"""
         if not self.sale_items:
             messagebox.showerror("Error", "Debe agregar al menos un producto a la venta")
             return
-        
-        if self.status_var.get() == "pending" and not self.client_var.get():
-            messagebox.showerror("Error", "Debe seleccionar un cliente para ventas fiadas")
-            return
-        
+
+        # Validación estricta para ventas fiadas
+        if self.status_var.get() == 'pending':
+            if not self.client_var.get() or self.client_var.get() == "Sin cliente":
+                messagebox.showerror("Error", "Debe seleccionar un cliente válido para ventas fiadas")
+                return
+
         conn = None
         try:
-            total = sum(item['subtotal'] for item in self.sale_items)
-            status = self.status_var.get()
-            payment_method = self.payment_type_var.get()
-            
-            if status == "pending":
-                payment_method = "credit"
-            
-            client_id = None
-            client_name = None
-            if status == "pending":
-                client_name = self.client_var.get()
-                for c in self.clients:
-                    if c.name == client_name:
-                        client_id = c.id
-                        break
-                
-                if not client_id:
-                    messagebox.showerror("Error", "Cliente no encontrado")
-                    return
-            
-            # IMPORTANTE: Obtener conexión
             conn = get_connection()
             cursor = conn.cursor()
+
+            # Obtener cliente para ventas fiadas
+            client_id = None
+            client_name = "Venta al contado"
+            if self.status_var.get() == 'pending':
+                client = next((c for c in self.clients if c.name == self.client_var.get()), None)
+                if not client:
+                    raise ValueError("Cliente seleccionado no existe")
+                client_id = client.id
+                client_name = client.name
+
+            # Calcular total de la venta
+            total = sum(item['subtotal'] for item in self.sale_items)
+            status = self.status_var.get()
+            payment_method = 'credit' if status == 'pending' else 'cash'
+
+            # 1. Insertar la venta
+            cursor.execute('''
+                INSERT INTO sales (client_id, total, status, payment_method, created_at, user_id)
+                VALUES (?, ?, ?, ?, datetime('now', 'localtime'), ?)
+            ''', (client_id, total, status, payment_method, self.user.id))
             
-            try:
-                # Insertar venta
+            sale_id = cursor.lastrowid
+
+            # 2. Insertar detalles de venta
+            for item in self.sale_items:
+                product = next((p for p in self.products if p.id == item['product_id']), None)
+                if not product:
+                    raise ValueError(f"Producto ID {item['product_id']} no encontrado")
+
                 cursor.execute('''
-                    INSERT INTO sales (client_id, total, payment_method, notes, created_at, user_id, status) 
-                    VALUES (?, ?, ?, ?, datetime('now', 'localtime'), ?, ?)
-                ''', (client_id, total, payment_method, "", self.user.id, status))
-                
-                sale_id = cursor.lastrowid
-                print(f"Venta insertada con ID: {sale_id}")  # Debug
-                
-                # Insertar detalles
-                for item in self.sale_items:
-                    cursor.execute('''
-                        INSERT INTO sale_details (sale_id, product_id, quantity, unit_price, sale_price, subtotal)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (sale_id, item['product_id'], item['quantity'], 
-                        item['unit_price'], item['unit_price'], item['subtotal']))
-                    
-                    # Actualizar stock
-                    cursor.execute('''
-                        UPDATE products SET stock = stock - ? WHERE id = ?
-                    ''', (item['quantity'], item['product_id']))
-                
-                # Si es venta fiada, actualizar deuda del cliente
-                if status == "pending" and client_id:
-                    product_list = ", ".join([f"{item['product_name']} x{item['quantity']}" 
-                                            for item in self.sale_items])
-                    description = f"Venta #{sale_id}: {product_list}"
-                    
-                    cursor.execute('''
-                        UPDATE clients SET total_debt = total_debt + ? WHERE id = ?
-                    ''', (total, client_id))
-                    
-                    cursor.execute('''
-                        INSERT INTO client_transactions (client_id, transaction_type, amount, description)
-                        VALUES (?, 'debit', ?, ?)
-                    ''', (client_id, total, description))
-                
-                # COMMIT IMPORTANTE
-                conn.commit()
-                print("Transacción completada exitosamente")  # Debug
-                
-                # Mensaje de éxito
-                sale_type = "FIADA" if status == "pending" else "AL CONTADO"
-                client_info = f"Cliente: {client_name}" if client_name else ""
-                
-                messagebox.showinfo("Éxito", 
-                                f"Venta {sale_type} #{sale_id} guardada correctamente\n"
-                                f"{client_info}\n"
-                                f"Total: ${total:,.2f}")
-                
-                # Limpiar formulario y recargar
-                self.clear_all_form()
-                self.load_data()
-                
-            except Exception as e:
-                conn.rollback()
-                print(f"Error en transacción: {e}")  # Debug
-                raise
-                
+                    INSERT INTO sale_details 
+                    (sale_id, product_id, quantity, unit_price, sale_price, subtotal, cost_price)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    sale_id,
+                    item['product_id'],
+                    item['quantity'],
+                    item['unit_price'],
+                    item['unit_price'],
+                    item['subtotal'],
+                    product.cost_price
+                ))
+
+                # Actualizar stock
+                cursor.execute('''
+                    UPDATE products SET stock = stock - ? WHERE id = ?
+                ''', (item['quantity'], item['product_id']))
+
+            # 3. ACTUALIZAR DEUDA DEL CLIENTE SI ES VENTA FIADA
+            if status == 'pending' and client_id:
+                # Actualizar deuda total del cliente
+                cursor.execute('''
+                    UPDATE clients 
+                    SET total_debt = total_debt + ?
+                    WHERE id = ?
+                ''', (total, client_id))
+
+                # Registrar transacción de deuda
+                cursor.execute('''
+                    INSERT INTO client_transactions 
+                    (client_id, transaction_type, amount, description, sale_id, created_at)
+                    VALUES (?, 'debit', ?, ?, ?, datetime('now', 'localtime'))
+                ''', (
+                    client_id,
+                    total,
+                    f"Venta fiada #{sale_id}",
+                    sale_id
+                ))
+
+            conn.commit()
+            messagebox.showinfo("Éxito", f"Venta #{sale_id} guardada correctamente")
+            self.clear_all_form()
+            self.load_data()  # Actualizar todas las vistas
+
         except Exception as e:
-            messagebox.showerror("Error", f"Error al guardar la venta: {str(e)}")
-            print(f"Error detallado: {e}")  # Debug
+            if conn:
+                conn.rollback()
+            messagebox.showerror("Error", f"No se pudo completar la venta: {str(e)}")
         finally:
             if conn:
                 conn.close()
@@ -1016,8 +1017,14 @@ class SalesWindow:
         except Exception as e:
             messagebox.showerror("Error", f"Error al editar venta: {str(e)}")
     
+    def get_adjusted_time(base_time, minutes=1):
+        """Ajusta una hora existente agregando minutos"""
+        return (datetime.strptime(base_time, '%Y-%m-%d %H:%M:%S') 
+            + timedelta(minutes=minutes)).strftime('%Y-%m-%d %H:%M:%S')
+
+
     def delete_sale(self):
-        """Eliminar venta y actualizar deuda del cliente si era fiado"""
+        """Eliminar venta y actualizar deuda del cliente con control de tiempo preciso"""
         selected = self.sales_tree.selection()
         if not selected:
             messagebox.showwarning("Advertencia", "Seleccione una venta para eliminar")
@@ -1025,15 +1032,14 @@ class SalesWindow:
         
         try:
             sale_id = self.sales_tree.item(selected[0], 'values')[0]
-            
-            # Buscar la venta
             sale = next((s for s in self.sales if str(s.id) == str(sale_id)), None)
+            
             if not sale:
                 messagebox.showerror("Error", "Venta no encontrada")
                 return
-            
-            # Confirmar eliminación
-            if not messagebox.askyesno("Confirmar", f"¿Eliminar venta #{sale_id}?\nEsta acción afectará el inventario y deudas."):
+                
+            if not messagebox.askyesno("Confirmar", 
+                                    f"¿Eliminar venta #{sale_id}?\nEsta acción no se puede deshacer."):
                 return
             
             conn = get_connection()
@@ -1044,42 +1050,43 @@ class SalesWindow:
                 cursor.execute('SELECT product_id, quantity FROM sale_details WHERE sale_id = ?', (sale.id,))
                 details = cursor.fetchall()
                 
-                # 2. Si era venta fiada, actualizar deuda del cliente
+                # 2. Si era venta fiada, actualizar deuda
                 if sale.status == "pending" and sale.client_id:
-                    # Restar el total de la deuda del cliente
+                    # Actualizar deuda del cliente
                     cursor.execute('''
                         UPDATE clients 
                         SET total_debt = total_debt - ?
                         WHERE id = ?
                     ''', (sale.total, sale.client_id))
                     
-                    # Registrar transacción de ajuste
+                    # CORRECCIÓN: Usar hora actual en lugar de calcular tiempo artificial
                     cursor.execute('''
-                    INSERT INTO client_transactions 
-                    (client_id, transaction_type, amount, description)
-                    VALUES (?, 'debit_reversal', ?, ?)
-                ''', (sale.client_id, -sale.total, f"Reversión de venta #{sale.id}"))
+                        INSERT INTO client_transactions 
+                        (client_id, transaction_type, amount, description, created_at, sale_id)
+                        VALUES (?, 'debit_reversal', ?, ?, datetime('now', 'localtime'), ?)
+                    ''', (sale.client_id, sale.total, 
+                        f"Reversión de venta #{sale.id}", sale.id))
                 
-                # 3. Eliminar registros relacionados
+                # 3. Eliminar registros
                 cursor.execute('DELETE FROM sale_details WHERE sale_id = ?', (sale.id,))
                 cursor.execute('DELETE FROM sales WHERE id = ?', (sale.id,))
                 
                 conn.commit()
                 
-                # 4. Restaurar stock localmente
+                # 4. Actualizar stock localmente
                 for detail in details:
-                    for product in self.products:
-                        if product.id == detail['product_id']:
-                            product.stock += detail['quantity']
-                            product.save()
-                            break
+                    product = next((p for p in self.products if p.id == detail['product_id']), None)
+                    if product:
+                        product.stock += detail['quantity']
+                        product.save()
                 
-                messagebox.showinfo("Éxito", "Venta eliminada y deudas actualizadas")
-                self.load_data()  # Refrescar datos
+                messagebox.showinfo("Éxito", "Venta eliminada correctamente")
+                self.load_data()
                 
             except Exception as e:
                 conn.rollback()
                 messagebox.showerror("Error", f"Error al eliminar: {str(e)}")
+                raise
             finally:
                 conn.close()
                 
@@ -1087,35 +1094,48 @@ class SalesWindow:
             messagebox.showerror("Error", f"Error inesperado: {str(e)}")
     
     def update_sales_tree(self):
-        """Actualiza el árbol de ventas"""
+        """Muestra las ventas asegurando que las fiadas tengan cliente"""
         for item in self.sales_tree.get_children():
             self.sales_tree.delete(item)
         
         for sale in self.sales:
+            # Obtener nombre del cliente si existe
+            client_name = "Venta al contado"
+            if sale.client_id:
+                client = next((c for c in self.clients if c.id == sale.client_id), None)
+                client_name = client.name if client else "Cliente no encontrado"
+            
+            # Validación estricta para ventas fiadas
+            if sale.status == 'pending' and client_name == "Venta al contado":
+                client_name = "CLIENTE FALTANTE"  # Mensaje claro de error
+                print(f"¡Alerta! Venta fiada sin cliente (ID: {sale.id})")
+            
+            self.sales_tree.insert('', tk.END, values=(
+                sale.id,
+                client_name,
+                format_currency(sale.total),
+                "PENDIENTE" if sale.status == 'pending' else "PAGADO",
+                "Crédito" if sale.status == 'pending' else "Efectivo",
+                self._format_date(sale.created_at)
+            ), tags=('credit' if sale.status == 'pending' else 'paid',))
+
+    def _format_date(self, date_value):
+        """Formatea la fecha de manera segura"""
+        if date_value is None:
+            return "N/A"
+        
+        if isinstance(date_value, str):
             try:
-                # LÓGICA CORREGIDA: Si tiene client_id es una venta fiada (pendiente)
-                # Si no tiene client_id es una venta al contado (pagada)
-                if hasattr(sale, 'client_id') and sale.client_id is not None:
-                    # Es venta FIADA (pendiente)
-                    status_display = "Pendiente"
-                    client_display = sale.client_name if hasattr(sale, 'client_name') and sale.client_name else "Cliente desconocido"
-                else:
-                    # Es venta AL CONTADO (pagada)
-                    status_display = "Pagado"
-                    client_display = "Venta al contado"
-                
-                # Tipo de pago
-                payment_display = "Efectivo" if sale.payment_method == "cash" else "Crédito"
-                
-                self.sales_tree.insert('', tk.END, values=(
-                    sale.id,
-                    client_display,
-                    format_currency(sale.total),
-                    status_display,
-                    payment_display,
-                    sale.created_at or "N/A"
-                ))
-                
-            except Exception as e:
-                print(f"Error venta {sale.id}: {e}")
-                continue
+                # Si es string, convertir a datetime primero
+                from datetime import datetime
+                if 'T' in date_value:  # Formato ISO
+                    date_obj = datetime.fromisoformat(date_value)
+                else:  # Otro formato de string
+                    date_obj = datetime.strptime(date_value, '%Y-%m-%d %H:%M:%S')
+                return date_obj.strftime('%Y-%m-%d %H:%M:%S')
+            except (ValueError, AttributeError):
+                return date_value  # Devuelve el string original si no se puede convertir
+        elif hasattr(date_value, 'strftime'):  # Si ya es objeto datetime
+            return date_value.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            return str(date_value)  # Como último recurso
