@@ -50,16 +50,35 @@ class PurchasesWindow:
         self.setup_ui()
         self.load_data()
 
+    def format_currency(self, amount):
+        """Formatea un número como moneda con separadores de miles"""
+        try:
+            if amount is None:
+                return "$0"
+            # Convertir a float si es string
+            if isinstance(amount, str):
+                amount = float(amount.replace('$', '').replace(',', ''))
+            # Formatear con separadores de miles
+            return f"${amount:,.2f}".replace(',', '.')
+        except (ValueError, TypeError):
+            return "$0"
+
+    def format_number(self, number):
+        """Formatea un número con separadores de miles (sin símbolo de moneda)"""
+        try:
+            if number is None:
+                return "0"
+            # Convertir a float si es string
+            if isinstance(number, str):
+                number = float(number)
+            # Formatear con separadores de miles
+            return f"{number:,.2f}".replace(',', '.')
+        except (ValueError, TypeError):
+            return "0"
+
     def configure_styles(self):
         """Configura los estilos usando self.colors"""
         try:
-            self.style.configure('TFrame', background=self.colors['background'])
-            self.style.configure('TButton', 
-                            font=('Arial', 10), 
-                            padding=8,
-                            background=self.colors['secondary'],
-                            foreground='white')
-            """Configura los estilos para la interfaz"""
             self.style.configure('TFrame', background=self.colors['background'])
             self.style.configure('TButton', 
                             font=('Arial', 10), 
@@ -122,7 +141,6 @@ class PurchasesWindow:
         notebook.add(self.purchases_list_frame, text="📋 Historial")
         self.setup_purchases_list_ui()
 
-    
     def setup_new_purchase_ui(self):
         """Configura la UI para nueva compra"""
         main_frame = ttk.Frame(self.new_purchase_frame, padding="20")
@@ -336,7 +354,7 @@ class PurchasesWindow:
         # Total del lote
         self.total_label = ttk.Label(
             bottom_frame, 
-            text="Total del Lote: $0.00", 
+            text="Total del Lote: $0", 
             font=("Arial", 12, "bold"),
             foreground=self.colors['primary'])
         self.total_label.pack(side=tk.LEFT, padx=10)
@@ -375,22 +393,11 @@ class PurchasesWindow:
         ttk.Button(controls_frame, text="Actualizar", 
                 command=self.load_purchases).pack(side=tk.LEFT, padx=5)
         
-        # AGREGAR AQUÍ LOS BOTONES DE EDITAR Y ELIMINAR
+        # Botones de editar y eliminar
         ttk.Button(controls_frame, text="Editar Compra", 
                 command=self.edit_purchase).pack(side=tk.LEFT, padx=5)
         ttk.Button(controls_frame, text="Eliminar Compra", 
                 command=self.delete_purchase).pack(side=tk.LEFT, padx=5)
-        
-        """Configura la UI para lista de compras"""
-        main_frame = ttk.Frame(self.purchases_list_frame, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Frame para controles
-        controls_frame = ttk.Frame(main_frame)
-        controls_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Button(controls_frame, text="Actualizar", 
-                  command=self.load_purchases).pack(side=tk.LEFT, padx=5)
         
         # Treeview para mostrar compras
         columns = ('ID', 'Producto', 'Cantidad', 'Precio Unit.', 'Flete', 'IVA', 'Total', 'Factura', 'Fecha')
@@ -418,9 +425,6 @@ class PurchasesWindow:
         v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
 
-        """Configura la UI para el lote actual"""
-        main_frame = ttk.Frame(self.batch_frame, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
     def load_data(self):
         """Carga los datos necesarios"""
         self.load_products()
@@ -547,19 +551,19 @@ class PurchasesWindow:
         for item in self.batch_tree.get_children():
             self.batch_tree.delete(item)
         
-        # Agregar artículos
+        # Agregar artículos con formato de números
         for item in self.current_batch:
             self.batch_tree.insert('', tk.END, values=(
                 item['product_name'],
-                item['quantity'],
-                f"${item['unit_price']:.2f}",
-                f"${item['subtotal']:.2f}"
+                self.format_number(item['quantity']),
+                self.format_currency(item['unit_price']),
+                self.format_currency(item['subtotal'])
             ))
     
     def calculate_batch_total(self):
         """Calcula el total del lote con flete e IVA total distribuido"""
         if not self.current_batch:
-            self.total_label.config(text="Total del Lote: $0.00")
+            self.total_label.config(text="Total del Lote: $0")
             return
         
         try:
@@ -568,7 +572,7 @@ class PurchasesWindow:
             tax_total = float(self.tax_var.get() or 0)
             
             total = subtotal + freight + tax_total
-            self.total_label.config(text=f"Total del Lote: ${total:.2f}")
+            self.total_label.config(text=f"Total del Lote: {self.format_currency(total)}")
             
         except ValueError:
             messagebox.showerror("Error", "Flete e IVA deben ser números válidos")
@@ -689,10 +693,10 @@ class PurchasesWindow:
                     font=("Arial", 12, "bold")).pack(pady=(0, 10))
             
             ttk.Label(main_frame, text=f"Número de productos en lote: {num_items}").pack(anchor=tk.W)
-            ttk.Label(main_frame, text=f"IVA total: ${tax_total:.2f}").pack(anchor=tk.W)
-            ttk.Label(main_frame, text=f"IVA por producto: ${tax_per_item:.2f}").pack(anchor=tk.W)
-            ttk.Label(main_frame, text=f"Flete total: ${freight_total:.2f}").pack(anchor=tk.W)
-            ttk.Label(main_frame, text=f"Flete por producto: ${freight_per_item:.2f}").pack(anchor=tk.W)
+            ttk.Label(main_frame, text=f"IVA total: {self.format_currency(tax_total)}").pack(anchor=tk.W)
+            ttk.Label(main_frame, text=f"IVA por producto: {self.format_currency(tax_per_item)}").pack(anchor=tk.W)
+            ttk.Label(main_frame, text=f"Flete total: {self.format_currency(freight_total)}").pack(anchor=tk.W)
+            ttk.Label(main_frame, text=f"Flete por producto: {self.format_currency(freight_per_item)}").pack(anchor=tk.W)
             
             ttk.Button(main_frame, text="Cerrar", command=info_window.destroy).pack(pady=10)
             
@@ -773,8 +777,8 @@ class PurchasesWindow:
                 messagebox.showinfo("Éxito", 
                     f"Se guardaron {saved_count} compras correctamente.\n\n"
                     f"Distribución:\n"
-                    f"• IVA: ${tax_total:.2f} → ${tax_per_item:.2f} por producto\n"
-                    f"• Flete: ${freight_total:.2f} → ${freight_per_item:.2f} por producto")
+                    f"• IVA: {self.format_currency(tax_total)} → {self.format_currency(tax_per_item)} por producto\n"
+                    f"• Flete: {self.format_currency(freight_total)} → {self.format_currency(freight_per_item)} por producto")
                 
                 self.clear_batch()
                 self.load_data()
@@ -788,7 +792,7 @@ class PurchasesWindow:
         self.update_batch_tree()
         self.freight_var.set("0")
         self.tax_var.set("0")  # Limpiar también el IVA
-        self.total_label.config(text="Total del Lote: $0.00")
+        self.total_label.config(text="Total del Lote: $0")
     
     def remove_from_batch(self):
         """Elimina el artículo seleccionado del lote"""
@@ -813,12 +817,12 @@ class PurchasesWindow:
         # No limpiar el número de factura para mantener consistencia en el lote
     
     def update_purchases_tree(self):
-        """Actualiza el árbol de compras"""
+        """Actualiza el árbol de compras con números formateados"""
         # Limpiar árbol
         for item in self.purchases_tree.get_children():
             self.purchases_tree.delete(item)
         
-        # Agregar compras
+        # Agregar compras con formato mejorado
         for purchase in self.purchases:
             # Obtener detalles de la compra desde purchase_details
             conn = get_connection()
@@ -838,15 +842,15 @@ class PurchasesWindow:
                     # Formatear fecha
                     date_str = purchase.date if purchase.date else "N/A"
                     
-                    # Insertar en árbol
+                    # Insertar en árbol con números formateados
                     self.purchases_tree.insert('', tk.END, values=(
                         purchase.id,
                         detail['product_name'],
-                        detail['quantity'],
-                        f"${detail['unit_price']:.2f}",
-                        f"${purchase.shipping:.2f}" if purchase.shipping else "$0.00",
-                        f"${purchase.iva:.2f}" if purchase.iva else "$0.00",
-                        f"${purchase.total:.2f}" if purchase.total else "$0.00",
+                        self.format_number(detail['quantity']),
+                        self.format_currency(detail['unit_price']),
+                        self.format_currency(purchase.shipping) if purchase.shipping else "$0",
+                        self.format_currency(purchase.iva) if purchase.iva else "$0",
+                        self.format_currency(purchase.total) if purchase.total else "$0",
                         purchase.invoice_number or "N/A",
                         date_str
                     ))
@@ -857,9 +861,9 @@ class PurchasesWindow:
                     "N/A",
                     "N/A",
                     "N/A",
-                    f"${purchase.shipping:.2f}" if purchase.shipping else "$0.00",
-                    f"${purchase.iva:.2f}" if purchase.iva else "$0.00",
-                    f"${purchase.total:.2f}" if purchase.total else "$0.00",
+                    self.format_currency(purchase.shipping) if purchase.shipping else "$0",
+                    self.format_currency(purchase.iva) if purchase.iva else "$0",
+                    self.format_currency(purchase.total) if purchase.total else "$0",
                     purchase.invoice_number or "N/A",
                     purchase.date if purchase.date else "N/A"
                 ))

@@ -256,7 +256,7 @@ class InventoryWindow:
         result = messagebox.askyesno("Confirmar eliminación", 
                                    f"¿Está seguro que desea eliminar el producto:\n"
                                    f"'{self.selected_product['name']}'?\n\n"
-                                   f"Esta acción no se puede deshacer.")
+                                   f"Esta acción no se puede deshacer. Y si hizo compras con este producto generará graves errores")
         
         if result:
             try:

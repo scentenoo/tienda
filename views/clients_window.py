@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 from models.client import Client
 from config.database import get_connection
 import sqlite3
+from config.database import sync_client_sales_status_on_payment
 
 class ClientsWindow:
     def __init__(self, parent, user, main_window=None):
@@ -570,12 +571,13 @@ class CreditManagementWindow:
                       command=self.add_debt).pack(side=tk.RIGHT)
         
         # Frame para registrar pago
+       # Frame para registrar pago (MODIFICADO)
         if self.client.total_debt > 0:
             payment_frame = ttk.Frame(operations_frame)
             payment_frame.pack(fill=tk.X, pady=(0, 10))
             
-            ttk.Label(payment_frame, text="Registrar Pago:", 
-                     font=("Arial", 10, "bold")).pack(anchor=tk.W)
+            ttk.Label(payment_frame, text="Registrar Pago/Abono:", 
+                    font=("Arial", 10, "bold")).pack(anchor=tk.W)
             
             payment_input_frame = ttk.Frame(payment_frame)
             payment_input_frame.pack(fill=tk.X, pady=(5, 0))
@@ -589,7 +591,14 @@ class CreditManagementWindow:
             self.payment_desc_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
             
             ttk.Button(payment_input_frame, text="Registrar Pago", 
-                      command=self.register_payment).pack(side=tk.RIGHT)
+                    command=self.register_payment).pack(side=tk.RIGHT)
+            
+            # Agregar etiqueta informativa
+            info_label = ttk.Label(payment_frame, 
+                                text="💡 Puede registrar cualquier monto. Si excede la deuda, se creará crédito a favor.",
+                                font=("Arial", 8), foreground="gray")
+            info_label.pack(anchor=tk.W, pady=(5, 0))
+
         
         # Botones inferiores
         buttons_frame = ttk.Frame(main_frame)
@@ -600,6 +609,60 @@ class CreditManagementWindow:
         
         ttk.Button(buttons_frame, text="Cerrar", 
                   command=self.close_window).pack(side=tk.RIGHT)
+        
+    def handle_excess_credit(self, client_id, excess_amount):
+        """Maneja el crédito a favor cuando el pago excede la deuda"""
+        try:
+            from config.database import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Registrar transacción de crédito a favor
+            cursor.execute('''
+                INSERT INTO client_transactions 
+                    (client_id, transaction_type, amount, description, created_at)
+                VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+            ''', (client_id, 'credit_balance', excess_amount, 
+                f'Crédito a favor por exceso en pago de ${excess_amount:,.2f}'))
+            
+            conn.commit()
+            conn.close()
+            
+            print(f"💰 Crédito a favor registrado: ${excess_amount:,.2f}")
+            
+        except Exception as e:
+            print(f"Error al registrar crédito a favor: {e}")
+
+    # MÉTODO PARA CONSULTAR CRÉDITO A FAVOR
+    def get_client_credit_balance(self, client_id):
+        """Obtiene el saldo de crédito a favor del cliente"""
+        try:
+            from config.database import get_connection
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT COALESCE(SUM(
+                    CASE 
+                        WHEN transaction_type = 'credit_balance' THEN amount
+                        WHEN transaction_type = 'credit_used' THEN -amount
+                        ELSE 0
+                    END
+                ), 0) as credit_balance
+                FROM client_transactions
+                WHERE client_id = ?
+            ''', (client_id,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            return float(result[0]) if result else 0.0
+            
+        except Exception as e:
+            print(f"Error al consultar crédito a favor: {e}")
+            return 0.0
     
     def add_debt(self):
         """Agrega deuda al cliente"""
@@ -680,13 +743,13 @@ class CreditManagementWindow:
             messagebox.showerror("Error", "Ingrese un monto válido")
 
     def register_payment(self):
-        """Registra un pago del cliente y actualiza ventas pendientes"""
+        """Registra un pago del cliente aplicándolo directamente a ventas específicas - VERSIÓN CORREGIDA"""
         try:
             # Obtener y validar datos de entrada
             amount_str = self.payment_amount_entry.get().strip()
             description = self.payment_desc_entry.get().strip()
             
-            # Validaciones de entrada
+            # Validaciones básicas
             if not amount_str:
                 messagebox.showerror("Error", "Ingrese el monto del pago")
                 self.payment_amount_entry.focus()
@@ -710,60 +773,487 @@ class CreditManagementWindow:
                 self.payment_amount_entry.focus()
                 return
             
-            # Verificar que no exceda la deuda actual
-            if amount > self.client.total_debt:
-                messagebox.showerror("Error", 
-                    f"El monto excede la deuda actual\n"
-                    f"Deuda actual: ${self.client.total_debt:,.2f}\n"
-                    f"Monto ingresado: ${amount:,.2f}")
-                self.payment_amount_entry.focus()
-                return
+            # Obtener información actual del cliente (REFRESCAR DESDE BD)
+            self.client = Client.get_by_id(self.client.id)  # Refrescar datos
+            deuda_actual = self.client.total_debt
+            
+            # Mostrar preview de cómo se aplicará el pago
+            preview = self.show_payment_allocation_preview(amount)
+            
+            # Mensaje de confirmación detallado
+            if amount > deuda_actual:
+                exceso = amount - deuda_actual
+                mensaje_confirmacion = (
+                    f"💰 PAGO MAYOR A LA DEUDA\n\n"
+                    f"👤 Cliente: {self.client.name}\n"
+                    f"💳 Deuda actual: ${deuda_actual:,.2f}\n"
+                    f"💰 Pago recibido: ${amount:,.2f}\n"
+                    f"💵 Exceso del pago: ${exceso:,.2f}\n\n"
+                    f"DISTRIBUCIÓN DEL PAGO:\n"
+                    f"{preview}\n\n"
+                    f"✅ La deuda se saldará COMPLETAMENTE\n"
+                    f"⚠️ El exceso se registrará como crédito a favor\n\n"
+                    f"📝 Descripción: {description}\n\n"
+                    f"¿Desea procesar este pago?"
+                )
+            elif amount == deuda_actual:
+                mensaje_confirmacion = (
+                    f"✅ PAGO EXACTO - SALDA DEUDA\n\n"
+                    f"👤 Cliente: {self.client.name}\n"
+                    f"💳 Deuda actual: ${deuda_actual:,.2f}\n"
+                    f"💰 Pago recibido: ${amount:,.2f}\n\n"
+                    f"DISTRIBUCIÓN DEL PAGO:\n"
+                    f"{preview}\n\n"
+                    f"✅ La deuda se saldará COMPLETAMENTE\n\n"
+                    f"📝 Descripción: {description}\n\n"
+                    f"¿Desea procesar este pago?"
+                )
+            else:
+                saldo_restante = deuda_actual - amount
+                mensaje_confirmacion = (
+                    f"💳 ABONO PARCIAL\n\n"
+                    f"👤 Cliente: {self.client.name}\n"
+                    f"💳 Deuda actual: ${deuda_actual:,.2f}\n"
+                    f"💰 Abono: ${amount:,.2f}\n"
+                    f"💳 Saldo restante: ${saldo_restante:,.2f}\n\n"
+                    f"DISTRIBUCIÓN DEL ABONO:\n"
+                    f"{preview}\n\n"
+                    f"📝 Descripción: {description}\n\n"
+                    f"¿Desea procesar este abono?"
+                )
             
             # Confirmar operación
-            result = messagebox.askyesno("Confirmar Pago", 
-                f"¿Desea registrar este pago?\n\n"
-                f"Cliente: {self.client.name}\n"
-                f"Monto: ${amount:,.2f}\n"
-                f"Descripción: {description}\n\n"
-                f"Deuda actual: ${self.client.total_debt:,.2f}\n"
-                f"Deuda después del pago: ${self.client.total_debt - amount:,.2f}")
+            result = messagebox.askyesno("Confirmar Pago", mensaje_confirmacion)
             
             if result:
-                # PRIMERO: Actualizar ventas pendientes
-                updated_sales = self.update_sales_payment_status(amount)
+                # *** FLUJO CORREGIDO: PROCESAR TODO EN UNA SOLA TRANSACCIÓN ***
+                resultado_pago = self.process_complete_payment(amount, description)
                 
-                # SEGUNDO: Registrar el pago en el cliente
-                self.client.pay_debt(amount, description)
-                
-                # TERCERO: Actualizar el cliente desde la base de datos
-                self.client = Client.get_by_id(self.client.id)
-                
-                # Limpiar campos
-                self.payment_amount_entry.delete(0, tk.END)
-                self.payment_desc_entry.delete(0, tk.END)
-                
-                # Mostrar mensaje de éxito
-                remaining_debt = self.client.total_debt
-                success_message = f"¡Pago registrado correctamente!\n\n"
-                success_message += f"Monto pagado: ${amount:,.2f}\n"
-                
-                if remaining_debt == 0:
-                    success_message += "¡La deuda ha sido saldada completamente!\n\n"
-                else:
-                    success_message += f"Deuda restante: ${remaining_debt:,.2f}\n\n"
-                
-                # Agregar información de ventas actualizadas
-                if updated_sales['total_updated'] > 0:
-                    success_message += f"📋 {updated_sales['total_updated']} ventas actualizadas a estado 'paid'\n"
+                if resultado_pago['success']:
+                    # Limpiar campos
+                    self.payment_amount_entry.delete(0, tk.END)
+                    self.payment_desc_entry.delete(0, tk.END)
                     
-                messagebox.showinfo("Pago Registrado", success_message)
-                
-                # Actualizar la interfaz y cerrar
-                self.refresh_and_close()
-                
+                    # Mostrar mensaje de éxito
+                    self.show_payment_success_message(amount, deuda_actual, resultado_pago)
+                    
+                    # Actualizar todas las ventanas
+                    self.refresh_and_close()
+                else:
+                    messagebox.showerror("Error", f"Error al procesar pago:\n{resultado_pago['error']}")
+                    
         except Exception as e:
             messagebox.showerror("Error", f"Ocurrió un error inesperado:\n{str(e)}")
-            print(f"Error en register_payment: {e}")
+            print(f"❌ Error en register_payment: {e}")
+
+    def process_complete_payment(self, payment_amount, description):
+        """
+        Procesa un pago completo: actualiza ventas, cliente y transacciones - VERSIÓN CORREGIDA
+        """
+        from config.database import get_connection
+        from datetime import datetime
+        
+        conn = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print(f"\n💰 PROCESANDO PAGO COMPLETO: ${payment_amount:,.2f}")
+            print("=" * 60)
+            
+            # PASO 1: Detectar estructura de la tabla sales
+            cursor.execute("PRAGMA table_info(sales)")
+            table_info = cursor.fetchall()
+            column_names = [column[1] for column in table_info]
+            
+            if 'payment_status' in column_names:
+                status_column = 'payment_status'
+            elif 'status' in column_names:
+                status_column = 'status'
+            else:
+                return {'success': False, 'error': 'No se encontró columna de estado en sales'}
+            
+            print(f"📊 Usando columna de estado: '{status_column}'")
+            
+            # PASO 2: Obtener ventas pendientes ordenadas cronológicamente
+            query = f'''
+                SELECT id, total, created_at, notes
+                FROM sales 
+                WHERE client_id = ? AND {status_column} = 'pending'
+                ORDER BY datetime(created_at) ASC
+            '''
+            
+            cursor.execute(query, (self.client.id,))
+            pending_sales = cursor.fetchall()
+            
+            print(f"📋 Ventas pendientes encontradas: {len(pending_sales)}")
+            
+            if not pending_sales:
+                print("ℹ️ No hay ventas pendientes")
+                if payment_amount > 0:
+                    cursor.execute('''
+                        INSERT INTO client_transactions 
+                        (client_id, transaction_type, amount, description, created_at)
+                        VALUES (?, 'credit', ?, ?, datetime('now', 'localtime'))
+                    ''', (self.client.id, payment_amount, f"{description} - Crédito a favor"))
+                    
+                    print(f"💵 Registrado como crédito a favor: ${payment_amount:,.2f}")
+                
+                conn.commit()
+                return {
+                    'success': True, 
+                    'sales_paid_complete': 0,
+                    'sales_paid_partial': 0,
+                    'excess_credit': payment_amount
+                }
+            
+            # PASO 3: Aplicar el pago a las ventas
+            remaining_payment = payment_amount
+            updated_sales = []
+            sales_paid_complete = 0
+            sales_paid_partial = 0
+            total_debt_reduced = 0
+            
+            for sale in pending_sales:
+                if remaining_payment <= 0:
+                    break
+                    
+                sale_id = sale[0]
+                sale_total = float(sale[1])
+                sale_date = sale[2]
+                sale_notes = sale[3] or ""
+                
+                print(f"\n📄 Procesando Venta #{sale_id}")
+                print(f"   💰 Debe: ${sale_total:,.2f}")
+                print(f"   💳 Pago disponible: ${remaining_payment:,.2f}")
+                
+                if remaining_payment >= sale_total:
+                    # ✅ PAGO COMPLETO - Marcar como pagada
+                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                    updated_notes = f"{sale_notes} [PAGADA el {timestamp}]".strip()
+                    
+                    # *** CORRECCIÓN: Sin updated_at ***
+                    update_query = f'''
+                        UPDATE sales 
+                        SET {status_column} = 'paid',
+                            notes = ?
+                        WHERE id = ?
+                    '''
+                    cursor.execute(update_query, (updated_notes, sale_id))
+                    
+                    remaining_payment -= sale_total
+                    total_debt_reduced += sale_total
+                    sales_paid_complete += 1
+                    
+                    print(f"   ✅ PAGADA COMPLETAMENTE")
+                    print(f"   💰 Pago restante: ${remaining_payment:,.2f}")
+                    
+                else:
+                    # ⚠️ PAGO PARCIAL - Actualizar monto pendiente
+                    paid_amount = remaining_payment
+                    new_debt = sale_total - paid_amount
+                    
+                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                    updated_notes = f"{sale_notes} [Abono ${paid_amount:,.2f} el {timestamp} - Saldo: ${new_debt:,.2f}]".strip()
+                    
+                    # *** CORRECCIÓN: Sin updated_at ***
+                    update_query = f'''
+                        UPDATE sales 
+                        SET total = ?,
+                            notes = ?
+                        WHERE id = ?
+                    '''
+                    cursor.execute(update_query, (new_debt, updated_notes, sale_id))
+                    
+                    total_debt_reduced += paid_amount
+                    sales_paid_partial += 1
+                    
+                    print(f"   ⚠️ PAGO PARCIAL")
+                    print(f"   💳 Abono: ${paid_amount:,.2f}")
+                    print(f"   📊 Saldo pendiente: ${new_debt:,.2f}")
+                    
+                    remaining_payment = 0  # Se agotó el pago
+            
+            # PASO 4: Actualizar deuda del cliente - SIN updated_at
+            cursor.execute('''
+                UPDATE clients 
+                SET total_debt = MAX(0, total_debt - ?)
+                WHERE id = ?
+            ''', (total_debt_reduced, self.client.id))
+            
+            print(f"\n💳 Deuda reducida en: ${total_debt_reduced:,.2f}")
+            
+            # PASO 5: Registrar transacción de pago
+            cursor.execute('''
+                INSERT INTO client_transactions 
+                (client_id, transaction_type, amount, description, created_at)
+                VALUES (?, 'credit', ?, ?, datetime('now', 'localtime'))
+            ''', (self.client.id, total_debt_reduced, description))
+            
+            # PASO 6: Manejar exceso como crédito a favor
+            excess_credit = 0
+            if remaining_payment > 0:
+                excess_credit = remaining_payment
+                cursor.execute('''
+                    INSERT INTO client_transactions 
+                    (client_id, transaction_type, amount, description, created_at)
+                    VALUES (?, 'credit_balance', ?, ?, datetime('now', 'localtime'))
+                ''', (self.client.id, excess_credit, f"Crédito a favor por exceso en pago"))
+                
+                print(f"💵 Exceso registrado como crédito: ${excess_credit:,.2f}")
+            
+            # PASO 7: Confirmar todos los cambios
+            conn.commit()
+            
+            print(f"\n🎯 RESUMEN FINAL:")
+            print("=" * 50)
+            print(f"💰 Pago procesado: ${payment_amount:,.2f}")
+            print(f"💳 Aplicado a deuda: ${total_debt_reduced:,.2f}")
+            print(f"✅ Ventas pagadas completamente: {sales_paid_complete}")
+            print(f"⚠️ Ventas con abono parcial: {sales_paid_partial}")
+            print(f"💵 Crédito a favor: ${excess_credit:,.2f}")
+            
+            return {
+                'success': True,
+                'total_updated': len(updated_sales),
+                'sales_paid_complete': sales_paid_complete,
+                'sales_paid_partial': sales_paid_partial,
+                'debt_reduced': total_debt_reduced,
+                'excess_credit': excess_credit
+            }
+            
+        except Exception as e:
+            error_msg = f"Error al procesar pago completo: {e}"
+            print(f"❌ {error_msg}")
+            if conn:
+                conn.rollback()
+            return {'success': False, 'error': error_msg}
+        finally:
+            if conn:
+                conn.close()
+
+
+    def show_payment_success_message(self, amount, deuda_anterior, resultado):
+        """Muestra mensaje de éxito del pago con información detallada"""
+        try:
+            # Refrescar cliente desde BD para obtener nueva deuda
+            self.client = Client.get_by_id(self.client.id)
+            deuda_nueva = self.client.total_debt
+            exceso = resultado.get('excess_credit', 0)
+            
+            if deuda_nueva <= 0 and deuda_anterior > 0:
+                # Deuda saldada completamente
+                if exceso > 0:
+                    mensaje = (
+                        f"🎉 ¡DEUDA SALDADA COMPLETAMENTE!\n\n"
+                        f"💰 Pago recibido: ${amount:,.2f}\n"
+                        f"💳 Deuda anterior: ${deuda_anterior:,.2f}\n"
+                        f"💵 Crédito a favor: ${exceso:,.2f}\n\n"
+                        f"✅ Ventas pagadas: {resultado.get('sales_paid_complete', 0)}\n"
+                        f"⚠️ Abonos parciales: {resultado.get('sales_paid_partial', 0)}\n\n"
+                        f"🎯 El cliente está al día y tiene crédito a favor."
+                    )
+                else:
+                    mensaje = (
+                        f"🎉 ¡DEUDA SALDADA EXACTAMENTE!\n\n"
+                        f"💰 Pago recibido: ${amount:,.2f}\n"
+                        f"💳 Deuda anterior: ${deuda_anterior:,.2f}\n\n"
+                        f"✅ Ventas pagadas: {resultado.get('sales_paid_complete', 0)}\n"
+                        f"⚠️ Abonos parciales: {resultado.get('sales_paid_partial', 0)}\n\n"
+                        f"🎯 El cliente está completamente al día."
+                    )
+            else:
+                # Abono parcial
+                mensaje = (
+                    f"💳 ABONO REGISTRADO EXITOSAMENTE\n\n"
+                    f"💰 Abono recibido: ${amount:,.2f}\n"
+                    f"💳 Deuda anterior: ${deuda_anterior:,.2f}\n"
+                    f"💳 Saldo actual: ${deuda_nueva:,.2f}\n\n"
+                    f"✅ Ventas pagadas: {resultado.get('sales_paid_complete', 0)}\n"
+                    f"⚠️ Abonos parciales: {resultado.get('sales_paid_partial', 0)}\n\n"
+                    f"📊 Progreso del pago registrado correctamente."
+                )
+            
+            messagebox.showinfo("Pago Procesado", mensaje)
+            
+        except Exception as e:
+            messagebox.showinfo("Éxito", f"Pago de ${amount:,.2f} procesado correctamente")
+            print(f"Error en mensaje de éxito: {e}")
+
+
+    def process_payment_to_sales_exact(self, payment_amount):
+        """Procesa el pago aplicándolo exactamente a las ventas pendientes"""
+        try:
+            from config.database import get_connection
+            from datetime import datetime
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print(f"\n🏦 PROCESANDO PAGO EXACTO: ${payment_amount:,.2f} para {self.client.name}")
+            print("=" * 70)
+            
+            # PASO 1: Detectar estructura de la tabla
+            cursor.execute("PRAGMA table_info(sales)")
+            table_info = cursor.fetchall()
+            column_names = [column[1] for column in table_info]
+            
+            if 'payment_status' in column_names:
+                status_column = 'payment_status'
+            elif 'status' in column_names:
+                status_column = 'status'
+            else:
+                print("❌ ERROR: No se encontró columna de estado")
+                conn.close()
+                return {'total_updated': 0, 'sales_updated': [], 'error': 'No status column'}
+            
+            print(f"📊 Usando columna de estado: '{status_column}'")
+            
+            # PASO 2: Obtener ventas pendientes ordenadas cronológicamente
+            query = f'''
+                SELECT id, total, created_at, notes
+                FROM sales 
+                WHERE client_id = ? AND {status_column} = 'pending'
+                ORDER BY datetime(created_at) ASC
+            '''
+            
+            cursor.execute(query, (self.client.id,))
+            pending_sales = cursor.fetchall()
+            
+            print(f"📋 Ventas pendientes: {len(pending_sales)}")
+            
+            if not pending_sales:
+                print("ℹ️ No hay ventas pendientes - Pago aplicado como abono general")
+                conn.close()
+                return {'total_updated': 0, 'sales_updated': [], 'message': 'No pending sales'}
+            
+            # Mostrar ventas antes del procesamiento
+            total_pending = 0
+            for i, sale in enumerate(pending_sales, 1):
+                sale_total = float(sale[1])
+                total_pending += sale_total
+                print(f"   {i}. Venta #{sale[0]}: ${sale_total:,.2f} ({sale[2][:19]})")
+            
+            print(f"💰 Total pendiente en ventas: ${total_pending:,.2f}")
+            print(f"💳 Pago exacto a aplicar: ${payment_amount:,.2f}")
+            
+            # PASO 3: Aplicar el pago exactamente a las ventas
+            remaining_payment = payment_amount
+            updated_sales = []
+            sales_paid_complete = 0
+            sales_paid_partial = 0
+            
+            for sale in pending_sales:
+                if remaining_payment <= 0:
+                    print(f"   ⏹️ Pago agotado, ventas restantes sin cambios")
+                    break
+                    
+                sale_id = sale[0]
+                sale_total = float(sale[1])
+                sale_date = sale[2]
+                sale_notes = sale[3] or ""
+                
+                print(f"\n🔄 Procesando Venta #{sale_id}")
+                print(f"   💰 Debe actualmente: ${sale_total:,.2f}")
+                print(f"   💳 Pago disponible: ${remaining_payment:,.2f}")
+                
+                if remaining_payment >= sale_total:
+                    # ✅ PAGO COMPLETO - Marcar como pagada
+                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                    updated_notes = f"{sale_notes} [PAGADA el {timestamp}]".strip()
+                    
+                    update_query = f'''
+                        UPDATE sales 
+                        SET {status_column} = 'paid',
+                            notes = ?,
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    '''
+                    cursor.execute(update_query, (updated_notes, sale_id))
+                    
+                    remaining_payment -= sale_total
+                    sales_paid_complete += 1
+                    
+                    updated_sales.append({
+                        'id': sale_id,
+                        'original_amount': sale_total,
+                        'amount_paid': sale_total,
+                        'remaining_debt': 0,
+                        'status': 'paid_complete',
+                        'date': sale_date[:19]
+                    })
+                    
+                    print(f"   ✅ PAGADA COMPLETAMENTE")
+                    print(f"   💰 Pago restante: ${remaining_payment:,.2f}")
+                    
+                else:
+                    # ⚠️ PAGO PARCIAL - Actualizar monto pendiente
+                    paid_amount = remaining_payment
+                    new_debt = sale_total - paid_amount
+                    
+                    print(f"   ⚠️ PAGO PARCIAL")
+                    print(f"   💳 Abono: ${paid_amount:,.2f}")
+                    print(f"   📊 Saldo pendiente: ${new_debt:,.2f}")
+                    
+                    # Actualizar la venta con el nuevo saldo pendiente
+                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                    updated_notes = f"{sale_notes} [Abono ${paid_amount:,.2f} el {timestamp} - Saldo: ${new_debt:,.2f}]".strip()
+                    
+                    update_query = f'''
+                        UPDATE sales 
+                        SET total = ?,
+                            notes = ?,
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    '''
+                    cursor.execute(update_query, (new_debt, updated_notes, sale_id))
+                    
+                    sales_paid_partial += 1
+                    
+                    updated_sales.append({
+                        'id': sale_id,
+                        'original_amount': sale_total,
+                        'amount_paid': paid_amount,
+                        'remaining_debt': new_debt,
+                        'status': 'paid_partial',
+                        'date': sale_date[:19]
+                    })
+                    
+                    remaining_payment = 0  # Se agotó el pago exactamente
+                    print(f"   💳 Pago agotado exactamente")
+            
+            # PASO 4: Confirmar todos los cambios
+            conn.commit()
+            conn.close()
+            
+            # PASO 5: Resumen final
+            print(f"\n🎯 RESUMEN FINAL:")
+            print("=" * 50)
+            print(f"💰 Pago procesado: ${payment_amount:,.2f}")
+            print(f"✅ Ventas pagadas completamente: {sales_paid_complete}")
+            print(f"⚠️ Ventas con abono parcial: {sales_paid_partial}")
+            print(f"📊 Total ventas afectadas: {len(updated_sales)}")
+            print(f"💳 Pago restante: ${remaining_payment:,.2f} (debe ser $0.00)")
+            
+            if remaining_payment > 0.01:  # Tolerancia para decimales
+                print(f"⚠️ ADVERTENCIA: Quedó pago sin aplicar: ${remaining_payment:,.2f}")
+            
+            return {
+                'total_updated': len(updated_sales),
+                'sales_updated': updated_sales,
+                'sales_paid_complete': sales_paid_complete,
+                'sales_paid_partial': sales_paid_partial,
+                'remaining_payment': remaining_payment,
+                'status_column_used': status_column
+            }
+            
+        except Exception as e:
+            error_msg = f"Error al procesar pago exacto: {e}"
+            print(f"❌ {error_msg}")
+            if 'conn' in locals():
+                conn.rollback()
+                conn.close()
+            return {'total_updated': 0, 'sales_updated': [], 'error': error_msg}
 
     def update_sales_payment_status(self, payment_amount):
         """Actualiza el estado de las ventas pendientes a 'paid' basándose en el pago"""
@@ -1008,41 +1498,258 @@ class CreditManagementWindow:
             print(f"Error al marcar ventas específicas como pagadas: {e}")
             return []
 
-    def show_payment_allocation(self, amount):
-        """Muestra cómo se distribuirá el pago entre las ventas pendientes - VERSIÓN CORREGIDA"""
-        pending_sales = self.get_pending_sales()
-        if not pending_sales:
-            return "No hay ventas pendientes"
-        
-        allocation_text = ""
-        remaining_payment = amount
-        
-        for i, sale in enumerate(pending_sales, 1):
-            if remaining_payment <= 0:
-                break
-                
-            sale_total = float(sale['total'])
-            sale_date = sale['created_at'][:16]  # Solo fecha y hora sin segundos
+    def show_payment_allocation_preview(self, amount):
+        """Muestra cómo se distribuirá el pago entre las ventas pendientes"""
+        try:
+            from config.database import get_connection
             
-            if remaining_payment >= sale_total:
-                allocation_text += f"✅ Venta #{sale['id']} ({sale_date}): ${sale_total:,.2f} - PAGADA COMPLETA\n"
-                remaining_payment -= sale_total
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Detectar columna de estado
+            cursor.execute("PRAGMA table_info(sales)")
+            table_info = cursor.fetchall()
+            column_names = [column[1] for column in table_info]
+            
+            status_column = 'payment_status' if 'payment_status' in column_names else 'status'
+            
+            # Obtener ventas pendientes
+            cursor.execute(f'''
+                SELECT id, total, created_at
+                FROM sales 
+                WHERE client_id = ? AND {status_column} = 'pending'
+                ORDER BY datetime(created_at) ASC
+            ''', (self.client.id,))
+            
+            pending_sales = cursor.fetchall()
+            conn.close()
+            
+            if not pending_sales:
+                if amount > 0:
+                    return f"💵 Todo el pago (${amount:,.2f}) se registrará como crédito a favor"
+                return "No hay ventas pendientes"
+            
+            allocation_text = ""
+            remaining_payment = amount
+            total_debt = sum(float(sale[1]) for sale in pending_sales)
+            
+            for i, sale in enumerate(pending_sales, 1):
+                if remaining_payment <= 0:
+                    allocation_text += f"⏸️ Venta #{sale[0]}: ${sale[1]:,.2f} - SIN CAMBIOS\n"
+                    continue
+                    
+                sale_total = float(sale[1])
+                sale_date = sale[2][:16]
+                
+                if remaining_payment >= sale_total:
+                    allocation_text += f"✅ Venta #{sale[0]} ({sale_date}): ${sale_total:,.2f} - PAGADA COMPLETA\n"
+                    remaining_payment -= sale_total
+                else:
+                    saldo = sale_total - remaining_payment
+                    allocation_text += f"⚠️ Venta #{sale[0]} ({sale_date}): Abono ${remaining_payment:,.2f}, Saldo ${saldo:,.2f}\n"
+                    remaining_payment = 0
+            
+            # Agregar información del exceso si lo hay
+            if amount > total_debt:
+                exceso = amount - total_debt
+                allocation_text += f"\n💵 Exceso como crédito: ${exceso:,.2f}"
+            
+            return allocation_text.strip()
+            
+        except Exception as e:
+            return f"Error al calcular distribución: {e}"
+    
+    def process_payment_with_accumulation(self, payment_amount):
+        """Procesa el pago aplicándolo exactamente a las ventas pendientes"""
+        try:
+            from config.database import get_connection
+            from datetime import datetime
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print(f"\n💰 PROCESANDO PAGO CON ACUMULACIÓN: ${payment_amount:,.2f}")
+            print("=" * 60)
+            
+            # PASO 1: Detectar estructura de la tabla
+            cursor.execute("PRAGMA table_info(sales)")
+            table_info = cursor.fetchall()
+            column_names = [column[1] for column in table_info]
+            
+            if 'payment_status' in column_names:
+                status_column = 'payment_status'
+            elif 'status' in column_names:
+                status_column = 'status'
             else:
-                allocation_text += f"⚠️ Venta #{sale['id']} ({sale_date}): ${remaining_payment:,.2f} de ${sale_total:,.2f} - PAGO PARCIAL\n"
-                remaining_payment = 0
-        
-        if remaining_payment > 0:
-            allocation_text += f"\n💰 Sobrante: ${remaining_payment:,.2f}"
-        
-        return allocation_text.strip()
+                print("❌ ERROR: No se encontró columna de estado")
+                conn.close()
+                return {'error': 'No status column found'}
+            
+            print(f"📊 Usando columna de estado: '{status_column}'")
+            
+            # PASO 2: Obtener ventas pendientes ordenadas cronológicamente
+            query = f'''
+                SELECT id, total, created_at, notes
+                FROM sales 
+                WHERE client_id = ? AND {status_column} = 'pending'
+                ORDER BY datetime(created_at) ASC
+            '''
+            
+            cursor.execute(query, (self.client.id,))
+            pending_sales = cursor.fetchall()
+            
+            print(f"📋 Ventas pendientes encontradas: {len(pending_sales)}")
+            
+            if not pending_sales:
+                print("ℹ️ No hay ventas pendientes")
+                # Si hay pago y no hay ventas pendientes, registrar como crédito a favor
+                if payment_amount > 0:
+                    self.handle_excess_credit(self.client.id, payment_amount)
+                conn.close()
+                return {'message': 'No pending sales', 'excess_credit': payment_amount}
+            
+            # PASO 3: Mostrar estado inicial
+            total_pending = sum(float(sale[1]) for sale in pending_sales)
+            print(f"💳 Total pendiente en ventas: ${total_pending:,.2f}")
+            print(f"💰 Pago a aplicar: ${payment_amount:,.2f}")
+            
+            for i, sale in enumerate(pending_sales, 1):
+                print(f"   {i}. Venta #{sale[0]}: ${float(sale[1]):,.2f} ({sale[2][:19]})")
+            
+            # PASO 4: Procesar el pago exactamente
+            remaining_payment = payment_amount
+            updated_sales = []
+            sales_paid_complete = 0
+            sales_paid_partial = 0
+            
+            for sale in pending_sales:
+                if remaining_payment <= 0:
+                    print(f"   ⏸️ Pago agotado, ventas restantes sin cambios")
+                    break
+                    
+                sale_id = sale[0]
+                sale_total = float(sale[1])
+                sale_date = sale[2]
+                sale_notes = sale[3] or ""
+                
+                print(f"\n📄 Procesando Venta #{sale_id}")
+                print(f"   💰 Debe actualmente: ${sale_total:,.2f}")
+                print(f"   💳 Pago disponible: ${remaining_payment:,.2f}")
+                
+                if remaining_payment >= sale_total:
+                    # ✅ PAGO COMPLETO - Marcar como pagada
+                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                    updated_notes = f"{sale_notes} [PAGADA el {timestamp}]".strip()
+                    
+                    update_query = f'''
+                        UPDATE sales 
+                        SET {status_column} = 'paid',
+                            notes = ?,
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    '''
+                    cursor.execute(update_query, (updated_notes, sale_id))
+                    
+                    remaining_payment -= sale_total
+                    sales_paid_complete += 1
+                    
+                    updated_sales.append({
+                        'id': sale_id,
+                        'original_amount': sale_total,
+                        'amount_paid': sale_total,
+                        'remaining_debt': 0,
+                        'status': 'paid_complete',
+                        'date': sale_date[:19]
+                    })
+                    
+                    print(f"   ✅ PAGADA COMPLETAMENTE")
+                    print(f"   💰 Pago restante: ${remaining_payment:,.2f}")
+                    
+                else:
+                    # ⚠️ PAGO PARCIAL - Actualizar monto pendiente
+                    paid_amount = remaining_payment
+                    new_debt = sale_total - paid_amount
+                    
+                    print(f"   ⚠️ PAGO PARCIAL")
+                    print(f"   💳 Abono: ${paid_amount:,.2f}")
+                    print(f"   📊 Saldo pendiente: ${new_debt:,.2f}")
+                    
+                    # Actualizar la venta con el nuevo saldo pendiente
+                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                    updated_notes = f"{sale_notes} [Abono ${paid_amount:,.2f} el {timestamp} - Saldo: ${new_debt:,.2f}]".strip()
+                    
+                    update_query = f'''
+                        UPDATE sales 
+                        SET total = ?,
+                            notes = ?,
+                            updated_at = datetime('now', 'localtime')
+                        WHERE id = ?
+                    '''
+                    cursor.execute(update_query, (new_debt, updated_notes, sale_id))
+                    
+                    sales_paid_partial += 1
+                    
+                    updated_sales.append({
+                        'id': sale_id,
+                        'original_amount': sale_total,
+                        'amount_paid': paid_amount,
+                        'remaining_debt': new_debt,
+                        'status': 'paid_partial',
+                        'date': sale_date[:19]
+                    })
+                    
+                    remaining_payment = 0  # Se agotó el pago exactamente
+                    print(f"   💳 Pago agotado exactamente")
+            
+            # PASO 5: Manejar exceso de pago como crédito a favor
+            if remaining_payment > 0:
+                print(f"\n💵 EXCESO DE PAGO: ${remaining_payment:,.2f}")
+                self.handle_excess_credit(self.client.id, remaining_payment)
+            
+            # PASO 6: Confirmar todos los cambios
+            conn.commit()
+            conn.close()
+            
+            # PASO 7: Resumen final
+            print(f"\n🎯 RESUMEN FINAL:")
+            print("=" * 50)
+            print(f"💰 Pago procesado: ${payment_amount:,.2f}")
+            print(f"✅ Ventas pagadas completamente: {sales_paid_complete}")
+            print(f"⚠️ Ventas con abono parcial: {sales_paid_partial}")
+            print(f"📊 Total ventas afectadas: {len(updated_sales)}")
+            print(f"💳 Exceso como crédito: ${remaining_payment:,.2f}")
+            
+            return {
+                'total_updated': len(updated_sales),
+                'sales_updated': updated_sales,
+                'sales_paid_complete': sales_paid_complete,
+                'sales_paid_partial': sales_paid_partial,
+                'excess_credit': remaining_payment,
+                'status_column_used': status_column
+            }
+            
+        except Exception as e:
+            error_msg = f"Error al procesar pago con acumulación: {e}"
+            print(f"❌ {error_msg}")
+            if 'conn' in locals():
+                conn.rollback()
+                conn.close()
+            return {'total_updated': 0, 'sales_updated': [], 'error': error_msg}
     
     def view_history(self):
         """Muestra el historial del cliente"""
         ClientHistoryWindow(self.window, self.client)
     
     def refresh_and_close(self):
-        """Actualiza la ventana principal y cierra esta ventana"""
+        """Actualiza todas las ventanas y cierra esta ventana"""
+        # Actualizar ventana de clientes
         self.clients_window.refresh_clients()
+        
+        # Actualizar todas las ventanas desde main_window si existe
+        if self.main_window:
+            self.main_window.refresh_all_windows()
+        
+        # Cerrar ventana actual
         self.window.destroy()
     
     def close_window(self):

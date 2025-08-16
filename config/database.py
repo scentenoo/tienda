@@ -161,6 +161,7 @@ def init_database():
                 paid_amount REAL DEFAULT 0.0,
                 remaining_debt REAL DEFAULT 0.0,
                 notes TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 user_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 status TEXT DEFAULT 'paid',
@@ -621,6 +622,184 @@ def fix_all_client_debts():
             conn.rollback()
             conn.close()
         return False
+    
+def sync_all_client_sales_status():
+    """Sincroniza el estado de todas las ventas basándose en la deuda real de los clientes"""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        print("🔄 Iniciando sincronización completa de estados de ventas...")
+        print("=" * 60)
+        
+        # Detectar columna de estado
+        cursor.execute("PRAGMA table_info(sales)")
+        table_info = cursor.fetchall()
+        column_names = [column[1] for column in table_info]
+        
+        if 'payment_status' in column_names:
+            status_column = 'payment_status'
+        elif 'status' in column_names:
+            status_column = 'status'
+        else:
+            print("❌ ERROR: No se encontró columna de estado en sales")
+            return False
+        
+        print(f"📊 Usando columna de estado: '{status_column}'")
+        
+        # Obtener todos los clientes con sus deudas reales
+        cursor.execute("""
+            SELECT 
+                c.id,
+                c.name,
+                c.total_debt,
+                COALESCE(SUM(
+                    CASE 
+                        WHEN ct.transaction_type = 'debit' THEN ct.amount
+                        WHEN ct.transaction_type = 'credit' THEN -ct.amount
+                        ELSE 0
+                    END
+                ), 0) as calculated_debt
+            FROM clients c
+            LEFT JOIN client_transactions ct ON c.id = ct.client_id
+            GROUP BY c.id, c.name, c.total_debt
+        """)
+        
+        clients_data = cursor.fetchall()
+        total_clients_processed = 0
+        total_sales_updated = 0
+        
+        for client in clients_data:
+            client_id = client['id']
+            client_name = client['name']
+            registered_debt = float(client['total_debt'])
+            calculated_debt = float(client['calculated_debt'])
+            
+            print(f"\n👤 Cliente: {client_name} (ID: {client_id})")
+            print(f"   💳 Deuda registrada: ${registered_debt:,.2f}")
+            print(f"   🧮 Deuda calculada: ${calculated_debt:,.2f}")
+            
+            # Usar la deuda registrada como referencia (ya que pay_debt() la actualiza)
+            current_debt = registered_debt
+            
+            # Obtener todas las ventas de este cliente ordenadas cronológicamente
+            query = f'''
+                SELECT id, total, {status_column}, created_at, notes
+                FROM sales 
+                WHERE client_id = ?
+                ORDER BY datetime(created_at) ASC
+            '''
+            cursor.execute(query, (client_id,))
+            client_sales = cursor.fetchall()
+            
+            if not client_sales:
+                print(f"   ℹ️ Sin ventas registradas")
+                continue
+            
+            print(f"   📋 Ventas encontradas: {len(client_sales)}")
+            
+            # Procesar las ventas según la deuda actual
+            remaining_debt = current_debt
+            sales_updated_for_client = 0
+            
+            for sale in client_sales:
+                sale_id = sale['id']
+                sale_total = float(sale['total'])
+                current_status = sale[status_column]
+                sale_date = sale['created_at'][:19]
+                sale_notes = sale['notes'] or ""
+                
+                if current_debt <= 0:
+                    # Cliente sin deuda - todas las ventas deben estar pagadas
+                    if current_status != 'paid':
+                        update_query = f'''
+                            UPDATE sales 
+                            SET {status_column} = 'paid',
+                                notes = ?,
+                                updated_at = datetime('now', 'localtime')
+                            WHERE id = ?
+                        '''
+                        updated_notes = f"{sale_notes} [Auto-pagada por sincronización]".strip()
+                        cursor.execute(update_query, (updated_notes, sale_id))
+                        sales_updated_for_client += 1
+                        print(f"      ✅ Venta #{sale_id} marcada como PAGADA (cliente sin deuda)")
+                
+                elif remaining_debt >= sale_total:
+                    # Esta venta específica sigue pendiente
+                    remaining_debt -= sale_total
+                    if current_status != 'pending':
+                        update_query = f'''
+                            UPDATE sales 
+                            SET {status_column} = 'pending',
+                                updated_at = datetime('now', 'localtime')
+                            WHERE id = ?
+                        '''
+                        cursor.execute(update_query, (sale_id,))
+                        sales_updated_for_client += 1
+                        print(f"      ⚠️ Venta #{sale_id} marcada como PENDIENTE (${sale_total:,.2f})")
+                
+                else:
+                    # Esta venta está parcialmente pagada o completamente pagada
+                    if remaining_debt > 0:
+                        # Pago parcial - actualizar el monto pendiente
+                        paid_amount = sale_total - remaining_debt
+                        update_query = f'''
+                            UPDATE sales 
+                            SET total = ?,
+                                {status_column} = 'pending',
+                                notes = ?,
+                                updated_at = datetime('now', 'localtime')
+                            WHERE id = ?
+                        '''
+                        updated_notes = f"{sale_notes} [Abono parcial ${paid_amount:,.2f} - Saldo: ${remaining_debt:,.2f}]".strip()
+                        cursor.execute(update_query, (remaining_debt, updated_notes, sale_id))
+                        sales_updated_for_client += 1
+                        print(f"      💳 Venta #{sale_id} ABONO PARCIAL: Pagado ${paid_amount:,.2f}, Saldo ${remaining_debt:,.2f}")
+                        remaining_debt = 0
+                    else:
+                        # Completamente pagada
+                        if current_status != 'paid':
+                            update_query = f'''
+                                UPDATE sales 
+                                SET {status_column} = 'paid',
+                                    notes = ?,
+                                    updated_at = datetime('now', 'localtime')
+                                WHERE id = ?
+                            '''
+                            updated_notes = f"{sale_notes} [Pagada por sincronización]".strip()
+                            cursor.execute(update_query, (updated_notes, sale_id))
+                            sales_updated_for_client += 1
+                            print(f"      ✅ Venta #{sale_id} marcada como PAGADA")
+            
+            total_sales_updated += sales_updated_for_client
+            total_clients_processed += 1
+            
+            if sales_updated_for_client > 0:
+                print(f"   📊 Ventas actualizadas: {sales_updated_for_client}")
+            else:
+                print(f"   ✅ Ventas ya estaban sincronizadas")
+        
+        # Confirmar cambios
+        conn.commit()
+        
+        print(f"\n🎯 SINCRONIZACIÓN COMPLETADA")
+        print("=" * 40)
+        print(f"👥 Clientes procesados: {total_clients_processed}")
+        print(f"📋 Ventas actualizadas: {total_sales_updated}")
+        print(f"✅ Todas las ventas están ahora sincronizadas con las deudas reales")
+        
+        return True
+        
+    except Exception as e:
+        error_msg = f"Error en sincronización: {e}"
+        print(f"❌ {error_msg}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn:
+            conn.close()
 
 def migrate_transaction_times():
     """Corrige las horas incorrectas en transacciones existentes"""
@@ -645,6 +824,314 @@ def migrate_transaction_times():
         print(f"Error en migración: {e}")
         if conn:
             conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+def fix_client_sales_relationship():
+    """Corrige la relación entre clientes y ventas de una vez por todas"""
+    try:
+        print("🔧 Iniciando corrección completa de relación cliente-ventas...")
+        
+        # Paso 1: Sincronizar estados de ventas
+        print("📊 Paso 1: Sincronizando estados de ventas...")
+        if sync_all_client_sales_status():
+            print("✅ Estados de ventas sincronizados correctamente")
+        else:
+            print("❌ Error al sincronizar estados de ventas")
+            return False
+        
+        # Paso 2: Verificar integridad de datos
+        print("🔍 Paso 2: Verificando integridad de datos...")
+        verify_data_integrity()
+        
+        print("🎉 ¡Corrección completa terminada exitosamente!")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error en corrección completa: {e}")
+        return False
+def sync_client_sales_status_on_payment(client_id):
+    """
+    Sincroniza automáticamente el estado de las ventas cuando se hace un pago
+    Esta función se debe llamar después de cada pago registrado
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        print(f"🔄 Sincronizando estados de ventas para cliente {client_id}")
+        
+        # PASO 1: Obtener la deuda actual del cliente
+        cursor.execute("SELECT total_debt FROM clients WHERE id = ?", (client_id,))
+        client_result = cursor.fetchone()
+        
+        if not client_result:
+            print(f"❌ Cliente {client_id} no encontrado")
+            return False
+        
+        client_debt = float(client_result[0])
+        print(f"💳 Deuda actual del cliente: ${client_debt:,.2f}")
+        
+        # PASO 2: Detectar columna de estado en la tabla sales
+        cursor.execute("PRAGMA table_info(sales)")
+        table_info = cursor.fetchall()
+        column_names = [column[1] for column in table_info]
+        
+        if 'payment_status' in column_names:
+            status_column = 'payment_status'
+        elif 'status' in column_names:
+            status_column = 'status'
+        else:
+            print("❌ ERROR: No se encontró columna de estado en sales")
+            return False
+        
+        print(f"📊 Usando columna de estado: '{status_column}'")
+        
+        # PASO 3: Si la deuda es 0, marcar TODAS las ventas como pagadas
+        if client_debt <= 0:
+            update_query = f'''
+                UPDATE sales 
+                SET {status_column} = 'paid',
+                    updated_at = datetime('now', 'localtime')
+                WHERE client_id = ? AND {status_column} = 'pending'
+            '''
+            cursor.execute(update_query, (client_id,))
+            updated_sales = cursor.rowcount
+            
+            print(f"✅ Cliente sin deuda: {updated_sales} ventas marcadas como PAGADAS")
+            
+        else:
+            # PASO 4: Si hay deuda, aplicar lógica de pagos cronológicos
+            print("📋 Cliente con deuda pendiente, aplicando lógica cronológica...")
+            
+            # Obtener todas las ventas ordenadas cronológicamente
+            query = f'''
+                SELECT id, total, created_at, {status_column}
+                FROM sales 
+                WHERE client_id = ?
+                ORDER BY datetime(created_at) ASC
+            '''
+            cursor.execute(query, (client_id,))
+            all_sales = cursor.fetchall()
+            
+            # Calcular cuánto se ha pagado basándose en la deuda restante
+            total_sales = sum(float(sale[1]) for sale in all_sales)
+            total_paid = total_sales - client_debt
+            
+            print(f"💰 Total en ventas: ${total_sales:,.2f}")
+            print(f"💳 Total pagado: ${total_paid:,.2f}")
+            print(f"📊 Deuda restante: ${client_debt:,.2f}")
+            
+            # Aplicar pagos cronológicamente
+            remaining_payment = total_paid
+            sales_updated = 0
+            
+            for sale in all_sales:
+                sale_id = sale[0]
+                sale_total = float(sale[1])
+                current_status = sale[3]
+                
+                if remaining_payment >= sale_total:
+                    # Esta venta debe estar pagada
+                    if current_status != 'paid':
+                        update_query = f'''
+                            UPDATE sales 
+                            SET {status_column} = 'paid',
+                                updated_at = datetime('now', 'localtime')
+                            WHERE id = ?
+                        '''
+                        cursor.execute(update_query, (sale_id,))
+                        sales_updated += 1
+                        print(f"   ✅ Venta #{sale_id} marcada como PAGADA")
+                    
+                    remaining_payment -= sale_total
+                    
+                else:
+                    # Esta venta debe estar pendiente
+                    if current_status == 'paid':
+                        update_query = f'''
+                            UPDATE sales 
+                            SET {status_column} = 'pending',
+                                updated_at = datetime('now', 'localtime')
+                            WHERE id = ?
+                        '''
+                        cursor.execute(update_query, (sale_id,))
+                        sales_updated += 1
+                        print(f"   ⚠️ Venta #{sale_id} marcada como PENDIENTE")
+                    
+                    # Solo procesar hasta donde alcance el pago
+                    if remaining_payment <= 0:
+                        break
+            
+            print(f"📊 Total de ventas actualizadas: {sales_updated}")
+        
+        # PASO 5: Confirmar cambios
+        conn.commit()
+        print("✅ Sincronización completada exitosamente")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error en sincronización: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
+def fix_all_client_sales_statuses():
+    """
+    Función de mantenimiento: Corrige todos los estados de ventas para todos los clientes
+    Ejecutar esta función una sola vez para arreglar datos históricos
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        print("🔧 INICIANDO CORRECCIÓN MASIVA DE ESTADOS DE VENTAS")
+        print("=" * 60)
+        
+        # Obtener todos los clientes
+        cursor.execute("SELECT id, name, total_debt FROM clients")
+        all_clients = cursor.fetchall()
+        
+        total_clients = len(all_clients)
+        clients_processed = 0
+        total_sales_updated = 0
+        
+        print(f"👥 Clientes a procesar: {total_clients}")
+        print()
+        
+        for client in all_clients:
+            client_id = client[0]
+            client_name = client[1]
+            client_debt = float(client[2])
+            
+            print(f"👤 Procesando: {client_name} (Deuda: ${client_debt:,.2f})")
+            
+            # Llamar a la función de sincronización para cada cliente
+            if sync_client_sales_status_on_payment(client_id):
+                clients_processed += 1
+                print(f"   ✅ Procesado correctamente")
+            else:
+                print(f"   ❌ Error al procesar")
+            
+            print()
+        
+        print("🎯 CORRECCIÓN MASIVA COMPLETADA")
+        print("=" * 40)
+        print(f"✅ Clientes procesados: {clients_processed}/{total_clients}")
+        print("📊 Todos los estados de ventas han sido sincronizados")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error en corrección masiva: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def sync_client_sales_status_on_payment(client_id):
+    """
+    Sincroniza automáticamente el estado de las ventas cuando se hace un pago - VERSIÓN CORREGIDA
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Obtener la deuda actual del cliente
+        cursor.execute("SELECT total_debt FROM clients WHERE id = ?", (client_id,))
+        client_result = cursor.fetchone()
+        
+        if not client_result:
+            return False
+        
+        client_debt = float(client_result[0])
+        
+        # Detectar columna de estado
+        cursor.execute("PRAGMA table_info(sales)")
+        table_info = cursor.fetchall()
+        column_names = [column[1] for column in table_info]
+        
+        if 'payment_status' in column_names:
+            status_column = 'payment_status'
+        elif 'status' in column_names:
+            status_column = 'status'
+        else:
+            return False
+        
+        # Si la deuda es 0, marcar todas las ventas como pagadas
+        if client_debt <= 0:
+            # *** CORRECCIÓN: Sin updated_at ***
+            update_query = f'''
+                UPDATE sales 
+                SET {status_column} = 'paid'
+                WHERE client_id = ? AND {status_column} = 'pending'
+            '''
+            cursor.execute(update_query, (client_id,))
+            
+        else:
+            # Aplicar lógica cronológica de pagos
+            query = f'''
+                SELECT id, total, created_at, {status_column}
+                FROM sales 
+                WHERE client_id = ?
+                ORDER BY datetime(created_at) ASC
+            '''
+            cursor.execute(query, (client_id,))
+            all_sales = cursor.fetchall()
+            
+            # Calcular cuánto se ha pagado
+            total_sales = sum(float(sale[1]) for sale in all_sales)
+            total_paid = total_sales - client_debt
+            
+            # Aplicar pagos cronológicamente
+            remaining_payment = total_paid
+            
+            for sale in all_sales:
+                sale_id = sale[0]
+                sale_total = float(sale[1])
+                current_status = sale[3]
+                
+                if remaining_payment >= sale_total:
+                    # Esta venta debe estar pagada
+                    if current_status != 'paid':
+                        # *** CORRECCIÓN: Sin updated_at ***
+                        update_query = f'''
+                            UPDATE sales 
+                            SET {status_column} = 'paid'
+                            WHERE id = ?
+                        '''
+                        cursor.execute(update_query, (sale_id,))
+                    
+                    remaining_payment -= sale_total
+                    
+                else:
+                    # Esta venta debe estar pendiente
+                    if current_status == 'paid':
+                        # *** CORRECCIÓN: Sin updated_at ***
+                        update_query = f'''
+                            UPDATE sales 
+                            SET {status_column} = 'pending'
+                            WHERE id = ?
+                        '''
+                        cursor.execute(update_query, (sale_id,))
+                    
+                    break
+        
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return False
     finally:
         if conn:
             conn.close()

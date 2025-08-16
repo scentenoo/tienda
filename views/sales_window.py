@@ -658,7 +658,7 @@ class SalesWindow:
         """Abre diálogo para agregar nuevo cliente"""
         dialog = tk.Toplevel(self.window)
         dialog.title("Nuevo Cliente")
-        dialog.geometry("300x300")
+        dialog.geometry("300x500")
         dialog.resizable(False, False)
         dialog.transient(self.window)
         dialog.grab_set()

@@ -67,18 +67,13 @@ class ReportsWindow:
         notebook.add(summary_tab, text="📊 Resumen")
         self.setup_summary_tab(summary_tab)
         
-        # Pestaña 2: Análisis
-        analysis_tab = ttk.Frame(notebook)
-        notebook.add(analysis_tab, text="📈 Análisis")
-        self.setup_analysis_tab(analysis_tab)
-        
         # Pestaña 3: Exportar
         export_tab = ttk.Frame(notebook)
         notebook.add(export_tab, text="📤 Exportar")
         self.setup_export_tab(export_tab)
 
     def setup_summary_tab(self, parent):
-        """Configura la pestaña de resumen financiero"""
+        """Configura la pestaña de resumen financiero con herramientas de diagnóstico MEJORADAS"""
         # Frame con scroll
         canvas = tk.Canvas(parent, borderwidth=0, background="#ffffff")
         scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
@@ -113,34 +108,27 @@ class ReportsWindow:
         
         self.create_summary_row(inventory_frame, "📦 Valor de Compras:", 'inventory_purchases', "blue")
         self.create_summary_row(inventory_frame, "✅ Valor Vendido:", 'inventory_sold', "green")
+        self.create_summary_row(inventory_frame, "🚚 Flete Pagado:", 'total_freight', "red")
+        self.create_summary_row(inventory_frame, "🧾 IVA Pagado:", 'total_iva', "red")
         self.create_summary_row(inventory_frame, "❌ Pérdidas de Inventario:", 'losses', "orange")
         self.create_summary_row(inventory_frame, "📊 INVENTARIO ACTUAL:", 'current_inventory', "purple", bold=True)
         
-        # Sección de utilidad
-        profit_frame = ttk.LabelFrame(scrollable_frame, text="Utilidad Neta", padding=10)
-        profit_frame.pack(fill=tk.X, pady=5, padx=5)
-        
-        self.create_summary_row(profit_frame, "💰 Ingresos por Ventas:", 'profit_sales', "green")
-        self.create_summary_row(profit_frame, "📦 Costo Productos Vendidos:", 'cogs', "red")
-        self.create_summary_row(profit_frame, "🏪 Gastos Operativos:", 'profit_expenses', "red")
-        self.create_summary_row(profit_frame, "💎 UTILIDAD NETA:", 'net_profit', "darkgreen", bold=True)
-        
-        """Agrega los botones al final de setup_summary_tab"""
-    
-        # Frame para botones
+        # Frame para botones (EXPANDIDO)
         buttons_frame = ttk.Frame(scrollable_frame)
-        buttons_frame.pack(pady=10)
+        buttons_frame.pack(pady=15)
         
-        # Botón de actualización normal
-        ttk.Button(buttons_frame, 
+        # Fila 1 de botones
+        row1 = ttk.Frame(buttons_frame)
+        row1.pack(pady=5)
+        
+        ttk.Button(row1, 
                 text="🔄 Actualizar Datos", 
                 command=self.load_financial_summary,
                 style='TButton').pack(side=tk.LEFT, padx=5)
         
-        # Botón de sincronización
-        ttk.Button(buttons_frame, 
-                text="🔄 Sincronizar Estados", 
-                command=self.sync_sales_status_with_debt,
+        ttk.Button(row1, 
+                text="💳 Sincronizar Pagos", 
+                command=self.sync_sales_with_partial_payments,
                 style='TButton').pack(side=tk.LEFT, padx=5)
         
     def create_summary_row(self, parent, label_text, key, color, bold=False):
@@ -280,6 +268,74 @@ class ReportsWindow:
         # Botón para actualizar análisis
         ttk.Button(parent, text="Actualizar Análisis", 
                   command=self.load_losses_analysis).pack(pady=5)
+        
+    def calculate_inventory_sold_with_full_costs(self):
+        """
+        Método alternativo más detallado para calcular inventario vendido
+        incluyendo todos los costos asociados (flete e IVA)
+        """
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print("🔍 Calculando inventario vendido con costos completos...")
+            
+            # Obtener todas las ventas con costos detallados - NOMBRES CORREGIDOS
+            cursor.execute('''
+                SELECT 
+                    p.id as product_id,
+                    p.name as product_name,
+                    p.cost_price,
+                    SUM(sd.quantity) as total_sold_qty,
+                    -- Calcular costo promedio con flete e IVA (COLUMNAS CORRECTAS)
+                    AVG(
+                        pd.unit_cost + 
+                        COALESCE(
+                            CASE 
+                                WHEN pd.subtotal > 0 AND pur.shipping IS NOT NULL AND pur.shipping != '' AND CAST(pur.shipping AS REAL) > 0
+                                THEN (CAST(pur.shipping AS REAL) / pd.subtotal) * pd.unit_cost
+                                ELSE 0
+                            END, 0
+                        ) +
+                        COALESCE(
+                            CASE 
+                                WHEN pd.subtotal > 0 AND pur.iva IS NOT NULL AND pur.iva != '' AND CAST(pur.iva AS REAL) > 0
+                                THEN (CAST(pur.iva AS REAL) / pd.subtotal) * pd.unit_cost
+                                ELSE 0
+                            END, 0
+                        )
+                    ) as avg_full_cost
+                FROM sale_details sd
+                JOIN products p ON sd.product_id = p.id
+                LEFT JOIN purchase_details pd ON pd.product_id = p.id
+                LEFT JOIN purchases pur ON pd.purchase_id = pur.id
+                GROUP BY p.id, p.name, p.cost_price
+                HAVING total_sold_qty > 0
+            ''')
+            
+            products_data = cursor.fetchall()
+            total_inventory_sold = 0
+            
+            print(f"📦 Analizando {len(products_data)} productos vendidos:")
+            
+            for product in products_data:
+                # Usar el costo completo si está disponible, sino usar cost_price
+                unit_cost = product['avg_full_cost'] if product['avg_full_cost'] else product['cost_price']
+                product_value = product['total_sold_qty'] * unit_cost
+                total_inventory_sold += product_value
+                
+                print(f"  • {product['product_name']}: {product['total_sold_qty']} unidades × ${unit_cost:.2f} = ${product_value:.2f}")
+            
+            conn.close()
+            
+            print(f"💰 Total inventario vendido: ${total_inventory_sold:,.2f}")
+            return total_inventory_sold
+            
+        except Exception as e:
+            print(f"Error en calculate_inventory_sold_with_full_costs: {e}")
+            if conn:
+                conn.close()
+            return 0.0
     
     def load_financial_summary(self):
         """Carga y actualiza el resumen financiero con manejo mejorado de errores"""
@@ -330,101 +386,513 @@ class ReportsWindow:
             if conn:
                 conn.close()
 
-    def _fetch_financial_data(self):
-        """Obtiene los datos financieros con cálculo corregido de inventario"""
+    def sync_client_sales_status_on_payment(client_id):
+        """
+        Sincroniza automáticamente el estado de las ventas cuando se hace un pago - VERSIÓN CORREGIDA
+        """
         conn = None
         try:
             conn = get_connection()
             cursor = conn.cursor()
             
-            # 1. Datos de ventas (sin cambios)
+            # Obtener la deuda actual del cliente
+            cursor.execute("SELECT total_debt FROM clients WHERE id = ?", (client_id,))
+            client_result = cursor.fetchone()
+            
+            if not client_result:
+                return False
+            
+            client_debt = float(client_result[0])
+            
+            # Detectar columna de estado
+            cursor.execute("PRAGMA table_info(sales)")
+            table_info = cursor.fetchall()
+            column_names = [column[1] for column in table_info]
+            
+            if 'payment_status' in column_names:
+                status_column = 'payment_status'
+            elif 'status' in column_names:
+                status_column = 'status'
+            else:
+                return False
+            
+            # Si la deuda es 0, marcar todas las ventas como pagadas
+            if client_debt <= 0:
+                # *** CORRECCIÓN: Sin updated_at ***
+                update_query = f'''
+                    UPDATE sales 
+                    SET {status_column} = 'paid'
+                    WHERE client_id = ? AND {status_column} = 'pending'
+                '''
+                cursor.execute(update_query, (client_id,))
+                
+            else:
+                # Aplicar lógica cronológica de pagos
+                query = f'''
+                    SELECT id, total, created_at, {status_column}
+                    FROM sales 
+                    WHERE client_id = ?
+                    ORDER BY datetime(created_at) ASC
+                '''
+                cursor.execute(query, (client_id,))
+                all_sales = cursor.fetchall()
+                
+                # Calcular cuánto se ha pagado
+                total_sales = sum(float(sale[1]) for sale in all_sales)
+                total_paid = total_sales - client_debt
+                
+                # Aplicar pagos cronológicamente
+                remaining_payment = total_paid
+                
+                for sale in all_sales:
+                    sale_id = sale[0]
+                    sale_total = float(sale[1])
+                    current_status = sale[3]
+                    
+                    if remaining_payment >= sale_total:
+                        # Esta venta debe estar pagada
+                        if current_status != 'paid':
+                            # *** CORRECCIÓN: Sin updated_at ***
+                            update_query = f'''
+                                UPDATE sales 
+                                SET {status_column} = 'paid'
+                                WHERE id = ?
+                            '''
+                            cursor.execute(update_query, (sale_id,))
+                        
+                        remaining_payment -= sale_total
+                        
+                    else:
+                        # Esta venta debe estar pendiente
+                        if current_status == 'paid':
+                            # *** CORRECCIÓN: Sin updated_at ***
+                            update_query = f'''
+                                UPDATE sales 
+                                SET {status_column} = 'pending'
+                                WHERE id = ?
+                            '''
+                            cursor.execute(update_query, (sale_id,))
+                        
+                        break
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            return False
+        finally:
+            if conn:
+                conn.close()
+
+
+    def sync_all_client_sales_status():
+        """Sincroniza el estado de todas las ventas basándose en la deuda real - VERSIÓN CORREGIDA"""
+        conn = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print("🔄 Iniciando sincronización completa de estados de ventas...")
+            print("=" * 60)
+            
+            # Detectar columna de estado
+            cursor.execute("PRAGMA table_info(sales)")
+            table_info = cursor.fetchall()
+            column_names = [column[1] for column in table_info]
+            
+            if 'payment_status' in column_names:
+                status_column = 'payment_status'
+            elif 'status' in column_names:
+                status_column = 'status'
+            else:
+                print("❌ ERROR: No se encontró columna de estado en sales")
+                return False
+            
+            print(f"📊 Usando columna de estado: '{status_column}'")
+            
+            # Obtener todos los clientes con sus deudas reales
+            cursor.execute("""
+                SELECT 
+                    c.id,
+                    c.name,
+                    c.total_debt,
+                    COALESCE(SUM(
+                        CASE 
+                            WHEN ct.transaction_type = 'debit' THEN ct.amount
+                            WHEN ct.transaction_type = 'credit' THEN -ct.amount
+                            ELSE 0
+                        END
+                    ), 0) as calculated_debt
+                FROM clients c
+                LEFT JOIN client_transactions ct ON c.id = ct.client_id
+                GROUP BY c.id, c.name, c.total_debt
+            """)
+            
+            clients_data = cursor.fetchall()
+            total_clients_processed = 0
+            total_sales_updated = 0
+            
+            for client in clients_data:
+                client_id = client[0]
+                client_name = client[1]
+                registered_debt = float(client[2])
+                calculated_debt = float(client[3])
+                
+                print(f"\n👤 Cliente: {client_name} (ID: {client_id})")
+                print(f"   💳 Deuda registrada: ${registered_debt:,.2f}")
+                print(f"   🧮 Deuda calculada: ${calculated_debt:,.2f}")
+                
+                # Usar la deuda registrada como referencia
+                current_debt = registered_debt
+                
+                # Obtener todas las ventas de este cliente ordenadas cronológicamente
+                query = f'''
+                    SELECT id, total, {status_column}, created_at, notes
+                    FROM sales 
+                    WHERE client_id = ?
+                    ORDER BY datetime(created_at) ASC
+                '''
+                cursor.execute(query, (client_id,))
+                client_sales = cursor.fetchall()
+                
+                if not client_sales:
+                    print(f"   ℹ️ Sin ventas registradas")
+                    continue
+                
+                print(f"   📋 Ventas encontradas: {len(client_sales)}")
+                
+                # Procesar las ventas según la deuda actual
+                remaining_debt = current_debt
+                sales_updated_for_client = 0
+                
+                for sale in client_sales:
+                    sale_id = sale[0]
+                    sale_total = float(sale[1])
+                    current_status = sale[2]
+                    sale_date = sale[3][:19]
+                    sale_notes = sale[4] or ""
+                    
+                    if current_debt <= 0:
+                        # Cliente sin deuda - todas las ventas deben estar pagadas
+                        if current_status != 'paid':
+                            # *** CORRECCIÓN: Sin updated_at ***
+                            update_query = f'''
+                                UPDATE sales 
+                                SET {status_column} = 'paid',
+                                    notes = ?
+                                WHERE id = ?
+                            '''
+                            updated_notes = f"{sale_notes} [Auto-pagada por sincronización]".strip()
+                            cursor.execute(update_query, (updated_notes, sale_id))
+                            sales_updated_for_client += 1
+                            print(f"      ✅ Venta #{sale_id} marcada como PAGADA (cliente sin deuda)")
+                    
+                    elif remaining_debt >= sale_total:
+                        # Esta venta específica sigue pendiente
+                        remaining_debt -= sale_total
+                        if current_status != 'pending':
+                            # *** CORRECCIÓN: Sin updated_at ***
+                            update_query = f'''
+                                UPDATE sales 
+                                SET {status_column} = 'pending'
+                                WHERE id = ?
+                            '''
+                            cursor.execute(update_query, (sale_id,))
+                            sales_updated_for_client += 1
+                            print(f"      ⚠️ Venta #{sale_id} marcada como PENDIENTE (${sale_total:,.2f})")
+                    
+                    else:
+                        # Esta venta está parcialmente pagada o completamente pagada
+                        if remaining_debt > 0:
+                            # Pago parcial - actualizar el monto pendiente
+                            paid_amount = sale_total - remaining_debt
+                            # *** CORRECCIÓN: Sin updated_at ***
+                            update_query = f'''
+                                UPDATE sales 
+                                SET total = ?,
+                                    {status_column} = 'pending',
+                                    notes = ?
+                                WHERE id = ?
+                            '''
+                            updated_notes = f"{sale_notes} [Abono parcial ${paid_amount:,.2f} - Saldo: ${remaining_debt:,.2f}]".strip()
+                            cursor.execute(update_query, (remaining_debt, updated_notes, sale_id))
+                            sales_updated_for_client += 1
+                            print(f"      💳 Venta #{sale_id} ABONO PARCIAL: Pagado ${paid_amount:,.2f}, Saldo ${remaining_debt:,.2f}")
+                            remaining_debt = 0
+                        else:
+                            # Completamente pagada
+                            if current_status != 'paid':
+                                # *** CORRECCIÓN: Sin updated_at ***
+                                update_query = f'''
+                                    UPDATE sales 
+                                    SET {status_column} = 'paid',
+                                        notes = ?
+                                    WHERE id = ?
+                                '''
+                                updated_notes = f"{sale_notes} [Pagada por sincronización]".strip()
+                                cursor.execute(update_query, (updated_notes, sale_id))
+                                sales_updated_for_client += 1
+                                print(f"      ✅ Venta #{sale_id} marcada como PAGADA")
+                
+                total_sales_updated += sales_updated_for_client
+                total_clients_processed += 1
+                
+                if sales_updated_for_client > 0:
+                    print(f"   📊 Ventas actualizadas: {sales_updated_for_client}")
+                else:
+                    print(f"   ✅ Ventas ya estaban sincronizadas")
+            
+            # Confirmar cambios
+            conn.commit()
+            
+            print(f"\n🎯 SINCRONIZACIÓN COMPLETADA")
+            print("=" * 40)
+            print(f"👥 Clientes procesados: {total_clients_processed}")
+            print(f"📋 Ventas actualizadas: {total_sales_updated}")
+            print(f"✅ Todas las ventas están ahora sincronizadas con las deudas reales")
+            
+            return True
+            
+        except Exception as e:
+            error_msg = f"Error en sincronización: {e}"
+            print(f"❌ {error_msg}")
+            if conn:
+                conn.rollback()
+            return False
+        finally:
+            if conn:
+                conn.close()
+
+    def _fetch_financial_data(self):
+        """Obtiene los datos financieros usando las columnas paid_amount y remaining_debt existentes"""
+        conn = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # 1. CÁLCULO CORRECTO usando las columnas existentes
+            print("💰 Calculando ventas reales usando paid_amount y remaining_debt...")
+            
             cursor.execute('''
                 SELECT 
-                    COALESCE(SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END), 0) as paid_sales,
-                    COALESCE(SUM(CASE WHEN status = 'pending' THEN total ELSE 0 END), 0) as credit_sales,
-                    COALESCE(SUM(total), 0) as total_sales
+                    COALESCE(SUM(total), 0) as total_sales,
+                    COALESCE(SUM(COALESCE(paid_amount, 0)), 0) as actual_paid,
+                    COALESCE(SUM(COALESCE(remaining_debt, total)), 0) as actual_pending
                 FROM sales
             ''')
+            
             sales_data = cursor.fetchone()
+            total_sales = float(sales_data['total_sales'])
+            actual_paid = float(sales_data['actual_paid'])
+            actual_pending = float(sales_data['actual_pending'])
             
-            # 2. Deuda actual
-            cursor.execute('SELECT COALESCE(SUM(total_debt), 0) as current_debt FROM clients')
-            debt_result = cursor.fetchone()
-            current_debt = float(debt_result[0] if debt_result else 0)
+            # Verificación de consistencia
+            calculated_total = actual_paid + actual_pending
+            if abs(calculated_total - total_sales) > 0.01:  # Tolerancia de 1 centavo
+                print(f"⚠️ Inconsistencia detectada:")
+                print(f"   Total ventas: ${total_sales:,.2f}")
+                print(f"   Pagado + Pendiente: ${calculated_total:,.2f}")
+                print(f"   Diferencia: ${abs(calculated_total - total_sales):,.2f}")
+                
+                # Usar datos de transacciones como respaldo
+                cursor.execute('SELECT COALESCE(SUM(total_debt), 0) FROM clients')
+                current_debt = float(cursor.fetchone()[0])
+                actual_paid = total_sales - current_debt
+                actual_pending = current_debt
+                
+                print(f"   Usando método alternativo:")
+                print(f"   Pagado (corregido): ${actual_paid:,.2f}")
+                print(f"   Pendiente (corregido): ${actual_pending:,.2f}")
             
-            # 3. Otros totales
+            print(f"📊 Resumen de ventas:")
+            print(f"   Total: ${total_sales:,.2f}")
+            print(f"   Pagado: ${actual_paid:,.2f}")
+            print(f"   Pendiente: ${actual_pending:,.2f}")
+            
+            # 2. Deuda actual para verificación
+            cursor.execute('SELECT COALESCE(SUM(total_debt), 0) FROM clients')
+            current_debt = float(cursor.fetchone()[0])
+            
+            # 3. Otros totales (sin cambios)
             total_purchases = float(Purchase.get_total_purchases() or 0)
             total_expenses = float(Expense.get_total_expenses() or 0)
             total_losses = float(Loss.get_total_losses() or 0)
             
-            # 4. COGS solo para ventas pagadas (sin cambios)
+            # 4. Inventario vendido simple (solo cost_price)
             cursor.execute('''
-                SELECT COALESCE(SUM(sd.quantity * p.cost_price), 0) as cogs
+                SELECT COALESCE(SUM(sd.quantity * p.cost_price), 0) as inventory_sold_simple
                 FROM sale_details sd
-                JOIN sales s ON sd.sale_id = s.id
                 JOIN products p ON sd.product_id = p.id
-                WHERE s.status = 'paid'
             ''')
-            cogs_result = cursor.fetchone()
-            cogs = float(cogs_result[0] if cogs_result and cogs_result[0] else 0)
+            inventory_result = cursor.fetchone()
+            inventory_sold = float(inventory_result[0] if inventory_result else 0)
             
-            # 5. INVENTARIO VENDIDO CORREGIDO - NOMBRES DE COLUMNAS ARREGLADOS
+            # 5. Calcular totales de flete e IVA
             cursor.execute('''
                 SELECT 
-                    SUM(
-                        sd.quantity * (
-                            p.cost_price + 
-                            -- Agregar flete proporcional por unidad (CORREGIDO: freight no freight_cost)
-                            COALESCE(
-                                (SELECT AVG(CAST(pur.freight AS REAL) / pur.subtotal * pd.unit_cost)
-                                FROM purchase_details pd 
-                                JOIN purchases pur ON pd.purchase_id = pur.id
-                                WHERE pd.product_id = p.id 
-                                AND pur.freight IS NOT NULL 
-                                AND pur.freight != ''
-                                AND CAST(pur.subtotal AS REAL) > 0), 0
-                            ) +
-                            -- Agregar IVA proporcional por unidad (CORREGIDO: tax no tax_amount)
-                            COALESCE(
-                                (SELECT AVG(CAST(pur.tax AS REAL) / pur.subtotal * pd.unit_cost)
-                                FROM purchase_details pd 
-                                JOIN purchases pur ON pd.purchase_id = pur.id
-                                WHERE pd.product_id = p.id 
-                                AND pur.tax IS NOT NULL 
-                                AND pur.tax != ''
-                                AND CAST(pur.subtotal AS REAL) > 0), 0
-                            )
-                        )
-                    ) as corrected_inventory_sold
-                FROM sale_details sd
-                JOIN products p ON sd.product_id = p.id
+                    COALESCE(SUM(CASE WHEN shipping IS NOT NULL AND shipping != '' AND shipping != '0' 
+                                THEN CAST(shipping AS REAL) ELSE 0 END), 0) as total_freight,
+                    COALESCE(SUM(CASE WHEN iva IS NOT NULL AND iva != '' AND iva != '0' 
+                                THEN CAST(iva AS REAL) ELSE 0 END), 0) as total_iva
+                FROM purchases
             ''')
-            
-            inventory_result = cursor.fetchone()
-            inventory_sold_corrected = float(inventory_result[0] if inventory_result and inventory_result[0] else 0)
+            additional_costs_result = cursor.fetchone()
+            total_freight = float(additional_costs_result[0] if additional_costs_result else 0)
+            total_iva = float(additional_costs_result[1] if additional_costs_result else 0)
             
             return {
-                'total_sales': float(sales_data[2] if sales_data else 0),
-                'paid_sales': float(sales_data[0] if sales_data else 0),
-                'credit_sales': float(sales_data[1] if sales_data else 0),
+                'total_sales': total_sales,
+                'paid_sales': actual_paid,        # DINERO REALMENTE RECIBIDO
+                'credit_sales': actual_pending,   # DINERO PENDIENTE DE COBRO
                 'total_purchases': total_purchases,
                 'total_expenses': total_expenses,
                 'total_losses': total_losses,
-                'cogs': cogs,
-                'inventory_sold': inventory_sold_corrected,  # CORREGIDO
-                'current_debt': current_debt
+                'inventory_sold': inventory_sold,
+                'current_debt': current_debt,     # Para verificación
+                'total_freight': total_freight,
+                'total_iva': total_iva
             }
             
         except Exception as e:
-            print(f"Error detallado: {str(e)}")
+            print(f"Error detallado en _fetch_financial_data: {str(e)}")
             return {
                 'total_sales': 0.0, 'paid_sales': 0.0, 'credit_sales': 0.0,
                 'total_purchases': 0.0, 'total_expenses': 0.0, 'total_losses': 0.0,
-                'cogs': 0.0, 'inventory_sold': 0.0, 'current_debt': 0.0
+                'inventory_sold': 0.0, 'current_debt': 0.0, 'total_freight': 0.0, 'total_iva': 0.0
             }
         finally:
             if conn:
                 conn.close()
+
+    def sync_sales_with_partial_payments(self):
+        """Sincroniza los estados de ventas considerando pagos parciales correctamente"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print("🔄 Sincronizando ventas con pagos parciales...")
+            
+            # 1. Obtener todos los clientes y sus deudas actuales
+            cursor.execute('''
+                SELECT id, name, total_debt
+                FROM clients
+                ORDER BY id
+            ''')
+            
+            clients = cursor.fetchall()
+            
+            for client in clients:
+                client_id = client['id']
+                current_debt = float(client['total_debt'] or 0)
+                
+                print(f"📝 Procesando cliente: {client['name']} (Deuda: ${current_debt:,.2f})")
+                
+                if current_debt == 0:
+                    # Cliente sin deuda - todas sus ventas están pagadas
+                    cursor.execute('''
+                        UPDATE sales 
+                        SET status = 'paid', 
+                            paid_amount = total, 
+                            remaining_debt = 0
+                        WHERE client_id = ? AND (status != 'paid' OR paid_amount != total)
+                    ''', (client_id,))
+                    
+                    updated = cursor.rowcount
+                    if updated > 0:
+                        print(f"   ✅ {updated} ventas marcadas como pagadas")
+                
+                else:
+                    # Cliente con deuda - calcular pagos parciales
+                    cursor.execute('''
+                        SELECT id, total, COALESCE(paid_amount, 0) as current_paid
+                        FROM sales 
+                        WHERE client_id = ?
+                        ORDER BY created_at ASC
+                    ''', (client_id,))
+                    
+                    sales = cursor.fetchall()
+                    
+                    # Calcular cuánto se ha pagado en total
+                    total_sales_amount = sum(sale['total'] for sale in sales)
+                    total_paid_amount = total_sales_amount - current_debt
+                    
+                    print(f"   📊 Total vendido: ${total_sales_amount:,.2f}")
+                    print(f"   💰 Total pagado: ${total_paid_amount:,.2f}")
+                    print(f"   🔴 Pendiente: ${current_debt:,.2f}")
+                    
+                    # Distribuir el pago entre las ventas (FIFO - más antiguas primero)
+                    remaining_payment = total_paid_amount
+                    
+                    for sale in sales:
+                        sale_id = sale['id']
+                        sale_total = sale['total']
+                        
+                        if remaining_payment <= 0:
+                            # No hay más pago para esta venta
+                            new_paid = 0
+                            new_remaining = sale_total
+                            new_status = 'pending'
+                        elif remaining_payment >= sale_total:
+                            # Esta venta está completamente pagada
+                            new_paid = sale_total
+                            new_remaining = 0
+                            new_status = 'paid'
+                            remaining_payment -= sale_total
+                        else:
+                            # Esta venta tiene pago parcial
+                            new_paid = remaining_payment
+                            new_remaining = sale_total - remaining_payment
+                            new_status = 'pending'
+                            remaining_payment = 0
+                        
+                        # Actualizar la venta solo si hay cambios
+                        cursor.execute('''
+                            UPDATE sales 
+                            SET paid_amount = ?, 
+                                remaining_debt = ?, 
+                                status = ?
+                            WHERE id = ? AND (
+                                COALESCE(paid_amount, 0) != ? OR 
+                                COALESCE(remaining_debt, 0) != ? OR 
+                                status != ?
+                            )
+                        ''', (new_paid, new_remaining, new_status, sale_id, new_paid, new_remaining, new_status))
+                        
+                        if cursor.rowcount > 0:
+                            print(f"   🔄 Venta #{sale_id}: Pagado=${new_paid:,.2f}, Pendiente=${new_remaining:,.2f}")
+            
+            conn.commit()
+            print("✅ Sincronización completada")
+            
+            # Recargar datos financieros
+            self.load_financial_summary()
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error en sincronización: {e}")
+            if conn:
+                conn.rollback()
+            return False
+        finally:
+            if conn:
+                conn.close()
+
+    def _perform_calculations(self, data):
+        """Realiza los cálculos derivados con inventario vendido simple"""
+        # Efectivo = ventas pagadas - compras - gastos
+        cash_in_hand = data['paid_sales'] - data['total_purchases'] - data['total_expenses']
+        
+        # Inventario actual = compras - inventario vendido (solo cost_price) - pérdidas
+        current_inventory_value = data['total_purchases'] - data['inventory_sold'] - data['total_losses']
+        
+        return {
+            'cash_in_hand': cash_in_hand,
+            'current_inventory_value': max(0, current_inventory_value),  # No negativo
+        }
+
 
     def _perform_calculations(self, data):
         """Realiza los cálculos derivados"""
@@ -432,15 +900,11 @@ class ReportsWindow:
         cash_in_hand = data['paid_sales'] - data['total_purchases'] - data['total_expenses']
         
         # Inventario actual = compras - inventario vendido - pérdidas
-        current_inventory_value = data['total_purchases'] - data['inventory_sold'] - data['total_losses']
-        
-        # Utilidad neta = ventas pagadas - costo vendido - gastos
-        net_profit = data['paid_sales'] - data['cogs'] - data['total_expenses']
+        current_inventory_value = data['total_purchases'] - data['inventory_sold'] - data['total_losses'] - data['total_freight'] - data['total_iva']
         
         return {
             'cash_in_hand': cash_in_hand,
             'current_inventory_value': max(0, current_inventory_value),  # No negativo
-            'net_profit': net_profit
         }
 
     def force_refresh_all_data(self):
@@ -706,16 +1170,13 @@ class ReportsWindow:
             # Inventario
             self.financial_labels['inventory_purchases'].config(text=format_currency(data['total_purchases']), foreground="blue")
             self.financial_labels['inventory_sold'].config(text=format_currency(data['inventory_sold']), foreground="green")
+            self.financial_labels['total_freight'].config(text=format_currency(data['total_freight']), foreground="red")     # NUEVO
+            self.financial_labels['total_iva'].config(text=format_currency(data['total_iva']), foreground="red")
             self.financial_labels['losses'].config(text=format_currency(data['total_losses']), foreground="orange")
             self.financial_labels['current_inventory'].config(text=format_currency(calculations['current_inventory_value']), 
                                                             foreground="purple" if calculations['current_inventory_value'] >= 0 else "red")
             
-            # Utilidad
-            self.financial_labels['profit_sales'].config(text=format_currency(data['paid_sales']), foreground="green")  # Era: data['total_sales']
-            self.financial_labels['cogs'].config(text=format_currency(data['cogs']), foreground="red")
-            self.financial_labels['profit_expenses'].config(text=format_currency(data['total_expenses']), foreground="red")
-            self.financial_labels['net_profit'].config(text=format_currency(calculations['net_profit']), 
-                                                    foreground="darkgreen" if calculations['net_profit'] >= 0 else "red")
+
             
         except Exception as e:
             print(f"Error al actualizar UI: {str(e)}")
@@ -1509,3 +1970,498 @@ class ReportsWindow:
         except Exception as e:
             print(f"Error calculando inventario real: {e}")
             return None
+        
+    def diagnose_inventory_calculation(self):
+        """Diagnostica los cálculos de inventario paso a paso"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print("🔍 DIAGNÓSTICO DETALLADO DEL INVENTARIO")
+            print("=" * 60)
+            
+            # 1. Total de compras
+            cursor.execute('SELECT SUM(total) FROM purchases')
+            total_purchases = cursor.fetchone()[0] or 0
+            print(f"1. Total invertido en compras: ${total_purchases:,.2f}")
+            
+            # 2. Desglose de compras con flete e IVA
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as num_purchases,
+                    SUM(CASE WHEN subtotal IS NOT NULL AND subtotal != '' 
+                        THEN CAST(subtotal AS REAL) ELSE 0 END) as subtotal_sum,
+                    SUM(CASE WHEN freight IS NOT NULL AND freight != '' AND freight != '0' 
+                        THEN CAST(freight AS REAL) ELSE 0 END) as freight_sum,
+                    SUM(CASE WHEN tax IS NOT NULL AND tax != '' AND tax != '0' 
+                        THEN CAST(tax AS REAL) ELSE 0 END) as tax_sum
+                FROM purchases
+            ''')
+            
+            purchase_breakdown = cursor.fetchone()
+            print(f"   - Número de compras: {purchase_breakdown[0]}")
+            print(f"   - Subtotal productos: ${purchase_breakdown[1]:,.2f}")
+            print(f"   - Total flete: ${purchase_breakdown[2]:,.2f}")
+            print(f"   - Total IVA: ${purchase_breakdown[3]:,.2f}")
+            
+            # 3. Inventario vendido simple (solo cost_price)
+            cursor.execute('''
+                SELECT COALESCE(SUM(sd.quantity * p.cost_price), 0) as simple_sold
+                FROM sale_details sd
+                JOIN products p ON sd.product_id = p.id
+            ''')
+            simple_sold = cursor.fetchone()[0]
+            print(f"2. Inventario vendido (solo costo base): ${simple_sold:,.2f}")
+            
+            # 4. Intentar inventario vendido con costos completos
+            inventory_with_costs = self.calculate_inventory_sold_with_full_costs()
+            print(f"3. Inventario vendido (con flete e IVA): ${inventory_with_costs:,.2f}")
+            
+            # 5. Pérdidas
+            cursor.execute('SELECT COALESCE(SUM(total_cost), 0) FROM losses')
+            total_losses = cursor.fetchone()[0] or 0
+            print(f"4. Pérdidas registradas: ${total_losses:,.2f}")
+            
+            # 6. Inventario restante
+            remaining_simple = total_purchases - simple_sold - total_losses
+            remaining_with_costs = total_purchases - inventory_with_costs - total_losses
+            
+            print(f"\n📊 INVENTARIO RESTANTE:")
+            print(f"   - Con costo base: ${remaining_simple:,.2f}")
+            print(f"   - Con costos completos: ${remaining_with_costs:,.2f}")
+            
+            # 7. Verificar si hay productos con stock aparente
+            cursor.execute('''
+                SELECT 
+                    p.name,
+                    COALESCE(SUM(pd.quantity), 0) as purchased,
+                    COALESCE(SUM(sd.quantity), 0) as sold,
+                    COALESCE(SUM(l.quantity), 0) as lost,
+                    (COALESCE(SUM(pd.quantity), 0) - COALESCE(SUM(sd.quantity), 0) - COALESCE(SUM(l.quantity), 0)) as apparent_stock
+                FROM products p
+                LEFT JOIN purchase_details pd ON p.id = pd.product_id
+                LEFT JOIN sale_details sd ON p.id = sd.product_id
+                LEFT JOIN losses l ON p.id = l.product_id
+                GROUP BY p.id, p.name
+                HAVING apparent_stock > 0
+                ORDER BY apparent_stock DESC
+                LIMIT 10
+            ''')
+            
+            products_with_stock = cursor.fetchall()
+            if products_with_stock:
+                print(f"\n📦 PRODUCTOS CON STOCK APARENTE:")
+                for product in products_with_stock:
+                    print(f"   • {product[0]}: {product[4]} unidades (C:{product[1]}, V:{product[2]}, P:{product[3]})")
+            
+            # 8. Mostrar mensaje al usuario
+            messagebox.showinfo("Diagnóstico Completado", 
+                            f"Diagnóstico completado. Revisa la consola para detalles.\n\n"
+                            f"Resumen:\n"
+                            f"• Total compras: ${total_purchases:,.2f}\n"
+                            f"• Inventario vendido (simple): ${simple_sold:,.2f}\n"
+                            f"• Inventario vendido (con costos): ${inventory_with_costs:,.2f}\n"
+                            f"• Pérdidas: ${total_losses:,.2f}\n"
+                            f"• Inventario restante (estimado): ${remaining_with_costs:,.2f}")
+            
+            conn.close()
+            return {
+                'total_purchases': total_purchases,
+                'simple_sold': simple_sold,
+                'inventory_with_costs': inventory_with_costs,
+                'total_losses': total_losses,
+                'remaining_simple': remaining_simple,
+                'remaining_with_costs': remaining_with_costs
+            }
+            
+        except Exception as e:
+            print(f"Error en diagnóstico: {e}")
+            messagebox.showerror("Error", f"Error en diagnóstico: {e}")
+            if conn:
+                conn.close()
+            return None
+        
+    def show_inventory_discrepancies(self):
+        """Muestra las discrepancias de inventario sin registrarlas automáticamente"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Obtener productos con posibles discrepancias
+            cursor.execute('''
+                SELECT 
+                    p.id, p.name, p.cost_price,
+                    COALESCE(SUM(pd.quantity), 0) as purchased,
+                    COALESCE(SUM(sd.quantity), 0) as sold,
+                    COALESCE(SUM(l.quantity), 0) as lost,
+                    (COALESCE(SUM(pd.quantity), 0) - COALESCE(SUM(sd.quantity), 0) - COALESCE(SUM(l.quantity), 0)) as stock_diff
+                FROM products p
+                LEFT JOIN purchase_details pd ON p.id = pd.product_id
+                LEFT JOIN sale_details sd ON p.id = sd.product_id
+                LEFT JOIN losses l ON p.id = l.product_id
+                GROUP BY p.id, p.name, p.cost_price
+                HAVING stock_diff != 0
+                ORDER BY stock_diff DESC
+            ''')
+            
+            discrepancies = cursor.fetchall()
+            conn.close()
+            
+            if not discrepancies:
+                messagebox.showinfo("Info", "No se encontraron discrepancias de inventario")
+                return
+            
+            # Crear ventana para mostrar discrepancias
+            discrepancy_window = tk.Toplevel(self.window)
+            discrepancy_window.title("Discrepancias de Inventario")
+            discrepancy_window.geometry("800x500")
+            
+            # Frame con scroll
+            main_frame = ttk.Frame(discrepancy_window)
+            main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            ttk.Label(main_frame, 
+                    text="Discrepancias de Inventario Detectadas", 
+                    font=("Arial", 14, "bold")).pack(pady=(0, 10))
+            
+            ttk.Label(main_frame, 
+                    text="Estas diferencias deben revisarse manualmente y registrarse en el módulo de Pérdidas/Mermas si corresponde:", 
+                    font=("Arial", 10), 
+                    foreground="red").pack(pady=(0, 10))
+            
+            # Treeview para mostrar discrepancias
+            columns = ('Producto', 'Comprado', 'Vendido', 'Perdido', 'Diferencia', 'Valor Diferencia')
+            tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=15)
+            
+            # Configurar columnas
+            for col in columns:
+                tree.heading(col, text=col)
+                if col in ['Comprado', 'Vendido', 'Perdido', 'Diferencia']:
+                    tree.column(col, width=80)
+                elif col == 'Valor Diferencia':
+                    tree.column(col, width=120)
+                else:
+                    tree.column(col, width=200)
+            
+            # Scrollbar
+            scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=tree.yview)
+            tree.configure(yscrollcommand=scrollbar.set)
+            
+            tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            
+            # Insertar datos
+            total_discrepancy_value = 0
+            for disc in discrepancies:
+                value_diff = disc[6] * disc[2]  # stock_diff * cost_price
+                total_discrepancy_value += abs(value_diff)
+                
+                tree.insert('', tk.END, values=(
+                    disc[1],  # name
+                    format_number(disc[3]),  # purchased
+                    format_number(disc[4]),  # sold
+                    format_number(disc[5]),  # lost
+                    format_number(disc[6]),  # stock_diff
+                    format_currency(value_diff)  # value
+                ))
+            
+            # Label con total
+            ttk.Label(main_frame, 
+                    text=f"Valor total de discrepancias: {format_currency(total_discrepancy_value)}", 
+                    font=("Arial", 12, "bold"),
+                    foreground="red").pack(pady=10)
+            
+            ttk.Label(main_frame, 
+                    text="💡 Utiliza el módulo de Pérdidas/Mermas para registrar cualquier pérdida real", 
+                    font=("Arial", 10),
+                    foreground="blue").pack(pady=5)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error mostrando discrepancias: {e}")
+            if conn:
+                conn.close()
+    
+    def diagnose_payment_discrepancies(self):
+        """Diagnostica discrepancias entre pagos registrados y deudas de clientes"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print("🔍 DIAGNÓSTICO DE PAGOS PARCIALES")
+            print("=" * 50)
+            
+            # 1. Verificar consistencia general
+            cursor.execute('''
+                SELECT 
+                    SUM(total) as total_sales,
+                    SUM(COALESCE(paid_amount, 0)) as total_paid,
+                    SUM(COALESCE(remaining_debt, total)) as total_pending,
+                    (SELECT SUM(total_debt) FROM clients) as client_debts
+                FROM sales
+            ''')
+            
+            summary = cursor.fetchone()
+            
+            print("📊 RESUMEN GENERAL:")
+            print(f"   Total vendido: ${summary['total_sales']:,.2f}")
+            print(f"   Total pagado (sales): ${summary['total_paid']:,.2f}")
+            print(f"   Total pendiente (sales): ${summary['total_pending']:,.2f}")
+            print(f"   Deudas de clientes: ${summary['client_debts']:,.2f}")
+            print()
+            
+            # 2. Verificar clientes con discrepancias
+            cursor.execute('''
+                SELECT 
+                    c.id,
+                    c.name,
+                    c.total_debt,
+                    COALESCE(SUM(s.total - COALESCE(s.paid_amount, 0)), 0) as calculated_debt,
+                    COALESCE(SUM(s.total), 0) as total_sales_client,
+                    COALESCE(SUM(COALESCE(s.paid_amount, 0)), 0) as total_paid_client
+                FROM clients c
+                LEFT JOIN sales s ON c.id = s.client_id
+                GROUP BY c.id, c.name, c.total_debt
+                HAVING ABS(c.total_debt - calculated_debt) > 0.01
+                ORDER BY ABS(c.total_debt - calculated_debt) DESC
+            ''')
+            
+            discrepancies = cursor.fetchall()
+            
+            if discrepancies:
+                print("⚠️ DISCREPANCIAS ENCONTRADAS:")
+                for client in discrepancies:
+                    print(f"   • {client['name']}:")
+                    print(f"     - Deuda registrada: ${client['total_debt']:,.2f}")
+                    print(f"     - Deuda calculada: ${client['calculated_debt']:,.2f}")
+                    print(f"     - Diferencia: ${abs(client['total_debt'] - client['calculated_debt']):,.2f}")
+                    print(f"     - Total vendido: ${client['total_sales_client']:,.2f}")
+                    print(f"     - Total pagado: ${client['total_paid_client']:,.2f}")
+                    print()
+            else:
+                print("✅ No se encontraron discrepancias significativas")
+            
+            # 3. Mostrar algunos ejemplos de ventas con pagos parciales
+            cursor.execute('''
+                SELECT 
+                    s.id,
+                    c.name as client_name,
+                    s.total,
+                    COALESCE(s.paid_amount, 0) as paid_amount,
+                    COALESCE(s.remaining_debt, s.total) as remaining_debt,
+                    s.status,
+                    s.created_at
+                FROM sales s
+                JOIN clients c ON s.client_id = c.id
+                WHERE COALESCE(s.paid_amount, 0) > 0 AND COALESCE(s.remaining_debt, 0) > 0
+                ORDER BY s.created_at DESC
+                LIMIT 5
+            ''')
+            
+            partial_payments = cursor.fetchall()
+            
+            if partial_payments:
+                print("💳 EJEMPLOS DE PAGOS PARCIALES:")
+                for sale in partial_payments:
+                    print(f"   • Venta #{sale['id']} - {sale['client_name']}")
+                    print(f"     - Total: ${sale['total']:,.2f}")
+                    print(f"     - Pagado: ${sale['paid_amount']:,.2f}")
+                    print(f"     - Pendiente: ${sale['remaining_debt']:,.2f}")
+                    print(f"     - Fecha: {sale['created_at']}")
+                    print()
+            
+            conn.close()
+            
+            # Mostrar resultado al usuario
+            messagebox.showinfo("Diagnóstico Completado", 
+                            f"Diagnóstico completado. Ver consola para detalles.\n\n"
+                            f"Resumen:\n"
+                            f"• Total vendido: ${summary['total_sales']:,.2f}\n"
+                            f"• Total pagado: ${summary['total_paid']:,.2f}\n"
+                            f"• Total pendiente: ${summary['total_pending']:,.2f}\n"
+                            f"• Discrepancias: {len(discrepancies)} clientes")
+            
+        except Exception as e:
+            print(f"Error en diagnóstico: {e}")
+            messagebox.showerror("Error", f"Error en diagnóstico: {e}")
+            if conn:
+                conn.close()
+
+    def fix_all_data_integrity(self):
+        """Corrige automáticamente todos los problemas de integridad de datos"""
+        try:
+            # Confirmar con el usuario
+            if not messagebox.askyesno("Confirmar Corrección", 
+                                    "¿Está seguro de que desea corregir automáticamente todos los datos?\n\n"
+                                    "Esto actualizará:\n"
+                                    "• Estados de ventas (paid/pending)\n"
+                                    "• Montos pagados y pendientes\n"
+                                    "• Deudas de clientes\n\n"
+                                    "Recomendamos hacer backup antes de continuar."):
+                return
+            
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            print("🔧 INICIANDO CORRECCIÓN AUTOMÁTICA DE DATOS")
+            print("=" * 50)
+            
+            # 1. Recalcular deudas de clientes basándose en transacciones
+            print("📊 Paso 1: Recalculando deudas de clientes...")
+            
+            cursor.execute("SELECT id, name FROM clients")
+            clients = cursor.fetchall()
+            
+            clients_updated = 0
+            for client in clients:
+                client_id = client['id']
+                
+                # Calcular deuda real basada en transacciones
+                cursor.execute("""
+                    SELECT 
+                        COALESCE(SUM(CASE WHEN transaction_type = 'debit' THEN amount ELSE 0 END), 0) as debits,
+                        COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE 0 END), 0) as credits
+                    FROM client_transactions 
+                    WHERE client_id = ?
+                """, (client_id,))
+                
+                result = cursor.fetchone()
+                if result:
+                    debits = float(result['debits'] or 0)
+                    credits = float(result['credits'] or 0)
+                    calculated_debt = max(0, debits - credits)
+                    
+                    # Actualizar solo si hay diferencia
+                    cursor.execute("SELECT total_debt FROM clients WHERE id = ?", (client_id,))
+                    current_debt = float(cursor.fetchone()['total_debt'] or 0)
+                    
+                    if abs(current_debt - calculated_debt) > 0.01:
+                        cursor.execute("""
+                            UPDATE clients 
+                            SET total_debt = ?
+                            WHERE id = ?
+                        """, (calculated_debt, client_id))
+                        clients_updated += 1
+                        print(f"   ✅ Cliente {client['name']}: ${current_debt:,.2f} → ${calculated_debt:,.2f}")
+            
+            print(f"   📈 {clients_updated} clientes actualizados")
+            
+            # 2. Sincronizar estados de ventas
+            print("💳 Paso 2: Sincronizando estados de ventas...")
+            
+            # Para cada cliente, distribuir pagos correctamente
+            cursor.execute("SELECT id, name, total_debt FROM clients")
+            clients = cursor.fetchall()
+            
+            sales_updated = 0
+            for client in clients:
+                client_id = client['id']
+                current_debt = float(client['total_debt'] or 0)
+                
+                # Obtener todas las ventas del cliente
+                cursor.execute('''
+                    SELECT id, total
+                    FROM sales 
+                    WHERE client_id = ?
+                    ORDER BY created_at ASC
+                ''', (client_id,))
+                
+                sales = cursor.fetchall()
+                
+                if not sales:
+                    continue
+                
+                # Calcular cuánto se ha pagado en total
+                total_sales_amount = sum(sale['total'] for sale in sales)
+                total_paid = total_sales_amount - current_debt
+                
+                # Distribuir pagos (FIFO)
+                remaining_payment = max(0, total_paid)
+                
+                for sale in sales:
+                    sale_id = sale['id']
+                    sale_total = sale['total']
+                    
+                    if remaining_payment <= 0:
+                        # No hay pago para esta venta
+                        new_paid = 0
+                        new_remaining = sale_total
+                        new_status = 'pending'
+                    elif remaining_payment >= sale_total:
+                        # Venta completamente pagada
+                        new_paid = sale_total
+                        new_remaining = 0
+                        new_status = 'paid'
+                        remaining_payment -= sale_total
+                    else:
+                        # Pago parcial
+                        new_paid = remaining_payment
+                        new_remaining = sale_total - remaining_payment
+                        new_status = 'pending'
+                        remaining_payment = 0
+                    
+                    # Actualizar venta
+                    cursor.execute('''
+                        UPDATE sales 
+                        SET paid_amount = ?, 
+                            remaining_debt = ?, 
+                            status = ?
+                        WHERE id = ?
+                    ''', (new_paid, new_remaining, new_status, sale_id))
+                    
+                    if cursor.rowcount > 0:
+                        sales_updated += 1
+            
+            print(f"   📈 {sales_updated} ventas actualizadas")
+            
+            # 3. Verificación final
+            print("✅ Paso 3: Verificación final...")
+            
+            cursor.execute('''
+                SELECT 
+                    SUM(total) as total_sales,
+                    SUM(COALESCE(paid_amount, 0)) as total_paid,
+                    SUM(COALESCE(remaining_debt, 0)) as total_pending,
+                    (SELECT SUM(total_debt) FROM clients) as client_debts
+                FROM sales
+            ''')
+            
+            verification = cursor.fetchone()
+            
+            print(f"   📊 Total ventas: ${verification['total_sales']:,.2f}")
+            print(f"   💰 Total pagado: ${verification['total_paid']:,.2f}")
+            print(f"   🔴 Total pendiente: ${verification['total_pending']:,.2f}")
+            print(f"   👥 Deudas clientes: ${verification['client_debts']:,.2f}")
+            
+            # Verificar consistencia
+            paid_plus_pending = verification['total_paid'] + verification['total_pending']
+            pending_vs_debts = abs(verification['total_pending'] - verification['client_debts'])
+            
+            if abs(paid_plus_pending - verification['total_sales']) < 0.01 and pending_vs_debts < 0.01:
+                print("   ✅ Datos consistentes")
+            else:
+                print(f"   ⚠️ Inconsistencia detectada:")
+                print(f"      Diferencia ventas: ${abs(paid_plus_pending - verification['total_sales']):,.2f}")
+                print(f"      Diferencia deudas: ${pending_vs_debts:,.2f}")
+            
+            conn.commit()
+            conn.close()
+            
+            # Actualizar la interfaz
+            self.load_financial_summary()
+            
+            messagebox.showinfo("Corrección Completada", 
+                            f"Corrección automática completada:\n\n"
+                            f"• {clients_updated} clientes actualizados\n"
+                            f"• {sales_updated} ventas sincronizadas\n\n"
+                            f"Los datos han sido actualizados en la interfaz.")
+            
+            print("🎉 CORRECCIÓN COMPLETADA EXITOSAMENTE")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error en corrección automática: {e}")
+            messagebox.showerror("Error", f"Error durante la corrección: {str(e)}")
+            if conn:
+                conn.rollback()
+                conn.close()
+            return False

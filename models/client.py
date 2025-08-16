@@ -1,4 +1,5 @@
 from config.database import get_connection
+from config.database import sync_client_sales_status_on_payment
 
 class Client:
     def __init__(self, id=None, name=None, phone=None, address=None, 
@@ -126,12 +127,12 @@ class Client:
                 WHERE id = ?
             ''', (amount, self.id))
             
-            # CORRECCIÓN: Agregar timestamp local explícito
+            # Registrar transacción de deuda (CORREGIDO: usar amount positivo para débitos)
             cursor.execute('''
                 INSERT INTO client_transactions (
                     client_id, transaction_type, amount, description, created_at
                 ) VALUES (?, 'debit', ?, ?, datetime('now', 'localtime'))
-            ''', (self.id, amount, description))
+            ''', (self.id, amount, description))  # amount positivo para débitos
             
             conn.commit()
             self.total_debt += amount
@@ -143,9 +144,13 @@ class Client:
             return False
         finally:
             conn.close()
-    
+
     def pay_debt(self, amount, description=""):
-        """Reduce la deuda y registra el pago en el historial."""
+        """
+        Reduce la deuda y registra el pago en el historial.
+        NOTA: Este método NO debe usarse directamente para pagos complejos.
+        Usar process_complete_payment() en CreditManagementWindow para pagos que afectan ventas.
+        """
         if amount <= 0:
             raise ValueError("El monto debe ser positivo")
         
@@ -160,17 +165,21 @@ class Client:
                 WHERE id = ?
             ''', (amount, self.id))
             
-            # CORRECCIÓN: Agregar timestamp local explícito
+            # Registrar transacción de pago (CORREGIDO: usar amount positivo para créditos)
             cursor.execute('''
                 INSERT INTO client_transactions (
                     client_id, transaction_type, amount, description, created_at
                 ) VALUES (?, 'credit', ?, ?, datetime('now', 'localtime'))
-            ''', (self.id, -amount, description))
+            ''', (self.id, amount, description))  # amount positivo para créditos
             
             conn.commit()
             
             # Actualizar objeto
             self.total_debt = max(0, self.total_debt - amount)
+            
+            # Sincronizar estados de ventas después del pago
+            sync_client_sales_status_on_payment(self.id)
+            
             return True
             
         except Exception as e:
@@ -186,11 +195,11 @@ class Client:
         try:
             cursor = conn.cursor()
             
-            # Registrar como DEUDA (debit) no como pago
+            # Registrar como DEUDA (debit) 
             cursor.execute('''
                 INSERT INTO client_transactions 
-                (client_id, transaction_type, amount, description, sale_id)
-                VALUES (?, 'debit', ?, ?, ?)
+                (client_id, transaction_type, amount, description, sale_id, created_at)
+                VALUES (?, 'debit', ?, ?, ?, datetime('now', 'localtime'))
             ''', (self.id, amount, description, sale_id))
             
             # Actualizar deuda del cliente

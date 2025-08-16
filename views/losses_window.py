@@ -40,6 +40,32 @@ class LossesWindow:
         
         # Cargar datos
         self.load_data()
+
+    def format_currency(self, amount):
+        """Formatea un número como moneda con separadores de miles"""
+        try:
+            if amount is None:
+                return "$0"
+            # Convertir a float si es string
+            if isinstance(amount, str):
+                amount = float(amount.replace('$', '').replace(',', ''))
+            # Formatear con separadores de miles
+            return f"${amount:,.2f}".replace(',', '.')
+        except (ValueError, TypeError):
+            return "$0"
+
+    def format_number(self, number):
+        """Formatea un número con separadores de miles (sin símbolo de moneda)"""
+        try:
+            if number is None:
+                return "0"
+            # Convertir a float si es string
+            if isinstance(number, str):
+                number = float(number)
+            # Formatear con separadores de miles
+            return f"{number:,.2f}".replace(',', '.')
+        except (ValueError, TypeError):
+            return "0"
     
     def setup_ui(self):
         """Configura la interfaz de usuario"""
@@ -192,16 +218,16 @@ class LossesWindow:
         summary_frame.pack(fill=tk.X, pady=10)
         
         # Etiquetas de resumen
-        self.total_losses_label = ttk.Label(summary_frame, text="Total de Pérdidas: $0.00")
+        self.total_losses_label = ttk.Label(summary_frame, text="Total de Pérdidas: $0")
         self.total_losses_label.pack(side=tk.LEFT, padx=20)
         
-        self.expiration_losses_label = ttk.Label(summary_frame, text="Por Vencimiento: $0.00")
+        self.expiration_losses_label = ttk.Label(summary_frame, text="Por Vencimiento: $0")
         self.expiration_losses_label.pack(side=tk.LEFT, padx=20)
         
-        self.damage_losses_label = ttk.Label(summary_frame, text="Por Daño: $0.00")
+        self.damage_losses_label = ttk.Label(summary_frame, text="Por Daño: $0")
         self.damage_losses_label.pack(side=tk.LEFT, padx=20)
         
-        self.other_losses_label = ttk.Label(summary_frame, text="Otros: $0.00")
+        self.other_losses_label = ttk.Label(summary_frame, text="Otros: $0")
         self.other_losses_label.pack(side=tk.LEFT, padx=20)
     
     def load_products(self):
@@ -245,7 +271,7 @@ class LossesWindow:
             
         
     def load_data(self):
-        """Carga las pérdidas en el treeview"""
+        """Carga las pérdidas en el treeview con formato mejorado"""
         try:
             # Limpiar treeview
             for item in self.losses_tree.get_children():
@@ -264,14 +290,14 @@ class LossesWindow:
                 self.update_summary([], start_date, end_date)
                 return
             
-            # Insertar en treeview
+            # Insertar en treeview con números formateados
             for loss in losses:
                 self.losses_tree.insert('', tk.END, values=(
                     loss.id,
                     loss.loss_date.strftime("%Y-%m-%d") if isinstance(loss.loss_date, datetime) else loss.loss_date,
                     loss.product_name,
-                    f"{loss.quantity:.2f}",
-                    f"${loss.total_cost:.2f}",
+                    self.format_number(loss.quantity),
+                    self.format_currency(loss.total_cost),
                     loss.loss_type,
                     loss.reason
                 ))
@@ -283,7 +309,7 @@ class LossesWindow:
             messagebox.showerror("Error", f"Error al cargar datos: {str(e)}")
     
     def update_summary(self, losses, start_date=None, end_date=None):
-        """Actualiza el resumen de pérdidas"""
+        """Actualiza el resumen de pérdidas con formato mejorado"""
         try:
             # Obtener resumen por tipo
             summary = Loss.get_summary_by_type(start_date, end_date)
@@ -306,11 +332,11 @@ class LossesWindow:
                 else:
                     other += amount
             
-            # Actualizar etiquetas
-            self.total_losses_label.config(text=f"Total de Pérdidas: ${total:.2f}")
-            self.expiration_losses_label.config(text=f"Por Vencimiento: ${expiration:.2f}")
-            self.damage_losses_label.config(text=f"Por Daño: ${damage:.2f}")
-            self.other_losses_label.config(text=f"Otros: ${other:.2f}")
+            # Actualizar etiquetas con formato mejorado
+            self.total_losses_label.config(text=f"Total de Pérdidas: {self.format_currency(total)}")
+            self.expiration_losses_label.config(text=f"Por Vencimiento: {self.format_currency(expiration)}")
+            self.damage_losses_label.config(text=f"Por Daño: {self.format_currency(damage)}")
+            self.other_losses_label.config(text=f"Otros: {self.format_currency(other)}")
             
         except Exception as e:
             print(f"Error al actualizar resumen: {e}")
@@ -352,7 +378,7 @@ class LossesWindow:
             
             # Verificar stock disponible
             if quantity > product.stock:
-                messagebox.showerror("Error", f"Stock insuficiente. Disponible: {product.stock}")
+                messagebox.showerror("Error", f"Stock insuficiente. Disponible: {self.format_number(product.stock)}")
                 return
             
             # Calcular costo total
@@ -373,7 +399,11 @@ class LossesWindow:
             
             # Guardar pérdida
             if loss.save():
-                messagebox.showinfo("Éxito", "Pérdida registrada correctamente")
+                messagebox.showinfo("Éxito", 
+                    f"Pérdida registrada correctamente\n\n"
+                    f"Producto: {product.name}\n"
+                    f"Cantidad: {self.format_number(quantity)}\n"
+                    f"Costo total: {self.format_currency(total_cost)}")
                 self.clear_form()
                 self.load_data()
                 # Recargar productos para actualizar stock
@@ -404,7 +434,7 @@ class LossesWindow:
             self.unit_cost_var.set(str(selected_product.cost_price))
     
     def view_loss_details(self):
-        """Muestra los detalles de una pérdida"""
+        """Muestra los detalles de una pérdida con formato mejorado"""
         selected = self.losses_tree.selection()
         if not selected:
             messagebox.showwarning("Advertencia", "Por favor seleccione una pérdida para ver detalles")
@@ -453,13 +483,13 @@ class LossesWindow:
         ttk.Label(col1, text=loss.product_name).grid(row=0, column=1, sticky=tk.W, pady=5)
         
         ttk.Label(col1, text="Cantidad:", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky=tk.W, pady=5)
-        ttk.Label(col1, text=f"{loss.quantity:.2f}").grid(row=1, column=1, sticky=tk.W, pady=5)
+        ttk.Label(col1, text=self.format_number(loss.quantity)).grid(row=1, column=1, sticky=tk.W, pady=5)
         
         ttk.Label(col1, text="Costo Unitario:", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky=tk.W, pady=5)
-        ttk.Label(col1, text=f"${loss.unit_cost:.2f}").grid(row=2, column=1, sticky=tk.W, pady=5)
+        ttk.Label(col1, text=self.format_currency(loss.unit_cost)).grid(row=2, column=1, sticky=tk.W, pady=5)
         
         ttk.Label(col1, text="Costo Total:", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky=tk.W, pady=5)
-        ttk.Label(col1, text=f"${loss.total_cost:.2f}").grid(row=3, column=1, sticky=tk.W, pady=5)
+        ttk.Label(col1, text=self.format_currency(loss.total_cost)).grid(row=3, column=1, sticky=tk.W, pady=5)
         
         # Columna 2
         col2 = ttk.Frame(details_frame)
