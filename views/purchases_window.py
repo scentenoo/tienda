@@ -34,6 +34,8 @@ class PurchasesWindow:
         self.products = []
         self.purchases = []
         self.current_batch = []
+        self.filtered_products = []  # Lista de productos filtrados para búsqueda
+        self.is_filtering = False  # Flag para controlar el filtrado
         
         # Crear ventana DESPUÉS de inicializar atributos
         self.window = tk.Toplevel(parent)
@@ -156,23 +158,21 @@ class PurchasesWindow:
         
         # Producto
         ttk.Label(form_frame, text="Producto:", font=('Arial', 10, 'bold')).grid(
-            row=0, column=0, sticky=tk.W, pady=8)
-        
+    row=0, column=0, sticky=tk.W, pady=8)
+
         self.product_var = tk.StringVar()
         self.product_combo = ttk.Combobox(
             form_frame, 
             textvariable=self.product_var, 
             font=('Arial', 10),
-            state='readonly',
+            state='normal',  # CAMBIO: de 'readonly' a 'normal' para permitir escribir
             width=30)
         self.product_combo.grid(row=0, column=1, pady=8, padx=5, sticky=tk.EW)
-        
-        add_product_btn = ttk.Button(
-            form_frame, 
-            text="➕ Nuevo Producto", 
-            command=self.add_new_product,
-            style='TButton')
-        add_product_btn.grid(row=0, column=2, columnspan=2, pady=8, padx=10, sticky=tk.E)
+
+        # AGREGAR estos nuevos eventos:
+        self.product_combo.bind('<KeyRelease>', self.filter_products)
+        self.product_combo.bind('<<ComboboxSelected>>', self.on_product_selected)
+        self.product_combo.bind('<FocusIn>', self.on_combo_focus_in)
         
         # Cantidad y Precio
         ttk.Label(form_frame, text="Cantidad:", font=('Arial', 10, 'bold')).grid(
@@ -424,6 +424,134 @@ class PurchasesWindow:
         self.purchases_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def on_combo_focus_in(self, event=None):
+        """Cuando el combo recibe focus, mostrar todos los productos"""
+        if not self.is_filtering and not self.product_var.get():
+            self.show_all_products()
+
+    def filter_products(self, event=None):
+        """Filtra productos en tiempo real mientras el usuario escribe"""
+        self.is_filtering = True
+        search_text = self.product_var.get().lower()
+        
+        if not search_text:
+            # Si no hay texto, mostrar todos los productos
+            self.show_all_products()
+            return
+        
+        # Filtrar productos que contengan el texto de búsqueda
+        filtered = []
+        for product in self.products:
+            if search_text in product.name.lower():
+                filtered.append(product.name)
+        
+        # Actualizar el combobox con productos filtrados
+        self.product_combo['values'] = filtered
+        
+        # Mantener el dropdown abierto durante la búsqueda
+        if filtered and len(search_text) > 0:
+            self.product_combo.event_generate('<Down>')
+        
+        self.is_filtering = False
+
+    def show_all_products(self):
+        """Muestra todos los productos disponibles"""
+        product_names = [p.name for p in self.products]
+        self.product_combo['values'] = product_names
+
+    def on_product_selected(self, event=None):
+        """Maneja la selección de producto"""
+        product_name = self.product_var.get()
+        
+        # Buscar producto exacto
+        found_product = None
+        for product in self.products:
+            if product.name == product_name:
+                found_product = product
+                break
+        
+        if not found_product:
+            # Si no encuentra producto exacto, limpiar mensaje de error
+            pass
+
+    # 4. MODIFICAR el método load_products():
+    def load_products(self):
+        """Carga la lista de productos - MEJORADO"""
+        self.products = Product.get_all()
+        product_names = [product.name for product in self.products]
+        self.product_combo['values'] = product_names
+        print(f"Productos cargados para compras: {len(self.products)}")
+
+    # 5. MODIFICAR el método add_to_batch() para validar mejor la selección:
+    def add_to_batch(self):
+        """Agrega un artículo al lote actual - VALIDACIÓN MEJORADA"""
+        # Validaciones
+        product_name = self.product_var.get().strip()
+        if not product_name:
+            messagebox.showerror("Error", "Debe seleccionar o escribir un producto")
+            self.product_combo.focus_set()
+            return
+        
+        try:
+            quantity = float(self.quantity_var.get())
+            unit_price = float(self.unit_price_var.get())
+            
+            if quantity <= 0:
+                messagebox.showerror("Error", "La cantidad debe ser mayor a 0")
+                return
+            
+            if unit_price <= 0:
+                messagebox.showerror("Error", "El precio debe ser mayor a 0")
+                return
+            
+        except ValueError:
+            messagebox.showerror("Error", "Cantidad y precio deben ser números válidos")
+            return
+        
+        # Verificar si el producto existe, si no, se creará automáticamente
+        product = None
+        for p in self.products:
+            if p.name.lower() == product_name.lower():
+                product = p
+                # Actualizar el nombre con la capitalización correcta
+                self.product_var.set(p.name)
+                product_name = p.name
+                break
+        
+        # Si el producto no existe, se permitirá agregarlo (se creará al guardar el lote)
+        if not product:
+            if not messagebox.askyesno("Producto Nuevo", 
+                                    f"El producto '{product_name}' no existe.\n¿Desea agregarlo como nuevo producto?"):
+                return
+        
+        # Agregar al lote
+        subtotal = quantity * unit_price
+        
+        item = {
+            'product_name': product_name,
+            'quantity': quantity,
+            'unit_price': unit_price,
+            'subtotal': subtotal,
+            'invoice_number': self.invoice_var.get().strip()
+        }
+        
+        self.current_batch.append(item)
+        self.update_batch_tree()
+        self.clear_form()
+        
+        # Enfocar de nuevo en el combo de productos para siguiente producto
+        self.product_combo.focus_set()
+
+    # 6. MODIFICAR el método clear_form():
+    def clear_form(self):
+        """Limpia el formulario de nueva compra - MEJORADO"""
+        self.product_var.set("")
+        self.quantity_var.set("")
+        self.unit_price_var.set("")
+        # No limpiar el número de factura para mantener consistencia en el lote
+        # Restaurar lista completa de productos
+        self.show_all_products()
 
     def load_data(self):
         """Carga los datos necesarios"""

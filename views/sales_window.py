@@ -25,6 +25,8 @@ class SalesWindow:
         self.clients = []
         self.sales = []
         self.sale_items = []  # Lista de productos en la venta actual
+        self.filtered_products = []  # Lista de productos filtrados para búsqueda
+        self.is_filtering = False  # Flag para controlar el filtrado
         
         # Crear notebook y frames para las pestañas
         self.notebook = ttk.Notebook(self.window)
@@ -105,12 +107,15 @@ class SalesWindow:
         self.product_combo = ttk.Combobox(
             product_controls, 
             textvariable=self.product_var, 
-            state="readonly", 
+            state="normal",  # CAMBIO: de "readonly" a "normal" para permitir escribir
             width=25,
             font=('Arial', 10)
         )
         self.product_combo.grid(row=0, column=1, pady=5, padx=(0, 15))
+        # AGREGAR estos nuevos eventos:
+        self.product_combo.bind('<KeyRelease>', self.filter_products)
         self.product_combo.bind('<<ComboboxSelected>>', self.on_product_selected)
+        self.product_combo.bind('<FocusIn>', self.on_combo_focus_in)
         
         # Precio unitario
         ttk.Label(product_controls, text="Precio:").grid(row=0, column=2, sticky=tk.W, pady=5, padx=(0, 5))
@@ -428,10 +433,12 @@ class SalesWindow:
         self.load_sales()
     
     def load_products(self):
-        """Carga la lista de productos"""
+        """Carga la lista de productos - MEJORADO"""
         self.products = Product.get_all()
-        product_names = [product.name for product in self.products]
-        self.product_combo['values'] = product_names
+        # Filtrar solo productos con stock disponible
+        available_products = [p.name for p in self.products if p.stock > 0]
+        self.product_combo['values'] = available_products
+        print(f"Productos cargados: {len(self.products)} total, {len(available_products)} disponibles")
 
     def load_clients(self):
         """Carga la lista de clientes desde la base de datos"""
@@ -464,6 +471,71 @@ class SalesWindow:
                 self.stock_var.set(f"{product.stock}")
                 break
         self.calculate_item_total()
+
+    def on_combo_focus_in(self, event=None):
+        """Cuando el combo recibe focus, mostrar todos los productos"""
+        if not self.is_filtering and not self.product_var.get():
+            self.show_all_products()
+
+    def filter_products(self, event=None):
+        """Filtra productos en tiempo real mientras el usuario escribe"""
+        self.is_filtering = True
+        search_text = self.product_var.get().lower()
+        
+        if not search_text:
+            # Si no hay texto, mostrar todos los productos
+            self.show_all_products()
+            return
+        
+        # Filtrar productos que contengan el texto de búsqueda
+        filtered = []
+        for product in self.products:
+            if (search_text in product.name.lower() and 
+                product.stock > 0):  # Solo productos con stock
+                filtered.append(product.name)
+        
+        # Actualizar el combobox con productos filtrados
+        self.product_combo['values'] = filtered
+        
+        # Mantener el dropdown abierto durante la búsqueda
+        if filtered and len(search_text) > 0:
+            self.product_combo.event_generate('<Down>')
+        
+        self.is_filtering = False
+
+    def show_all_products(self):
+        """Muestra todos los productos disponibles"""
+        available_products = [p.name for p in self.products if p.stock > 0]
+        self.product_combo['values'] = available_products
+
+    # 4. MODIFICAR el método on_product_selected() para manejar mejor la selección:
+    def on_product_selected(self, event=None):
+        """Maneja la selección de producto - MEJORADO"""
+        product_name = self.product_var.get()
+        
+        # Buscar producto exacto
+        found_product = None
+        for product in self.products:
+            if product.name == product_name:
+                found_product = product
+                break
+        
+        if found_product:
+            self.unit_price_var.set(f"{found_product.price:,.2f}")
+            self.stock_var.set(f"{found_product.stock}")
+            # Limpiar campos de cantidad al seleccionar nuevo producto
+            self.quantity_var.set("")
+            self.money_var.set("")
+            self.subtotal_var.set("")
+        else:
+            # Si no encuentra producto exacto, limpiar campos
+            self.unit_price_var.set("")
+            self.stock_var.set("")
+            self.quantity_var.set("")
+            self.money_var.set("")
+            self.subtotal_var.set("")
+        
+        self.calculate_item_total()
     
     def calculate_item_total(self, event=None):
         """Calcula el subtotal del producto actual"""
@@ -494,10 +566,30 @@ class SalesWindow:
             pass
     
     def add_product_to_sale(self):
-        """Agrega un producto a la lista de venta"""
+        """Agrega un producto a la lista de venta - VALIDACIÓN MEJORADA"""
         # Validaciones
-        if not self.product_var.get():
+        product_name = self.product_var.get().strip()
+        if not product_name:
             messagebox.showerror("Error", "Debe seleccionar un producto")
+            self.product_combo.focus_set()
+            return
+        
+        # Verificar que el producto existe exactamente como se escribió
+        product = None
+        for p in self.products:
+            if p.name.lower() == product_name.lower():
+                product = p
+                # Actualizar el nombre con la capitalización correcta
+                self.product_var.set(p.name)
+                break
+        
+        if not product:
+            messagebox.showerror("Error", f"Producto '{product_name}' no encontrado.\nVerifique que el nombre sea exacto.")
+            self.product_combo.focus_set()
+            return
+        
+        if product.stock <= 0:
+            messagebox.showerror("Error", f"Producto '{product_name}' sin stock disponible")
             return
         
         # Verificar si se ingresó cantidad o dinero recibido
@@ -509,21 +601,9 @@ class SalesWindow:
             return
         
         try:
-            product_name = self.product_var.get()
             quantity = safe_float_conversion(self.quantity_var.get() or 0)
             unit_price = safe_float_conversion(self.unit_price_var.get())
             subtotal = safe_float_conversion(self.subtotal_var.get())
-            
-            # Buscar producto
-            product = None
-            for p in self.products:
-                if p.name == product_name:
-                    product = p
-                    break
-            
-            if not product:
-                messagebox.showerror("Error", "Producto no encontrado")
-                return
             
             # Verificar que la cantidad sea válida
             if quantity <= 0:
@@ -558,7 +638,7 @@ class SalesWindow:
             if existing_item:
                 # Preguntar si quiere sumar las cantidades
                 if messagebox.askyesno("Producto Existente", 
-                                      f"El producto '{product_name}' ya está en la lista.\n¿Desea sumar las cantidades?"):
+                                    f"El producto '{product_name}' ya está en la lista.\n¿Desea sumar las cantidades?"):
                     existing_item['quantity'] += quantity
                     existing_item['subtotal'] = existing_item['quantity'] * existing_item['unit_price']
                 else:
@@ -578,6 +658,9 @@ class SalesWindow:
             self.update_items_tree()
             self.calculate_total_sale()
             self.clear_product_fields()
+            
+            # Enfocar de nuevo en el combo de productos para siguiente producto
+            self.product_combo.focus_set()
             
         except ValueError as e:
             messagebox.showerror("Error", f"Error en los datos: {str(e)}")
@@ -634,13 +717,15 @@ class SalesWindow:
         self.total_sale_var.set(format_currency(total))
     
     def clear_product_fields(self):
-        """Limpia los campos de producto"""
+        """Limpia los campos de producto - MEJORADO"""
         self.product_var.set("")
         self.unit_price_var.set("")
         self.stock_var.set("")
         self.quantity_var.set("")
         self.money_var.set("")
         self.subtotal_var.set("")
+        # Restaurar lista completa de productos
+        self.show_all_products()
     
     def on_status_changed(self):
         """Maneja el cambio de estado de pago - CORREGIDO"""

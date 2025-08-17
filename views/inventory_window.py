@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from config.database import get_connection
+from utils.ExcelImportWindow import ExcelImportWindow
+from views.users_window import UsersWindow
 
 class InventoryWindow:
     def __init__(self, parent, user):
@@ -65,7 +67,16 @@ class InventoryWindow:
             ("🗑️ ELIMINAR", self.delete_product),
             ("🔄 ACTUALIZAR", self.refresh_products)
         ]
-        
+         # NUEVO: Botón de importación solo para administradores
+        if self.user.role == 'admin':  # Asumiendo que tienes un campo 'role' en user
+            ttk.Button(
+                controls_frame,
+                text="📊 IMPORTAR EXCEL",
+                command=self.import_from_excel,
+                style='Accent.TButton'
+            ).pack(side=tk.LEFT, padx=5)
+
+
         for text, cmd, *style in actions:
             ttk.Button(
                 controls_frame,
@@ -132,6 +143,10 @@ class InventoryWindow:
             foreground=dark_blue
         )
         self.stats_label.pack()
+
+    def import_from_excel(self):
+        """Abre ventana para importar productos desde Excel"""
+        ExcelImportWindow(self.window, self)
     
     def refresh_products(self):
         """Recarga la lista de productos"""
