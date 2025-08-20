@@ -27,7 +27,10 @@ class SalesWindow:
         self.sale_items = []  # Lista de productos en la venta actual
         self.filtered_products = []  # Lista de productos filtrados para búsqueda
         self.is_filtering = False  # Flag para controlar el filtrado
-        
+        self._typing_timer = None
+        self._last_search = ""
+        self._is_clicking = False
+                
         # Crear notebook y frames para las pestañas
         self.notebook = ttk.Notebook(self.window)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -107,15 +110,17 @@ class SalesWindow:
         self.product_combo = ttk.Combobox(
             product_controls, 
             textvariable=self.product_var, 
-            state="normal",  # CAMBIO: de "readonly" a "normal" para permitir escribir
+            state="normal",
             width=25,
             font=('Arial', 10)
         )
         self.product_combo.grid(row=0, column=1, pady=5, padx=(0, 15))
+        self.product_combo.grid(row=0, column=1, pady=5, padx=(0, 15))
         # AGREGAR estos nuevos eventos:
-        self.product_combo.bind('<KeyRelease>', self.filter_products)
-        self.product_combo.bind('<<ComboboxSelected>>', self.on_product_selected)
-        self.product_combo.bind('<FocusIn>', self.on_combo_focus_in)
+        self.product_combo.bind('<KeyRelease>', self._on_product_typing)
+        self.product_combo.bind('<Button-1>', self._on_combo_click)
+        self.product_combo.bind('<Return>', self._on_product_enter)
+        self.product_combo.bind('<Tab>', self._on_product_tab)
         
         # Precio unitario
         ttk.Label(product_controls, text="Precio:").grid(row=0, column=2, sticky=tk.W, pady=5, padx=(0, 5))
@@ -425,6 +430,123 @@ class SalesWindow:
         
         self.sales_tree.pack(fill=tk.BOTH, expand=True)
         v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    def _on_product_typing(self, event=None):
+        """Maneja la escritura en el campo de producto SIN interferencias"""
+        # Cancelar timer anterior si existe
+        if self._typing_timer:
+            self.window.after_cancel(self._typing_timer)
+        
+        # Configurar nuevo timer para filtrar después de que termine de escribir
+        self._typing_timer = self.window.after(300, self._perform_filtering)
+
+    def _perform_filtering(self):
+        """Realiza el filtrado sin interferir con el foco"""
+        search_text = self.product_var.get().lower().strip()
+        
+        # Solo filtrar si el texto ha cambiado
+        if search_text == self._last_search:
+            return
+        
+        self._last_search = search_text
+        
+        if not search_text:
+            # Mostrar todos los productos disponibles
+            available_products = [p.name for p in self.products if p.stock > 0]
+            self._update_combo_values(available_products)
+            self._clear_product_info()
+            return
+        
+        # Filtrar productos que coincidan
+        filtered_products = []
+        exact_match = None
+        
+        for product in self.products:
+            if product.stock > 0:  # Solo productos con stock
+                product_name_lower = product.name.lower()
+                if search_text in product_name_lower:
+                    filtered_products.append(product.name)
+                    # Verificar coincidencia exacta
+                    if product_name_lower == search_text:
+                        exact_match = product
+        
+        # Actualizar lista de productos
+        self._update_combo_values(filtered_products)
+        
+        # Si hay coincidencia exacta, cargar información del producto
+        if exact_match:
+            self._load_product_info(exact_match)
+        else:
+            self._clear_product_info()
+
+    def _update_combo_values(self, values):
+        """Actualiza los valores del combo sin perder foco"""
+        try:
+            # Guardar posición del cursor
+            cursor_pos = self.product_combo.index(tk.INSERT)
+            
+            # Actualizar valores
+            self.product_combo['values'] = values
+            
+            # Restaurar posición del cursor si es posible
+            try:
+                self.product_combo.icursor(cursor_pos)
+            except:
+                pass  # Ignorar si no se puede restaurar
+                
+        except Exception as e:
+            print(f"Error actualizando combo: {e}")
+
+    def _load_product_info(self, product):
+        """Carga la información del producto seleccionado"""
+        self.unit_price_var.set(f"{product.price:,.2f}")
+        self.stock_var.set(f"{product.stock}")
+
+    def _clear_product_info(self):
+        """Limpia la información del producto"""
+        self.unit_price_var.set("")
+        self.stock_var.set("")
+
+    def _on_combo_click(self, event=None):
+        """Maneja el clic en el combo"""
+        self._is_clicking = True
+        # Si está vacío, mostrar todos los productos
+        if not self.product_var.get().strip():
+            available_products = [p.name for p in self.products if p.stock > 0]
+            self._update_combo_values(available_products)
+        self._is_clicking = False
+
+    def _on_product_enter(self, event=None):
+        """Maneja Enter en el campo de producto"""
+        self._select_current_product()
+        return 'break'  # Evitar que se propague el evento
+
+    def _on_product_tab(self, event=None):
+        """Maneja Tab en el campo de producto"""
+        self._select_current_product()
+
+    def _select_current_product(self):
+        """Selecciona el producto actual y carga su información"""
+        product_name = self.product_var.get().strip()
+        if not product_name:
+            return
+        
+        # Buscar producto exacto
+        selected_product = None
+        for product in self.products:
+            if product.name.lower() == product_name.lower():
+                selected_product = product
+                # Corregir capitalización
+                self.product_var.set(product.name)
+                break
+        
+        if selected_product:
+            self._load_product_info(selected_product)
+            # Enfocar siguiente campo
+            self.window.after(50, lambda: self.quantity_var.focus_set() if hasattr(self, 'quantity_var') else None)
+        else:
+            # Producto no encontrado
+            self._clear_product_info()
     
     def load_data(self):
         """Carga los datos necesarios"""
@@ -461,47 +583,11 @@ class SalesWindow:
         except Exception as e:
             print(f"Error al cargar ventas: {e}")
             messagebox.showerror("Error", f"Error al cargar ventas: {str(e)}")
-    
-    def on_product_selected(self, event=None):
-        """Maneja la selección de producto"""
-        product_name = self.product_var.get()
-        for product in self.products:
-            if product.name == product_name:
-                self.unit_price_var.set(f"{product.price:,.2f}")
-                self.stock_var.set(f"{product.stock}")
-                break
-        self.calculate_item_total()
 
-    def on_combo_focus_in(self, event=None):
-        """Cuando el combo recibe focus, mostrar todos los productos"""
-        if not self.is_filtering and not self.product_var.get():
-            self.show_all_products()
+    def _get_combo_entry(self):
+        """Obtiene el widget Entry interno del Combobox"""
+        return self.product_combo.nametowidget(self.product_combo.winfo_children()[0])
 
-    def filter_products(self, event=None):
-        """Filtra productos en tiempo real mientras el usuario escribe"""
-        self.is_filtering = True
-        search_text = self.product_var.get().lower()
-        
-        if not search_text:
-            # Si no hay texto, mostrar todos los productos
-            self.show_all_products()
-            return
-        
-        # Filtrar productos que contengan el texto de búsqueda
-        filtered = []
-        for product in self.products:
-            if (search_text in product.name.lower() and 
-                product.stock > 0):  # Solo productos con stock
-                filtered.append(product.name)
-        
-        # Actualizar el combobox con productos filtrados
-        self.product_combo['values'] = filtered
-        
-        # Mantener el dropdown abierto durante la búsqueda
-        if filtered and len(search_text) > 0:
-            self.product_combo.event_generate('<Down>')
-        
-        self.is_filtering = False
 
     def show_all_products(self):
         """Muestra todos los productos disponibles"""
@@ -717,16 +803,17 @@ class SalesWindow:
         self.total_sale_var.set(format_currency(total))
     
     def clear_product_fields(self):
-        """Limpia los campos de producto - MEJORADO"""
+        """Limpia los campos de producto - VERSIÓN ACTUALIZADA"""
         self.product_var.set("")
-        self.unit_price_var.set("")
-        self.stock_var.set("")
+        self._clear_product_info()
         self.quantity_var.set("")
         self.money_var.set("")
         self.subtotal_var.set("")
-        # Restaurar lista completa de productos
-        self.show_all_products()
-    
+        self._last_search = ""
+        # Mostrar todos los productos disponibles
+        available_products = [p.name for p in self.products if p.stock > 0]
+        self._update_combo_values(available_products)
+        
     def on_status_changed(self):
         """Maneja el cambio de estado de pago - CORREGIDO"""
         if self.status_var.get() == "pending":

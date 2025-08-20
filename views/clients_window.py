@@ -89,12 +89,23 @@ class ClientsWindow:
         table_frame = ttk.Frame(main_frame)
         table_frame.pack(fill=tk.BOTH, expand=True)
 
-        columns = ("ID", "Nombre", "Teléfono", "Límite", "Deuda", "Estado")
+        columns = ("ID", "Nombre", "Teléfono", "Límite", "Deuda", "Disponible", "Estado")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=15)
-        
+
         for col in columns:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=100, anchor="center")
+            if col == "ID":
+                self.tree.column(col, width=50, anchor="center")
+            elif col == "Nombre":
+                self.tree.column(col, width=150, anchor="w")
+            elif col == "Teléfono":
+                self.tree.column(col, width=100, anchor="center")
+            elif col in ["Límite", "Deuda", "Disponible"]:
+                self.tree.column(col, width=100, anchor="e")
+            elif col == "Estado":
+                self.tree.column(col, width=100, anchor="center")
+            else:
+                self.tree.column(col, width=100, anchor="center")
 
         # Scrollbars
         vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
@@ -124,6 +135,8 @@ class ClientsWindow:
         except Exception as e:
             messagebox.showerror("Error", f"Error al cargar clientes: {e}")
     
+    # Reemplaza el método populate_tree en la clase ClientsWindow
+
     def populate_tree(self, clients=None):
         """Llena el treeview con los clientes"""
         # Limpiar árbol
@@ -136,7 +149,7 @@ class ClientsWindow:
         for client in clients_to_show:
             available_credit = client.available_credit()
             
-            # Determinar estado
+            # CORRECCIÓN: Determinar estado más claro
             if client.total_debt == 0:
                 status = "✅ Al día"
                 tags = ["good"]
@@ -147,7 +160,7 @@ class ClientsWindow:
                 status = "⚠️ Alerta"
                 tags = ["warning"]
             elif client.total_debt > 0:
-                status = "💳 Crédito"
+                status = "⏳ Pendiente"  # Cambio aquí: en lugar de "💳 Crédito"
                 tags = ["credit"]
             else:
                 status = "✅ Al día"
@@ -165,7 +178,7 @@ class ClientsWindow:
         
         # Configurar colores
         self.tree.tag_configure("good", background="#d4edda")
-        self.tree.tag_configure("credit", background="#cce5ff")
+        self.tree.tag_configure("credit", background="#fff3cd")  # Amarillo para pendientes
         self.tree.tag_configure("warning", background="#fff3cd")
         self.tree.tag_configure("limit", background="#f8d7da")
     
@@ -773,8 +786,8 @@ class CreditManagementWindow:
                 self.payment_amount_entry.focus()
                 return
             
-            # Obtener información actual del cliente (REFRESCAR DESDE BD)
-            self.client = Client.get_by_id(self.client.id)  # Refrescar datos
+            # CORRECCIÓN 1: Refrescar datos del cliente desde la BD
+            self.client = Client.get_by_id(self.client.id)
             deuda_actual = self.client.total_debt
             
             # Mostrar preview de cómo se aplicará el pago
@@ -826,21 +839,44 @@ class CreditManagementWindow:
             result = messagebox.askyesno("Confirmar Pago", mensaje_confirmacion)
             
             if result:
-                # *** FLUJO CORREGIDO: PROCESAR TODO EN UNA SOLA TRANSACCIÓN ***
-                resultado_pago = self.process_complete_payment(amount, description)
+                # CORRECCIÓN 2: Usar el método pay_debt del cliente para casos simples
+                if deuda_actual == 0:
+                    # No hay deuda, registrar como crédito a favor
+                    self.handle_excess_credit(self.client.id, amount)
+                    success = True
+                    excess_amount = amount
+                    debt_reduced = 0
+                elif amount <= deuda_actual:
+                    # Pago normal - usar el método pay_debt que ya funciona bien
+                    success = self.client.pay_debt(amount, description)
+                    excess_amount = 0
+                    debt_reduced = amount
+                else:
+                    # Pago excede la deuda - pagar toda la deuda y registrar exceso
+                    success = self.client.pay_debt(deuda_actual, description)
+                    if success:
+                        excess_amount = amount - deuda_actual
+                        self.handle_excess_credit(self.client.id, excess_amount)
+                        debt_reduced = deuda_actual
+                    else:
+                        excess_amount = 0
+                        debt_reduced = 0
                 
-                if resultado_pago['success']:
+                if success:
+                    # CORRECCIÓN 3: Actualizar estado de ventas después del pago
+                    self.update_sales_status_after_payment(amount)
+                    
                     # Limpiar campos
                     self.payment_amount_entry.delete(0, tk.END)
                     self.payment_desc_entry.delete(0, tk.END)
                     
                     # Mostrar mensaje de éxito
-                    self.show_payment_success_message(amount, deuda_actual, resultado_pago)
+                    self.show_simple_payment_success(amount, deuda_actual, debt_reduced, excess_amount)
                     
-                    # Actualizar todas las ventanas
+                    # CORRECCIÓN 4: Refrescar todas las ventanas
                     self.refresh_and_close()
                 else:
-                    messagebox.showerror("Error", f"Error al procesar pago:\n{resultado_pago['error']}")
+                    messagebox.showerror("Error", "Error al procesar el pago")
                     
         except Exception as e:
             messagebox.showerror("Error", f"Ocurrió un error inesperado:\n{str(e)}")
@@ -1254,6 +1290,65 @@ class CreditManagementWindow:
                 conn.rollback()
                 conn.close()
             return {'total_updated': 0, 'sales_updated': [], 'error': error_msg}
+        
+    # Agregar estos dos métodos a la clase CreditManagementWindow
+
+    def update_sales_status_after_payment(self, payment_amount):
+        """Actualiza el estado de las ventas después de un pago"""
+        try:
+            from config.database import get_connection
+            from datetime import datetime
+            
+            # Refrescar datos del cliente
+            self.client = Client.get_by_id(self.client.id)
+            
+            # Si el cliente no tiene deuda, marcar todas las ventas pendientes como pagadas
+            if self.client.total_debt <= 0:
+                conn = get_connection()
+                cursor = conn.cursor()
+                
+                # Detectar columna de estado
+                cursor.execute("PRAGMA table_info(sales)")
+                table_info = cursor.fetchall()
+                column_names = [column[1] for column in table_info]
+                
+                status_column = 'payment_status' if 'payment_status' in column_names else 'status'
+                
+                # Marcar ventas pendientes como pagadas
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                update_query = f'''
+                    UPDATE sales 
+                    SET {status_column} = 'paid',
+                        notes = COALESCE(notes, '') || ' [SALDADA el {timestamp}]'
+                    WHERE client_id = ? AND {status_column} = 'pending'
+                '''
+                cursor.execute(update_query, (self.client.id,))
+                
+                conn.commit()
+                conn.close()
+                    
+        except Exception as e:
+            print(f"Error al actualizar ventas: {e}")
+
+    def show_simple_payment_success(self, amount, deuda_anterior, debt_reduced, excess_amount):
+        """Muestra mensaje de éxito simplificado"""
+        if debt_reduced >= deuda_anterior and deuda_anterior > 0:
+            if excess_amount > 0:
+                mensaje = (f"🎉 ¡DEUDA SALDADA!\n\n"
+                        f"💰 Pago: ${amount:,.2f}\n"
+                        f"💳 Deuda saldada: ${debt_reduced:,.2f}\n"
+                        f"💵 Crédito a favor: ${excess_amount:,.2f}")
+            else:
+                mensaje = (f"🎉 ¡DEUDA SALDADA!\n\n"
+                        f"💰 Pago: ${amount:,.2f}")
+        else:
+            nueva_deuda = deuda_anterior - debt_reduced
+            mensaje = (f"💳 ABONO REGISTRADO\n\n"
+                    f"💰 Abono: ${amount:,.2f}\n"
+                    f"💳 Saldo actual: ${nueva_deuda:,.2f}")
+        
+        messagebox.showinfo("Pago Procesado", mensaje)
 
     def update_sales_payment_status(self, payment_amount):
         """Actualiza el estado de las ventas pendientes a 'paid' basándose en el pago"""

@@ -36,6 +36,9 @@ class PurchasesWindow:
         self.current_batch = []
         self.filtered_products = []  # Lista de productos filtrados para búsqueda
         self.is_filtering = False  # Flag para controlar el filtrado
+        self._typing_timer = None
+        self._last_search = ""
+
         
         # Crear ventana DESPUÉS de inicializar atributos
         self.window = tk.Toplevel(parent)
@@ -170,9 +173,10 @@ class PurchasesWindow:
         self.product_combo.grid(row=0, column=1, pady=8, padx=5, sticky=tk.EW)
 
         # AGREGAR estos nuevos eventos:
-        self.product_combo.bind('<KeyRelease>', self.filter_products)
-        self.product_combo.bind('<<ComboboxSelected>>', self.on_product_selected)
-        self.product_combo.bind('<FocusIn>', self.on_combo_focus_in)
+        self.product_combo.bind('<KeyRelease>', self._on_product_typing)
+        self.product_combo.bind('<Button-1>', self._on_combo_click)
+        self.product_combo.bind('<Return>', self._on_product_enter)
+        self.product_combo.bind('<Tab>', self._on_product_tab)
         
         # Cantidad y Precio
         ttk.Label(form_frame, text="Cantidad:", font=('Arial', 10, 'bold')).grid(
@@ -216,6 +220,95 @@ class PurchasesWindow:
                 text="🧹 Limpiar Formulario", 
                 command=self.clear_form,
                 style='TButton').pack(side=tk.LEFT, padx=5)
+        
+    def _on_product_typing(self, event=None):
+        """Maneja la escritura en el campo de producto SIN interferencias"""
+        # Cancelar timer anterior si existe
+        if self._typing_timer:
+            self.window.after_cancel(self._typing_timer)
+        
+        # Configurar nuevo timer para filtrar después de que termine de escribir
+        self._typing_timer = self.window.after(300, self._perform_filtering)
+
+    def _perform_filtering(self):
+        """Realiza el filtrado sin interferir con el foco"""
+        search_text = self.product_var.get().lower().strip()
+        
+        # Solo filtrar si el texto ha cambiado
+        if search_text == self._last_search:
+            return
+        
+        self._last_search = search_text
+        
+        if not search_text:
+            # Mostrar todos los productos disponibles
+            product_names = [p.name for p in self.products]
+            self._update_combo_values(product_names)
+            return
+        
+        # Filtrar productos que coincidan
+        filtered_products = []
+        
+        for product in self.products:
+            product_name_lower = product.name.lower()
+            if search_text in product_name_lower:
+                filtered_products.append(product.name)
+        
+        # Actualizar lista de productos
+        self._update_combo_values(filtered_products)
+
+    def _update_combo_values(self, values):
+        """Actualiza los valores del combo sin perder foco"""
+        try:
+            # Guardar posición del cursor
+            cursor_pos = self.product_combo.index(tk.INSERT)
+            
+            # Actualizar valores
+            self.product_combo['values'] = values
+            
+            # Restaurar posición del cursor si es posible
+            try:
+                self.product_combo.icursor(cursor_pos)
+            except:
+                pass  # Ignorar si no se puede restaurar
+                
+        except Exception as e:
+            print(f"Error actualizando combo: {e}")
+
+    def _on_combo_click(self, event=None):
+        """Maneja el clic en el combo"""
+        # Si está vacío, mostrar todos los productos
+        if not self.product_var.get().strip():
+            product_names = [p.name for p in self.products]
+            self._update_combo_values(product_names)
+
+    def _on_product_enter(self, event=None):
+        """Maneja Enter en el campo de producto"""
+        self._select_current_product()
+        return 'break'  # Evitar que se propague el evento
+
+    def _on_product_tab(self, event=None):
+        """Maneja Tab en el campo de producto"""
+        self._select_current_product()
+
+    def _select_current_product(self):
+        """Selecciona el producto actual y carga su información"""
+        product_name = self.product_var.get().strip()
+        if not product_name:
+            return
+        
+        # Buscar producto exacto
+        selected_product = None
+        for product in self.products:
+            if product.name.lower() == product_name.lower():
+                selected_product = product
+                # Corregir capitalización
+                self.product_var.set(product.name)
+                break
+        
+        if selected_product:
+            # Enfocar siguiente campo (cantidad)
+            self.window.after(50, lambda: self.quantity_var and hasattr(self, 'quantity_var'))
         
     def edit_purchase(self):
         """Edita la compra seleccionada"""
@@ -425,55 +518,11 @@ class PurchasesWindow:
         v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
 
-    def on_combo_focus_in(self, event=None):
-        """Cuando el combo recibe focus, mostrar todos los productos"""
-        if not self.is_filtering and not self.product_var.get():
-            self.show_all_products()
-
-    def filter_products(self, event=None):
-        """Filtra productos en tiempo real mientras el usuario escribe"""
-        self.is_filtering = True
-        search_text = self.product_var.get().lower()
-        
-        if not search_text:
-            # Si no hay texto, mostrar todos los productos
-            self.show_all_products()
-            return
-        
-        # Filtrar productos que contengan el texto de búsqueda
-        filtered = []
-        for product in self.products:
-            if search_text in product.name.lower():
-                filtered.append(product.name)
-        
-        # Actualizar el combobox con productos filtrados
-        self.product_combo['values'] = filtered
-        
-        # Mantener el dropdown abierto durante la búsqueda
-        if filtered and len(search_text) > 0:
-            self.product_combo.event_generate('<Down>')
-        
-        self.is_filtering = False
-
+    
     def show_all_products(self):
         """Muestra todos los productos disponibles"""
         product_names = [p.name for p in self.products]
         self.product_combo['values'] = product_names
-
-    def on_product_selected(self, event=None):
-        """Maneja la selección de producto"""
-        product_name = self.product_var.get()
-        
-        # Buscar producto exacto
-        found_product = None
-        for product in self.products:
-            if product.name == product_name:
-                found_product = product
-                break
-        
-        if not found_product:
-            # Si no encuentra producto exacto, limpiar mensaje de error
-            pass
 
     # 4. MODIFICAR el método load_products():
     def load_products(self):
@@ -485,63 +534,496 @@ class PurchasesWindow:
 
     # 5. MODIFICAR el método add_to_batch() para validar mejor la selección:
     def add_to_batch(self):
-        """Agrega un artículo al lote actual - VALIDACIÓN MEJORADA"""
-        # Validaciones
+        """IMPLEMENTACIÓN ÚNICA - Agrega un artículo al lote actual con VALIDACIÓN ESTRICTA"""
+        print("🔍 EJECUTANDO add_to_batch() - VERSIÓN CON VALIDACIÓN")  # LÍNEA DE DEBUG
+        
+        # ==================== VALIDACIÓN DE CAMPOS ====================
         product_name = self.product_var.get().strip()
         if not product_name:
-            messagebox.showerror("Error", "Debe seleccionar o escribir un producto")
+            messagebox.showerror("Error", "⚠️ Debe escribir o seleccionar un producto de la lista")
             self.product_combo.focus_set()
             return
         
+        quantity_str = self.quantity_var.get().strip()
+        price_str = self.unit_price_var.get().strip()
+        
+        if not quantity_str:
+            messagebox.showerror("Error", "⚠️ Debe ingresar una cantidad")
+            return
+        
+        if not price_str:
+            messagebox.showerror("Error", "⚠️ Debe ingresar un precio unitario")
+            return
+        
+        # ==================== VALIDACIÓN NUMÉRICA ====================
         try:
-            quantity = float(self.quantity_var.get())
-            unit_price = float(self.unit_price_var.get())
+            quantity = float(quantity_str)
+            unit_price = float(price_str)
             
             if quantity <= 0:
-                messagebox.showerror("Error", "La cantidad debe ser mayor a 0")
+                messagebox.showerror("Error", "❌ La cantidad debe ser mayor a 0")
                 return
             
             if unit_price <= 0:
-                messagebox.showerror("Error", "El precio debe ser mayor a 0")
+                messagebox.showerror("Error", "❌ El precio debe ser mayor a 0")
                 return
-            
+                
         except ValueError:
-            messagebox.showerror("Error", "Cantidad y precio deben ser números válidos")
+            messagebox.showerror("Error", "❌ Cantidad y precio deben ser números válidos")
             return
         
-        # Verificar si el producto existe, si no, se creará automáticamente
-        product = None
-        for p in self.products:
-            if p.name.lower() == product_name.lower():
-                product = p
-                # Actualizar el nombre con la capitalización correcta
-                self.product_var.set(p.name)
-                product_name = p.name
+        # ==================== VALIDACIÓN DE PRODUCTO EN INVENTARIO ====================
+        print(f"🔍 Buscando producto: '{product_name}'")  # DEBUG
+        print(f"🔍 Productos disponibles: {len(self.products)}")  # DEBUG
+        
+        product_found = None
+        
+        # Búsqueda EXACTA (case-insensitive)
+        for product in self.products:
+            print(f"   Comparando: '{product.name}' vs '{product_name}'")  # DEBUG
+            if product.name.lower() == product_name.lower():
+                product_found = product
+                # Corregir capitalización
+                self.product_var.set(product.name)
+                product_name = product.name
+                print(f"✅ Producto encontrado: {product.name}")  # DEBUG
                 break
         
-        # Si el producto no existe, se permitirá agregarlo (se creará al guardar el lote)
-        if not product:
-            if not messagebox.askyesno("Producto Nuevo", 
-                                    f"El producto '{product_name}' no existe.\n¿Desea agregarlo como nuevo producto?"):
+        if not product_found:
+            print(f"❌ Producto NO encontrado: '{product_name}'")  # DEBUG
+            
+            # PRODUCTO NO EXISTE - Mostrar opciones
+            response = messagebox.askyesnocancel(
+                "🚨 Producto No Encontrado", 
+                f"El producto '{product_name}' NO EXISTE en el inventario.\n\n"
+                f"¿Qué desea hacer?\n\n"
+                f"✅ SÍ: Crear el producto automáticamente\n"
+                f"❌ NO: Cancelar y seleccionar un producto existente\n"
+                f"⏹️ CANCELAR: No hacer nada"
+            )
+            
+            if response is True:  # Crear producto
+                print("🏭 Usuario eligió CREAR producto")  # DEBUG
+                if self._create_product_dialog(product_name, unit_price):
+                    # Recargar productos
+                    self.load_products()
+                    # Buscar el producto recién creado
+                    for product in self.products:
+                        if product.name.lower() == product_name.lower():
+                            product_found = product
+                            break
+            elif response is False:  # Cancelar y mostrar lista
+                print("🔄 Usuario eligió CANCELAR")  # DEBUG
+                messagebox.showinfo("Información", 
+                                "📋 Seleccione un producto existente de la lista.\n\n"
+                                "💡 Puede escribir las primeras letras para filtrar.")
+                self.product_combo.focus_set()
+                self.product_var.set("")  # Limpiar campo
+                return
+            else:  # No hacer nada
+                print("⏹️ Usuario cerró diálogo")  # DEBUG
                 return
         
-        # Agregar al lote
-        subtotal = quantity * unit_price
+        # ==================== VERIFICAR QUE TENEMOS UN PRODUCTO VÁLIDO ====================
+        if not product_found:
+            messagebox.showerror("Error", "❌ No se pudo obtener un producto válido")
+            return
         
-        item = {
-            'product_name': product_name,
-            'quantity': quantity,
-            'unit_price': unit_price,
-            'subtotal': subtotal,
-            'invoice_number': self.invoice_var.get().strip()
-        }
+        print(f"✅ PRODUCTO VALIDADO: {product_found.name} (ID: {product_found.id})")  # DEBUG
         
-        self.current_batch.append(item)
+        # ==================== VERIFICAR SI YA EXISTE EN EL LOTE ====================
+        existing_item_index = None
+        for i, item in enumerate(self.current_batch):
+            if item['product_name'].lower() == product_name.lower():
+                existing_item_index = i
+                break
+        
+        if existing_item_index is not None:
+            # Producto YA existe en el lote
+            existing_item = self.current_batch[existing_item_index]
+            
+            response = messagebox.askyesnocancel(
+                "📦 Producto Ya en el Lote", 
+                f"El producto '{product_name}' ya está en el lote.\n\n"
+                f"📊 Cantidad actual: {existing_item['quantity']}\n"
+                f"💰 Precio actual: ${existing_item['unit_price']:,.2f}\n"
+                f"📊 Nueva cantidad: {quantity}\n"
+                f"💰 Nuevo precio: ${unit_price:,.2f}\n\n"
+                f"¿Qué desea hacer?\n\n"
+                f"➕ SÍ: Sumar cantidades\n"
+                f"🔄 NO: Reemplazar valores\n"
+                f"❌ CANCELAR: No cambiar nada"
+            )
+            
+            if response is True:  # Sumar cantidades
+                existing_item['quantity'] += quantity
+                # Usar precio nuevo si es diferente
+                if abs(existing_item['unit_price'] - unit_price) > 0.01:
+                    if messagebox.askyesno("Precio Diferente", 
+                                        f"¿Usar el precio nuevo (${unit_price:,.2f})?"):
+                        existing_item['unit_price'] = unit_price
+                existing_item['subtotal'] = existing_item['quantity'] * existing_item['unit_price']
+                
+            elif response is False:  # Reemplazar
+                existing_item['quantity'] = quantity
+                existing_item['unit_price'] = unit_price
+                existing_item['subtotal'] = quantity * unit_price
+            else:  # Cancelar
+                return
+        else:
+            # ==================== AGREGAR NUEVO PRODUCTO AL LOTE ====================
+            subtotal = quantity * unit_price
+            
+            new_item = {
+                'product_name': product_name,
+                'product_id': product_found.id,
+                'quantity': quantity,
+                'unit_price': unit_price,
+                'subtotal': subtotal,
+                'invoice_number': self.invoice_var.get().strip()
+            }
+            
+            self.current_batch.append(new_item)
+            print(f"✅ Producto agregado al lote: {new_item}")  # DEBUG
+        
+        # ==================== ACTUALIZAR INTERFAZ ====================
         self.update_batch_tree()
+        self.calculate_batch_total()
         self.clear_form()
+        
+        # Mostrar confirmación
+        messagebox.showinfo("✅ Éxito", f"Producto '{product_name}' procesado correctamente")
+        
+        # Enfocar en campo de producto para siguiente entrada
+        self.product_combo.focus_set()
+
+    def _create_product_dialog(self, product_name, suggested_price):
+        """Diálogo para crear un nuevo producto"""
+        dialog = tk.Toplevel(self.window)
+        dialog.title("🏭 Crear Nuevo Producto")
+        dialog.geometry("400x250")
+        dialog.resizable(False, False)
+        dialog.transient(self.window)
+        dialog.grab_set()
+        
+        # Centrar
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - 200
+        y = (dialog.winfo_screenheight() // 2) - 125
+        dialog.geometry(f"400x250+{x}+{y}")
+        
+        result = {'created': False}
+        
+        # UI
+        main_frame = ttk.Frame(dialog, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(main_frame, text="🏭 Crear Nuevo Producto", 
+                font=('Arial', 14, 'bold')).pack(pady=(0, 15))
+        
+        # Campos
+        fields_frame = ttk.Frame(main_frame)
+        fields_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        ttk.Label(fields_frame, text="Nombre:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        name_var = tk.StringVar(value=product_name)
+        ttk.Entry(fields_frame, textvariable=name_var, width=25).grid(row=0, column=1, pady=5, padx=(10,0))
+        
+        ttk.Label(fields_frame, text="Precio de Costo:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        cost_var = tk.StringVar(value=f"{suggested_price:.2f}")
+        ttk.Entry(fields_frame, textvariable=cost_var, width=15).grid(row=1, column=1, pady=5, padx=(10,0), sticky=tk.W)
+        
+        ttk.Label(fields_frame, text="Precio de Venta:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        price_var = tk.StringVar(value=f"{suggested_price * 1.3:.2f}")
+        ttk.Entry(fields_frame, textvariable=price_var, width=15).grid(row=2, column=1, pady=5, padx=(10,0), sticky=tk.W)
+        
+        ttk.Label(fields_frame, text="Stock Inicial:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        stock_var = tk.StringVar(value="0")
+        ttk.Entry(fields_frame, textvariable=stock_var, width=10).grid(row=3, column=1, pady=5, padx=(10,0), sticky=tk.W)
+        
+        def create_product():
+            try:
+                name = name_var.get().strip()
+                cost = float(cost_var.get())
+                price = float(price_var.get())
+                stock = float(stock_var.get())
+                
+                if not name:
+                    messagebox.showerror("Error", "El nombre no puede estar vacío")
+                    return
+                
+                from models.product import Product
+                product = Product(name=name, price=price, stock=stock, cost_price=cost)
+                if product.save():
+                    result['created'] = True
+                    dialog.destroy()
+                    messagebox.showinfo("✅ Éxito", f"Producto '{name}' creado")
+                else:
+                    messagebox.showerror("Error", "Ya existe un producto con ese nombre")
+            except ValueError:
+                messagebox.showerror("Error", "Valores numéricos inválidos")
+        
+        # Botones
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack()
+        
+        ttk.Button(button_frame, text="✅ Crear", command=create_product).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        
+        dialog.wait_window()
+        return result['created']
+
+    def _on_product_enter(self, event=None):
+        """Maneja Enter en el campo de producto - VALIDACIÓN MEJORADA"""
+        product_name = self.product_var.get().strip()
+        if not product_name:
+            return 'break'
+        
+        # Buscar producto exacto
+        selected_product = None
+        for product in self.products:
+            if product.name.lower() == product_name.lower():
+                selected_product = product
+                # Corregir capitalización
+                self.product_var.set(product.name)
+                break
+        
+        if selected_product:
+            # Enfocar siguiente campo (cantidad)
+            self.quantity_var.set("") if not self.quantity_var.get() else None
+            self.window.after(50, lambda: self._focus_next_field())
+        else:
+            # Buscar coincidencias parciales
+            partial_matches = []
+            for product in self.products:
+                if product_name.lower() in product.name.lower():
+                    partial_matches.append(product)
+            
+            if partial_matches:
+                # Mostrar opciones si hay coincidencias parciales
+                self._show_partial_matches_info(product_name, partial_matches)
+            else:
+                messagebox.showwarning("Producto no encontrado", 
+                                    f"No se encontró el producto '{product_name}'.\n"
+                                    "Use la lista desplegable para seleccionar un producto válido.")
+                self.product_var.set("")
+        
+        return 'break'
+
+    def _focus_next_field(self):
+        """Enfoca el siguiente campo después de seleccionar producto"""
+        # Buscar el widget de cantidad y enfocarlo
+        for widget in self.new_purchase_frame.winfo_children():
+            if isinstance(widget, ttk.Frame):
+                for child in widget.winfo_children():
+                    if hasattr(child, 'textvariable') and child.textvariable == self.quantity_var:
+                        child.focus_set()
+                        return
+
+    def _show_partial_matches_info(self, search_term, matches):
+        """Muestra información sobre coincidencias parciales encontradas"""
+        if len(matches) == 1:
+            # Solo una coincidencia, sugerir automáticamente
+            if messagebox.askyesno("Producto similar encontrado", 
+                                f"¿Se refiere a '{matches[0].name}'?"):
+                self.product_var.set(matches[0].name)
+                self._focus_next_field()
+        elif len(matches) <= 5:
+            # Pocas coincidencias, mostrar lista
+            matches_str = '\n'.join([f"• {p.name}" for p in matches])
+            messagebox.showinfo("Productos similares encontrados", 
+                            f"Se encontraron estos productos similares a '{search_term}':\n\n{matches_str}\n\n"
+                            "Escriba el nombre exacto o selecciónelo de la lista.")
+        else:
+            # Muchas coincidencias, pedir más específico
+            messagebox.showinfo("Muchos productos encontrados", 
+                            f"Se encontraron {len(matches)} productos que contienen '{search_term}'.\n"
+                            "Sea más específico o use la lista desplegable.")
+
+    def _validate_product_exists(self, product_name):
+        """Método auxiliar para validar que el producto existe - VALIDACIÓN ESTRICTA"""
+        if not product_name or not product_name.strip():
+            return None, "El nombre del producto no puede estar vacío"
+        
+        product_name = product_name.strip()
+        
+        # Buscar coincidencia exacta (case insensitive)
+        for product in self.products:
+            if product.name.lower() == product_name.lower():
+                return product, None
+        
+        # No se encontró coincidencia exacta
+        return None, f"El producto '{product_name}' no existe en el inventario."
+
+    def _show_product_selection_dialog(self, partial_matches):
+        """Muestra un diálogo para seleccionar entre productos similares"""
+        if not partial_matches:
+            return None
+        
+        # Crear ventana de selección
+        dialog = tk.Toplevel(self.window)
+        dialog.title("Seleccionar Producto")
+        dialog.geometry("400x300")
+        dialog.resizable(False, False)
+        dialog.transient(self.window)
+        dialog.grab_set()
+        
+        # Centrar diálogo
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (200)
+        y = (dialog.winfo_screenheight() // 2) - (150)
+        dialog.geometry(f"400x300+{x}+{y}")
+        
+        selected_product = {'product': None}
+        
+        # Contenido del diálogo
+        main_frame = ttk.Frame(dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(main_frame, text="Seleccione el producto correcto:", 
+                font=('Arial', 12, 'bold')).pack(pady=(0, 15))
+        
+        # Lista de productos
+        listbox = tk.Listbox(main_frame, height=8, font=('Arial', 10))
+        listbox.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        
+        for product in partial_matches:
+            listbox.insert(tk.END, product.name)
+        
+        # Seleccionar primer elemento
+        if partial_matches:
+            listbox.selection_set(0)
+        
+        def select_product():
+            selection = listbox.curselection()
+            if selection:
+                selected_product['product'] = partial_matches[selection[0]]
+                dialog.destroy()
+        
+        def cancel_selection():
+            selected_product['product'] = None
+            dialog.destroy()
+        
+        # Botones
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X)
+        
+        ttk.Button(button_frame, text="Seleccionar", command=select_product).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Cancelar", command=cancel_selection).pack(side=tk.LEFT)
+        
+        # Permitir doble clic para seleccionar
+        listbox.bind('<Double-Button-1>', lambda e: select_product())
+        
+        # Esperar hasta que se cierre el diálogo
+        dialog.wait_window()
+        
+        return selected_product['product']
+        
+        # Mostrar mensaje de confirmación
+        messagebox.showinfo("Éxito", f"Producto '{product_name}' agregado al lote")
         
         # Enfocar de nuevo en el combo de productos para siguiente producto
         self.product_combo.focus_set()
+
+    # NUEVO MÉTODO para crear productos desde el batch:
+    def _create_new_product_from_batch(self, product_name, cost_price):
+        """Crea un nuevo producto automáticamente desde el batch"""
+        try:
+            # Estimar precio de venta (30% más que el costo)
+            estimated_sale_price = cost_price * 1.3
+            
+            # Ventana de confirmación con datos del producto
+            dialog = tk.Toplevel(self.window)
+            dialog.title("Crear Nuevo Producto")
+            dialog.geometry("400x300")
+            dialog.resizable(False, False)
+            dialog.transient(self.window)
+            dialog.grab_set()
+            
+            # Centrar diálogo
+            dialog.update_idletasks()
+            x = dialog.winfo_reqwidth()
+            y = dialog.winfo_reqheight()
+            pos_x = (dialog.winfo_screenwidth() // 2) - (x // 2)
+            pos_y = (dialog.winfo_screenheight() // 2) - (y // 2)
+            dialog.geometry(f"{x}x{y}+{pos_x}+{pos_y}")
+            
+            # Variables para almacenar el resultado
+            result = {'created': False}
+            
+            # Contenido del diálogo
+            main_frame = ttk.Frame(dialog, padding="20")
+            main_frame.pack(fill=tk.BOTH, expand=True)
+            
+            ttk.Label(main_frame, text="Crear Nuevo Producto", 
+                    font=('Arial', 12, 'bold')).pack(pady=(0, 15))
+            
+            # Información del producto
+            info_frame = ttk.Frame(main_frame)
+            info_frame.pack(fill=tk.X, pady=(0, 15))
+            
+            ttk.Label(info_frame, text="Nombre:").grid(row=0, column=0, sticky=tk.W, pady=5)
+            name_var = tk.StringVar(value=product_name)
+            ttk.Entry(info_frame, textvariable=name_var, width=30).grid(row=0, column=1, pady=5, padx=(10, 0))
+            
+            ttk.Label(info_frame, text="Precio de Costo:").grid(row=1, column=0, sticky=tk.W, pady=5)
+            cost_var = tk.StringVar(value=f"{cost_price:.2f}")
+            ttk.Entry(info_frame, textvariable=cost_var, width=15).grid(row=1, column=1, pady=5, padx=(10, 0), sticky=tk.W)
+            
+            ttk.Label(info_frame, text="Precio de Venta:").grid(row=2, column=0, sticky=tk.W, pady=5)
+            price_var = tk.StringVar(value=f"{estimated_sale_price:.2f}")
+            ttk.Entry(info_frame, textvariable=price_var, width=15).grid(row=2, column=1, pady=5, padx=(10, 0), sticky=tk.W)
+            
+            ttk.Label(info_frame, text="Stock Inicial:").grid(row=3, column=0, sticky=tk.W, pady=5)
+            stock_var = tk.StringVar(value="0")
+            ttk.Entry(info_frame, textvariable=stock_var, width=10).grid(row=3, column=1, pady=5, padx=(10, 0), sticky=tk.W)
+            
+            def create_product():
+                try:
+                    name = name_var.get().strip()
+                    cost = float(cost_var.get())
+                    price = float(price_var.get())
+                    stock = float(stock_var.get())
+                    
+                    if not name:
+                        messagebox.showerror("Error", "El nombre no puede estar vacío")
+                        return
+                    
+                    if cost <= 0 or price <= 0:
+                        messagebox.showerror("Error", "Los precios deben ser mayores a 0")
+                        return
+                    
+                    if stock < 0:
+                        messagebox.showerror("Error", "El stock no puede ser negativo")
+                        return
+                    
+                    # Crear producto
+                    product = Product(name=name, price=price, stock=stock, cost_price=cost)
+                    if product.save():
+                        result['created'] = True
+                        dialog.destroy()
+                        messagebox.showinfo("Éxito", f"Producto '{name}' creado correctamente")
+                    else:
+                        messagebox.showerror("Error", "Ya existe un producto con ese nombre")
+                        
+                except ValueError:
+                    messagebox.showerror("Error", "Por favor ingrese valores numéricos válidos")
+            
+            # Botones
+            button_frame = ttk.Frame(main_frame)
+            button_frame.pack(pady=(15, 0))
+            
+            ttk.Button(button_frame, text="Crear Producto", command=create_product).pack(side=tk.LEFT, padx=5)
+            ttk.Button(button_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+            
+            # Esperar hasta que se cierre el diálogo
+            dialog.wait_window()
+            
+            return result['created']
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al crear producto: {str(e)}")
+            return False
 
     # 6. MODIFICAR el método clear_form():
     def clear_form(self):
@@ -634,44 +1116,6 @@ class PurchasesWindow:
         name_entry.focus()
         dialog.bind('<Return>', lambda e: save_product())
     
-    def add_to_batch(self):
-        """Agrega un artículo al lote actual"""
-        # Validaciones
-        if not self.product_var.get().strip():
-            messagebox.showerror("Error", "Debe seleccionar o escribir un producto")
-            return
-        
-        try:
-            quantity = float(self.quantity_var.get())
-            unit_price = float(self.unit_price_var.get())
-            
-            if quantity <= 0:
-                messagebox.showerror("Error", "La cantidad debe ser mayor a 0")
-                return
-            
-            if unit_price <= 0:
-                messagebox.showerror("Error", "El precio debe ser mayor a 0")
-                return
-            
-        except ValueError:
-            messagebox.showerror("Error", "Cantidad y precio deben ser números válidos")
-            return
-        
-        # Agregar al lote
-        product_name = self.product_var.get().strip()
-        subtotal = quantity * unit_price
-        
-        item = {
-            'product_name': product_name,
-            'quantity': quantity,
-            'unit_price': unit_price,
-            'subtotal': subtotal,
-            'invoice_number': self.invoice_var.get().strip()
-        }
-        
-        self.current_batch.append(item)
-        self.update_batch_tree()
-        self.clear_form()
     
     def update_batch_tree(self):
         """Actualiza el árbol del lote actual"""
