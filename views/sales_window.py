@@ -114,13 +114,16 @@ class SalesWindow:
             width=25,
             font=('Arial', 10)
         )
+        #MPLAZA la sección donde se configuran los eventos del combobox (líneas ~132-136):
         self.product_combo.grid(row=0, column=1, pady=5, padx=(0, 15))
-        self.product_combo.grid(row=0, column=1, pady=5, padx=(0, 15))
-        # AGREGAR estos nuevos eventos:
+        # EVENTOS CORREGIDOS:
         self.product_combo.bind('<KeyRelease>', self._on_product_typing)
+        self.product_combo.bind('<<ComboboxSelected>>', self.on_product_selected)  # ¡IMPORTANTE!
         self.product_combo.bind('<Button-1>', self._on_combo_click)
         self.product_combo.bind('<Return>', self._on_product_enter)
         self.product_combo.bind('<Tab>', self._on_product_tab)
+        self.product_combo.bind('<FocusOut>', self._on_product_focus_out)  # NUEVO
+
         
         # Precio unitario
         ttk.Label(product_controls, text="Precio:").grid(row=0, column=2, sticky=tk.W, pady=5, padx=(0, 5))
@@ -473,11 +476,56 @@ class SalesWindow:
         # Actualizar lista de productos
         self._update_combo_values(filtered_products)
         
-        # Si hay coincidencia exacta, cargar información del producto
-        if exact_match:
+        # SOLO cargar info si hay coincidencia exacta Y no estamos escribiendo
+        if exact_match and not self._is_typing_actively():
             self._load_product_info(exact_match)
-        else:
+        elif not exact_match:
             self._clear_product_info()
+
+    def _on_product_focus_out(self, event=None):
+        """Maneja cuando el campo pierde el foco - verifica selección"""
+        self._verify_and_load_product()
+
+    def _is_typing_actively(self):
+        """Determina si el usuario está escribiendo activamente"""
+        # Si el texto actual no coincide exactamente con ningún producto, está escribiendo
+        current_text = self.product_var.get().strip()
+        for product in self.products:
+            if product.name == current_text:
+                return False  # Coincidencia exacta, no está escribiendo
+        return True  # No hay coincidencia exacta, probablemente escribiendo
+
+        # 5. AGREGA este método para verificar selección:
+    def _verify_and_load_product(self):
+        """Verifica si hay un producto seleccionado válido y carga su información"""
+        product_name = self.product_var.get().strip()
+        if not product_name:
+            self._clear_product_info()
+            return
+        
+        # Buscar producto exacto
+        selected_product = None
+        for product in self.products:
+            if product.name == product_name:
+                selected_product = product
+                break
+        
+        if selected_product:
+            self._load_product_info(selected_product)
+        else:
+            # Si no es exacto, buscar el más cercano
+            closest_match = None
+            for product in self.products:
+                if product.stock > 0 and product.name.lower().startswith(product_name.lower()):
+                    closest_match = product
+                    break
+            
+            if closest_match:
+                # Autocompletar con el producto más cercano
+                self.product_var.set(closest_match.name)
+                self._load_product_info(closest_match)
+            else:
+                self._clear_product_info()
 
     def _update_combo_values(self, values):
         """Actualiza los valores del combo sin perder foco"""
@@ -514,16 +562,33 @@ class SalesWindow:
         if not self.product_var.get().strip():
             available_products = [p.name for p in self.products if p.stock > 0]
             self._update_combo_values(available_products)
+        else:
+            # Si hay texto, verificar si es un producto válido
+            self.window.after(100, self._verify_and_load_product)  # Pequeño delay
         self._is_clicking = False
 
     def _on_product_enter(self, event=None):
         """Maneja Enter en el campo de producto"""
-        self._select_current_product()
+        self._verify_and_load_product()
+        # Enfocar el campo de cantidad si hay un producto válido seleccionado
+        if self.unit_price_var.get() and self.stock_var.get():
+            self.quantity_var.focus_set() if hasattr(self, 'quantity_var') else None
         return 'break'  # Evitar que se propague el evento
+
 
     def _on_product_tab(self, event=None):
         """Maneja Tab en el campo de producto"""
-        self._select_current_product()
+        self._verify_and_load_product()
+
+    def debug_products(self):
+        """Método de debug para verificar productos cargados"""
+        print(f"\n=== DEBUG PRODUCTOS ===")
+        print(f"Total productos cargados: {len(self.products)}")
+        for i, product in enumerate(self.products[:5]):  # Mostrar solo los primeros 5
+            print(f"{i+1}. {product.name} - Stock: {product.stock} - Precio: {product.price}")
+        if len(self.products) > 5:
+            print(f"... y {len(self.products) - 5} más")
+        print("=====================\n")
 
     def _select_current_product(self):
         """Selecciona el producto actual y carga su información"""
@@ -555,7 +620,7 @@ class SalesWindow:
         self.load_sales()
     
     def load_products(self):
-        """Carga la lista de productos - MEJORADO"""
+        """Carga la lista de productos - MEJORADO CON DEBUG"""
         self.products = Product.get_all()
         # Filtrar solo productos con stock disponible
         available_products = [p.name for p in self.products if p.stock > 0]
@@ -596,8 +661,13 @@ class SalesWindow:
 
     # 4. MODIFICAR el método on_product_selected() para manejar mejor la selección:
     def on_product_selected(self, event=None):
-        """Maneja la selección de producto - MEJORADO"""
-        product_name = self.product_var.get()
+        """Maneja la selección de producto desde el dropdown - MEJORADO"""
+        print(f"Producto seleccionado: {self.product_var.get()}")  # Debug
+        
+        product_name = self.product_var.get().strip()
+        if not product_name:
+            self._clear_product_info()
+            return
         
         # Buscar producto exacto
         found_product = None
@@ -607,21 +677,15 @@ class SalesWindow:
                 break
         
         if found_product:
-            self.unit_price_var.set(f"{found_product.price:,.2f}")
-            self.stock_var.set(f"{found_product.stock}")
+            print(f"Cargando info para: {found_product.name}, Stock: {found_product.stock}, Precio: {found_product.price}")  # Debug
+            self._load_product_info(found_product)
             # Limpiar campos de cantidad al seleccionar nuevo producto
             self.quantity_var.set("")
             self.money_var.set("")
             self.subtotal_var.set("")
         else:
-            # Si no encuentra producto exacto, limpiar campos
-            self.unit_price_var.set("")
-            self.stock_var.set("")
-            self.quantity_var.set("")
-            self.money_var.set("")
-            self.subtotal_var.set("")
-        
-        self.calculate_item_total()
+            print(f"Producto no encontrado: {product_name}")  # Debug
+            self._clear_product_info()
     
     def calculate_item_total(self, event=None):
         """Calcula el subtotal del producto actual"""
