@@ -1,7 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from models.expense import Expense
-from utils.validators import validate_required, validate_positive
+from utils.validators import validate_required, validate_positive, safe_float_conversion
+from utils.formatters import format_currency, format_number
 from datetime import datetime
 
 class ExpensesWindow:
@@ -12,7 +13,7 @@ class ExpensesWindow:
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Gastos Operativos")
-        self.window.geometry("800x600")
+        self.window.geometry("900x700")  # Aumentado un poco para mejor visualización
         self.window.resizable(True, True)
         
         # Variables
@@ -24,170 +25,269 @@ class ExpensesWindow:
     
     def setup_ui(self):
         """Configura la interfaz de usuario"""
+        # Configurar estilo para mejorar apariencia
+        style = ttk.Style()
+        style.configure('Title.TLabel', font=('Arial', 14, 'bold'))
+        style.configure('Amount.TLabel', font=('Arial', 12, 'bold'), foreground='#2E7D32')
+        style.configure('Total.TLabel', font=('Arial', 14, 'bold'), foreground='#1976D2')
+        
         # Notebook para pestañas
         notebook = ttk.Notebook(self.window)
         notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Pestaña nuevo gasto
         self.new_expense_frame = ttk.Frame(notebook)
-        notebook.add(self.new_expense_frame, text="Nuevo Gasto")
+        notebook.add(self.new_expense_frame, text="  💰 Nuevo Gasto  ")
         self.setup_new_expense_ui()
         
         # Pestaña lista de gastos
         self.expenses_list_frame = ttk.Frame(notebook)
-        notebook.add(self.expenses_list_frame, text="Lista de Gastos")
+        notebook.add(self.expenses_list_frame, text="  📊 Lista de Gastos  ")
         self.setup_expenses_list_ui()
     
     def setup_new_expense_ui(self):
         """Configura la UI para nuevo gasto"""
-        main_frame = ttk.Frame(self.new_expense_frame, padding="20")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        # Frame principal centrado
+        container = ttk.Frame(self.new_expense_frame)
+        container.pack(expand=True, fill=tk.BOTH)
+        
+        main_frame = ttk.Frame(container, padding="30")
+        main_frame.pack(expand=True)
         
         # Título
-        title_label = ttk.Label(main_frame, text="Registrar Nuevo Gasto Operativo", 
-                               font=("Arial", 14, "bold"))
+        title_label = ttk.Label(main_frame, text="💰 Registrar Nuevo Gasto Operativo", 
+                               style='Title.TLabel')
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 30))
         
         # Descripción
-        ttk.Label(main_frame, text="Descripción:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Descripción:", font=('Arial', 10, 'bold')).grid(
+            row=1, column=0, sticky=tk.W, pady=(10, 5))
         self.description_var = tk.StringVar()
-        description_entry = ttk.Entry(main_frame, textvariable=self.description_var, width=40)
-        description_entry.grid(row=1, column=1, pady=5, padx=(10, 0), sticky=(tk.W, tk.E))
+        description_entry = ttk.Entry(main_frame, textvariable=self.description_var, 
+                                    width=50, font=('Arial', 11))
+        description_entry.grid(row=2, column=0, columnspan=2, pady=(0, 15), sticky=(tk.W, tk.E))
         
         # Monto
-        ttk.Label(main_frame, text="Monto:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Monto:", font=('Arial', 10, 'bold')).grid(
+            row=3, column=0, sticky=tk.W, pady=(10, 5))
+        
+        # Frame para monto con formato en tiempo real
+        amount_frame = ttk.Frame(main_frame)
+        amount_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
+        
+        ttk.Label(amount_frame, text="$", font=('Arial', 12, 'bold')).pack(side=tk.LEFT)
+        
         self.amount_var = tk.StringVar()
-        amount_entry = ttk.Entry(main_frame, textvariable=self.amount_var, width=20)
-        amount_entry.grid(row=2, column=1, pady=5, padx=(10, 0), sticky=tk.W)
+        self.amount_entry = ttk.Entry(amount_frame, textvariable=self.amount_var, 
+                                    width=20, font=('Arial', 12), justify=tk.RIGHT)
+        self.amount_entry.pack(side=tk.LEFT, padx=(5, 10))
+        
+        # Etiqueta para mostrar el monto formateado
+        self.formatted_amount_label = ttk.Label(amount_frame, text="", 
+                                              font=('Arial', 10), foreground='#666666')
+        self.formatted_amount_label.pack(side=tk.LEFT)
+        
+        # Bind para formato en tiempo real
+        self.amount_var.trace('w', self.on_amount_change)
         
         # Fecha (opcional, por defecto hoy)
-        ttk.Label(main_frame, text="Fecha (YYYY-MM-DD):").grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Fecha (YYYY-MM-DD):", font=('Arial', 10, 'bold')).grid(
+            row=5, column=0, sticky=tk.W, pady=(10, 5))
         self.date_var = tk.StringVar()
         self.date_var.set(datetime.now().strftime("%Y-%m-%d"))
-        date_entry = ttk.Entry(main_frame, textvariable=self.date_var, width=20)
-        date_entry.grid(row=3, column=1, pady=5, padx=(10, 0), sticky=tk.W)
+        date_entry = ttk.Entry(main_frame, textvariable=self.date_var, 
+                             width=20, font=('Arial', 11))
+        date_entry.grid(row=6, column=0, sticky=tk.W, pady=(0, 30))
         
-        # Botones
+        # Botones con estilo mejorado
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=4, column=0, columnspan=2, pady=30)
+        button_frame.grid(row=7, column=0, columnspan=2, pady=20)
         
-        ttk.Button(button_frame, text="Guardar Gasto", 
-                  command=self.save_expense).pack(side=tk.LEFT, padx=10)
-        ttk.Button(button_frame, text="Limpiar", 
-                  command=self.clear_form).pack(side=tk.LEFT, padx=10)
+        save_btn = ttk.Button(button_frame, text="💾 Guardar Gasto", 
+                            command=self.save_expense)
+        save_btn.pack(side=tk.LEFT, padx=10)
+        
+        clear_btn = ttk.Button(button_frame, text="🧹 Limpiar", 
+                             command=self.clear_form)
+        clear_btn.pack(side=tk.LEFT, padx=10)
         
         # Configurar grid weights
-        main_frame.columnconfigure(1, weight=1)
+        main_frame.columnconfigure(0, weight=1)
         
         # Focus en descripción
         description_entry.focus()
     
+    def on_amount_change(self, *args):
+        """Actualiza el formato del monto en tiempo real"""
+        try:
+            amount_str = self.amount_var.get().replace(',', '').replace('$', '').strip()
+            if amount_str:
+                amount = safe_float_conversion(amount_str)
+                if amount > 0:
+                    formatted = format_currency(amount)
+                    self.formatted_amount_label.config(text=f"({formatted})")
+                else:
+                    self.formatted_amount_label.config(text="")
+            else:
+                self.formatted_amount_label.config(text="")
+        except:
+            self.formatted_amount_label.config(text="")
+    
     def setup_expenses_list_ui(self):
         """Configura la UI para lista de gastos"""
-        main_frame = ttk.Frame(self.expenses_list_frame, padding="10")
+        main_frame = ttk.Frame(self.expenses_list_frame, padding="15")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Título
-        title_label = ttk.Label(main_frame, text="Lista de Gastos Operativos", 
-                               font=("Arial", 14, "bold"))
-        title_label.pack(pady=(0, 10))
+        title_label = ttk.Label(main_frame, text="📊 Lista de Gastos Operativos", 
+                               style='Title.TLabel')
+        title_label.pack(pady=(0, 15))
         
         # Frame para controles
-        controls_frame = ttk.Frame(main_frame)
-        controls_frame.pack(fill=tk.X, pady=(0, 10))
+        controls_frame = ttk.LabelFrame(main_frame, text=" Filtros y Controles ", padding="10")
+        controls_frame.pack(fill=tk.X, pady=(0, 15))
         
         # Filtros por fecha
-        ttk.Label(controls_frame, text="Desde:").pack(side=tk.LEFT, padx=(0, 5))
+        filter_frame = ttk.Frame(controls_frame)
+        filter_frame.pack(fill=tk.X)
+        
+        ttk.Label(filter_frame, text="📅 Desde:", font=('Arial', 9, 'bold')).pack(side=tk.LEFT, padx=(0, 5))
         self.date_from_var = tk.StringVar()
-        date_from_entry = ttk.Entry(controls_frame, textvariable=self.date_from_var, width=12)
-        date_from_entry.pack(side=tk.LEFT, padx=(0, 10))
+        date_from_entry = ttk.Entry(filter_frame, textvariable=self.date_from_var, width=12)
+        date_from_entry.pack(side=tk.LEFT, padx=(0, 15))
         
-        ttk.Label(controls_frame, text="Hasta:").pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(filter_frame, text="📅 Hasta:", font=('Arial', 9, 'bold')).pack(side=tk.LEFT, padx=(0, 5))
         self.date_to_var = tk.StringVar()
-        date_to_entry = ttk.Entry(controls_frame, textvariable=self.date_to_var, width=12)
-        date_to_entry.pack(side=tk.LEFT, padx=(0, 10))
+        date_to_entry = ttk.Entry(filter_frame, textvariable=self.date_to_var, width=12)
+        date_to_entry.pack(side=tk.LEFT, padx=(0, 15))
         
-        ttk.Button(controls_frame, text="Filtrar", 
+        ttk.Button(filter_frame, text="🔍 Filtrar", 
                   command=self.filter_expenses).pack(side=tk.LEFT, padx=5)
-        ttk.Button(controls_frame, text="Actualizar", 
+        ttk.Button(filter_frame, text="🔄 Actualizar", 
                   command=self.load_data).pack(side=tk.LEFT, padx=5)
+        ttk.Button(filter_frame, text="📋 Exportar", 
+                  command=self.export_expenses).pack(side=tk.LEFT, padx=5)
         
-        # Treeview para mostrar gastos
-        columns = ('ID', 'Descripción', 'Monto', 'Fecha')
-        self.expenses_tree = ttk.Treeview(main_frame, columns=columns, show='headings')
+        # Frame para estadísticas rápidas
+        stats_frame = ttk.Frame(main_frame)
+        stats_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Configurar columnas
-        for col in columns:
-            self.expenses_tree.heading(col, text=col)
-            if col == 'ID':
-                self.expenses_tree.column(col, width=50)
-            elif col == 'Monto':
-                self.expenses_tree.column(col, width=100)
-            elif col == 'Fecha':
-                self.expenses_tree.column(col, width=120)
-            else:
-                self.expenses_tree.column(col, width=300)
+        self.total_label = ttk.Label(stats_frame, text="💰 Total: $0.00", 
+                                   style='Total.TLabel')
+        self.total_label.pack(side=tk.RIGHT)
+        
+        self.count_label = ttk.Label(stats_frame, text="📝 Gastos: 0", 
+                                   font=('Arial', 10, 'bold'))
+        self.count_label.pack(side=tk.LEFT)
+        
+        # Treeview para mostrar gastos con mejor formato
+        columns = ('ID', 'Descripción', 'Monto', 'Fecha', 'Usuario')
+        self.expenses_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=15)
+        
+        # Configurar columnas con mejor espaciado
+        self.expenses_tree.heading('ID', text='ID')
+        self.expenses_tree.column('ID', width=60, anchor='center')
+        
+        self.expenses_tree.heading('Descripción', text='📝 Descripción')
+        self.expenses_tree.column('Descripción', width=300, anchor='w')
+        
+        self.expenses_tree.heading('Monto', text='💰 Monto')
+        self.expenses_tree.column('Monto', width=150, anchor='e')
+        
+        self.expenses_tree.heading('Fecha', text='📅 Fecha')
+        self.expenses_tree.column('Fecha', width=140, anchor='center')
+        
+        self.expenses_tree.heading('Usuario', text='👤 Usuario')
+        self.expenses_tree.column('Usuario', width=120, anchor='center')
+        
+        # Configurar estilos para el treeview
+        style = ttk.Style()
+        style.configure("Treeview", rowheight=25)
+        style.configure("Treeview.Heading", font=('Arial', 10, 'bold'))
         
         # Scrollbars
-        v_scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.expenses_tree.yview)
-        h_scrollbar = ttk.Scrollbar(main_frame, orient=tk.HORIZONTAL, command=self.expenses_tree.xview)
-        self.expenses_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
-        
-        # Frame para el treeview
         tree_frame = ttk.Frame(main_frame)
         tree_frame.pack(fill=tk.BOTH, expand=True)
         
+        v_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.expenses_tree.yview)
+        h_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.expenses_tree.xview)
+        self.expenses_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        
         self.expenses_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
         
         # Bind para selección
         self.expenses_tree.bind('<<TreeviewSelect>>', self.on_expense_select)
         
         # Frame para botones de acción
         action_frame = ttk.Frame(main_frame)
-        action_frame.pack(fill=tk.X, pady=(10, 0))
+        action_frame.pack(fill=tk.X, pady=(15, 0))
         
-        ttk.Button(action_frame, text="Editar", 
+        ttk.Button(action_frame, text="✏️ Editar", 
                   command=self.edit_expense).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Eliminar", 
+        ttk.Button(action_frame, text="🗑️ Eliminar", 
                   command=self.delete_expense).pack(side=tk.LEFT, padx=5)
-        
-        # Etiqueta para total
-        self.total_label = ttk.Label(action_frame, text="Total: $0.00", 
-                                    font=("Arial", 12, "bold"))
-        self.total_label.pack(side=tk.RIGHT)
+        ttk.Button(action_frame, text="📊 Detalles", 
+                  command=self.view_expense_details).pack(side=tk.LEFT, padx=5)
     
     def load_data(self):
         """Carga los datos de gastos"""
-        self.expenses = Expense.get_all()
-        self.update_expenses_tree()
+        try:
+            self.expenses = Expense.get_all()
+            self.update_expenses_tree()
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al cargar gastos: {str(e)}")
     
     def update_expenses_tree(self):
-        """Actualiza el árbol de gastos"""
+        """Actualiza el árbol de gastos con formato mejorado"""
         # Limpiar árbol
         for item in self.expenses_tree.get_children():
             self.expenses_tree.delete(item)
         
         total = 0
+        count = 0
         
         # Agregar gastos
         for expense in self.expenses:
-            # Formatear fecha
-            date_str = expense.date.strftime("%Y-%m-%d %H:%M") if expense.date else "N/A"
-            
-            # Insertar en árbol
-            self.expenses_tree.insert('', tk.END, values=(
-                expense.id,
-                expense.description,
-                f"${expense.amount:.2f}",
-                date_str
-            ))
-            
-            total += expense.amount
+            try:
+                # Formatear fecha
+                if hasattr(expense, 'date') and expense.date:
+                    if isinstance(expense.date, str):
+                        date_str = expense.date
+                    else:
+                        date_str = expense.date.strftime("%Y-%m-%d %H:%M")
+                else:
+                    date_str = "N/A"
+                
+                # Formatear monto con separadores de miles
+                amount_formatted = format_currency(expense.amount)
+                
+                # Obtener nombre de usuario si está disponible
+                user_name = getattr(expense, 'user_name', 'N/A')
+                
+                # Insertar en árbol con colores alternos
+                item_id = self.expenses_tree.insert('', tk.END, values=(
+                    expense.id,
+                    expense.description,
+                    amount_formatted,
+                    date_str,
+                    user_name
+                ), tags=('evenrow' if count % 2 == 0 else 'oddrow',))
+                
+                total += expense.amount
+                count += 1
+                
+            except Exception as e:
+                print(f"Error procesando gasto {expense.id}: {e}")
+                continue
         
-        # Actualizar total
-        self.total_label.config(text=f"Total: ${total:.2f}")
+        # Configurar colores alternos
+        self.expenses_tree.tag_configure('evenrow', background='#f0f0f0')
+        self.expenses_tree.tag_configure('oddrow', background='white')
+        
+        # Actualizar estadísticas
+        self.total_label.config(text=f"💰 Total: {format_currency(total)}")
+        self.count_label.config(text=f"📝 Gastos: {count:,}")
     
     def on_expense_select(self, event=None):
         """Maneja la selección de un gasto"""
@@ -207,20 +307,24 @@ class ExpensesWindow:
                 break
     
     def save_expense(self):
-        """Guarda el gasto"""
+        """Guarda el gasto con validaciones mejoradas"""
         # Validaciones
         description = self.description_var.get().strip()
         if not validate_required(description):
             messagebox.showerror("Error", "La descripción no puede estar vacía")
+            self.description_var.focus()
             return
         
         try:
-            amount = float(self.amount_var.get())
+            amount_str = self.amount_var.get().replace(',', '').replace('$', '').strip()
+            amount = safe_float_conversion(amount_str)
             if not validate_positive(amount, "Monto"):
                 messagebox.showerror("Error", "El monto debe ser mayor a 0")
+                self.amount_entry.focus()
                 return
         except ValueError:
             messagebox.showerror("Error", "El monto debe ser un número válido")
+            self.amount_entry.focus()
             return
         
         # Validar fecha
@@ -243,7 +347,8 @@ class ExpensesWindow:
         )
         
         if expense.save():
-            messagebox.showinfo("Éxito", "Gasto guardado correctamente")
+            messagebox.showinfo("Éxito", 
+                f"Gasto guardado correctamente:\n{description}\n{format_currency(amount)}")
             self.clear_form()
             self.load_data()
         else:
@@ -254,6 +359,7 @@ class ExpensesWindow:
         self.description_var.set("")
         self.amount_var.set("")
         self.date_var.set(datetime.now().strftime("%Y-%m-%d"))
+        self.formatted_amount_label.config(text="")
     
     def edit_expense(self):
         """Edita el gasto seleccionado"""
@@ -264,10 +370,10 @@ class ExpensesWindow:
         self.expense_dialog(self.selected_expense)
     
     def expense_dialog(self, expense):
-        """Diálogo para editar gasto"""
+        """Diálogo para editar gasto con formato mejorado"""
         dialog = tk.Toplevel(self.window)
-        dialog.title("Editar Gasto")
-        dialog.geometry("400x200")
+        dialog.title(f"✏️ Editar Gasto #{expense.id}")
+        dialog.geometry("500x350")
         dialog.resizable(False, False)
         dialog.transient(self.window)
         dialog.grab_set()
@@ -281,26 +387,60 @@ class ExpensesWindow:
         dialog.geometry(f"{x}x{y}+{pos_x}+{pos_y}")
         
         # Contenido del diálogo
-        main_frame = ttk.Frame(dialog, padding="20")
+        main_frame = ttk.Frame(dialog, padding="25")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Descripción
-        ttk.Label(main_frame, text="Descripción:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        description_var = tk.StringVar(value=expense.description)
-        description_entry = ttk.Entry(main_frame, textvariable=description_var, width=30)
-        description_entry.grid(row=0, column=1, pady=5)
+        # Título
+        title_label = ttk.Label(main_frame, text=f"Editando Gasto #{expense.id}", 
+                               font=('Arial', 12, 'bold'))
+        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
         
-        # Monto
-        ttk.Label(main_frame, text="Monto:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        # Descripción
+        ttk.Label(main_frame, text="Descripción:", font=('Arial', 10, 'bold')).grid(
+            row=1, column=0, sticky=tk.W, pady=5)
+        description_var = tk.StringVar(value=expense.description)
+        description_entry = ttk.Entry(main_frame, textvariable=description_var, width=40)
+        description_entry.grid(row=1, column=1, pady=5, sticky=(tk.W, tk.E))
+        
+        # Monto con formato
+        ttk.Label(main_frame, text="Monto:", font=('Arial', 10, 'bold')).grid(
+            row=2, column=0, sticky=tk.W, pady=5)
+        
+        amount_frame = ttk.Frame(main_frame)
+        amount_frame.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)
+        
+        ttk.Label(amount_frame, text="$", font=('Arial', 11, 'bold')).pack(side=tk.LEFT)
         amount_var = tk.StringVar(value=str(expense.amount))
-        amount_entry = ttk.Entry(main_frame, textvariable=amount_var, width=30)
-        amount_entry.grid(row=1, column=1, pady=5)
+        amount_entry = ttk.Entry(amount_frame, textvariable=amount_var, width=15, justify=tk.RIGHT)
+        amount_entry.pack(side=tk.LEFT, padx=(5, 10))
+        
+        # Etiqueta para mostrar formato
+        amount_format_label = ttk.Label(amount_frame, text="", font=('Arial', 9), foreground='#666')
+        amount_format_label.pack(side=tk.LEFT)
+        
+        def update_amount_format(*args):
+            try:
+                amount_str = amount_var.get().replace(',', '').replace('$', '').strip()
+                if amount_str:
+                    amount = safe_float_conversion(amount_str)
+                    if amount > 0:
+                        amount_format_label.config(text=f"({format_currency(amount)})")
+                    else:
+                        amount_format_label.config(text="")
+                else:
+                    amount_format_label.config(text="")
+            except:
+                amount_format_label.config(text="")
+        
+        amount_var.trace('w', update_amount_format)
+        update_amount_format()  # Inicial
         
         # Fecha
-        ttk.Label(main_frame, text="Fecha:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Fecha:", font=('Arial', 10, 'bold')).grid(
+            row=3, column=0, sticky=tk.W, pady=5)
         date_var = tk.StringVar(value=expense.date.strftime("%Y-%m-%d") if expense.date else "")
-        date_entry = ttk.Entry(main_frame, textvariable=date_var, width=30)
-        date_entry.grid(row=2, column=1, pady=5)
+        date_entry = ttk.Entry(main_frame, textvariable=date_var, width=20)
+        date_entry.grid(row=3, column=1, pady=5, sticky=tk.W)
         
         def save_changes():
             # Validaciones
@@ -310,7 +450,8 @@ class ExpensesWindow:
                 return
             
             try:
-                amount = float(amount_var.get())
+                amount_str = amount_var.get().replace(',', '').replace('$', '').strip()
+                amount = safe_float_conversion(amount_str)
                 if not validate_positive(amount, "Monto"):
                     messagebox.showerror("Error", "El monto debe ser mayor a 0")
                     return
@@ -337,11 +478,15 @@ class ExpensesWindow:
             else:
                 messagebox.showerror("Error", "No se pudo actualizar el gasto")
         
+        # Botones
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=20)
+        button_frame.grid(row=4, column=0, columnspan=2, pady=30)
         
-        ttk.Button(button_frame, text="Guardar", command=save_changes).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="💾 Guardar", command=save_changes).pack(side=tk.LEFT, padx=10)
+        ttk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=10)
+        
+        # Configurar grid
+        main_frame.columnconfigure(1, weight=1)
         
         description_entry.focus()
         dialog.bind('<Return>', lambda e: save_changes())
@@ -352,15 +497,100 @@ class ExpensesWindow:
             messagebox.showwarning("Advertencia", "Seleccione un gasto para eliminar")
             return
         
-        if messagebox.askyesno("Confirmar", 
-            f"¿Está seguro de eliminar el gasto '{self.selected_expense.description}'?"):
+        formatted_amount = format_currency(self.selected_expense.amount)
+        
+        if messagebox.askyesno("Confirmar Eliminación", 
+            f"¿Está seguro de eliminar este gasto?\n\n"
+            f"📝 Descripción: {self.selected_expense.description}\n"
+            f"💰 Monto: {formatted_amount}\n\n"
+            f"Esta acción no se puede deshacer."):
             
-            self.selected_expense.delete()
-            self.load_data()
-            self.selected_expense = None
-            messagebox.showinfo("Éxito", "Gasto eliminado correctamente")
+            if self.selected_expense.delete():
+                self.load_data()
+                self.selected_expense = None
+                messagebox.showinfo("Éxito", "Gasto eliminado correctamente")
+            else:
+                messagebox.showerror("Error", "No se pudo eliminar el gasto")
+    
+    def view_expense_details(self):
+        """Muestra detalles completos del gasto"""
+        if not self.selected_expense:
+            messagebox.showwarning("Advertencia", "Seleccione un gasto para ver detalles")
+            return
+        
+        # Crear ventana de detalles
+        details = tk.Toplevel(self.window)
+        details.title(f"📊 Detalles del Gasto #{self.selected_expense.id}")
+        details.geometry("400x300")
+        details.resizable(False, False)
+        details.transient(self.window)
+        details.grab_set()
+        
+        # Contenido
+        frame = ttk.Frame(details, padding="20")
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Información del gasto
+        info_text = f"""
+📝 ID: {self.selected_expense.id}
+
+📝 Descripción: {self.selected_expense.description}
+
+💰 Monto: {format_currency(self.selected_expense.amount)}
+
+📅 Fecha: {self.selected_expense.date.strftime("%Y-%m-%d %H:%M:%S") if self.selected_expense.date else 'N/A'}
+
+👤 Usuario: {getattr(self.selected_expense, 'user_name', 'N/A')}
+        """
+        
+        ttk.Label(frame, text=info_text, font=('Arial', 11), justify=tk.LEFT).pack()
+        
+        ttk.Button(frame, text="Cerrar", command=details.destroy).pack(pady=20)
     
     def filter_expenses(self):
         """Filtra los gastos por fecha"""
-        # TODO: Implementar filtrado por rango de fechas
-        messagebox.showinfo("Info", "Filtrado por fecha en desarrollo")
+        date_from = self.date_from_var.get().strip()
+        date_to = self.date_to_var.get().strip()
+        
+        if not date_from and not date_to:
+            messagebox.showinfo("Info", "Ingrese al menos una fecha para filtrar")
+            return
+        
+        try:
+            filtered_expenses = []
+            
+            for expense in Expense.get_all():
+                expense_date = expense.date
+                if isinstance(expense_date, str):
+                    expense_date = datetime.strptime(expense_date.split()[0], "%Y-%m-%d")
+                
+                include = True
+                
+                if date_from:
+                    from_date = datetime.strptime(date_from, "%Y-%m-%d")
+                    if expense_date < from_date:
+                        include = False
+                
+                if date_to and include:
+                    to_date = datetime.strptime(date_to, "%Y-%m-%d")
+                    if expense_date > to_date:
+                        include = False
+                
+                if include:
+                    filtered_expenses.append(expense)
+            
+            self.expenses = filtered_expenses
+            self.update_expenses_tree()
+            
+            messagebox.showinfo("Filtro Aplicado", 
+                f"Se encontraron {len(filtered_expenses)} gastos en el rango seleccionado")
+            
+        except ValueError:
+            messagebox.showerror("Error", "Formato de fecha inválido. Use YYYY-MM-DD")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al filtrar: {str(e)}")
+    
+    def export_expenses(self):
+        """Exporta la lista de gastos (función placeholder)"""
+        messagebox.showinfo("Exportar", "Función de exportación en desarrollo\n\n"
+                           f"Se exportarían {len(self.expenses)} gastos")
