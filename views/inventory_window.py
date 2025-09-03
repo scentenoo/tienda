@@ -60,32 +60,39 @@ class InventoryWindow:
         controls_frame = ttk.Frame(main_frame)
         controls_frame.pack(fill=tk.X, pady=(0, 15))
         
-        # Botones de acción (quitado el de ayuda que causaba error)
-        actions = [
-            ("➕ NUEVO", self.add_product, 'Accent.TButton'),
-            ("✏️ EDITAR", self.edit_product),
-            ("🗑️ ELIMINAR", self.delete_product),
-            ("🔄 ACTUALIZAR", self.refresh_products)
-        ]
-         # NUEVO: Botón de importación solo para administradores
-        if self.user.role == 'admin':  # Asumiendo que tienes un campo 'role' en user
+        # VERIFICAR PERMISOS DE ADMINISTRADOR PARA BOTONES
+        if self.user.role == 'admin':
+            # Botones de acción solo para administradores
+            actions = [
+                ("➕ NUEVO", self.add_product, 'Accent.TButton'),
+                ("✏️ EDITAR", self.edit_product),
+                ("🗑️ ELIMINAR", self.delete_product)
+            ]
+            
+            for text, cmd, *style in actions:
+                ttk.Button(
+                    controls_frame,
+                    text=text,
+                    command=cmd,
+                    style=style[0] if style else 'TButton'
+                ).pack(side=tk.LEFT, padx=5)
+            
+            # Botón de importación Excel solo para administradores
             ttk.Button(
                 controls_frame,
                 text="📊 IMPORTAR EXCEL",
                 command=self.import_from_excel,
                 style='Accent.TButton'
             ).pack(side=tk.LEFT, padx=5)
+        
+        # Botón de actualizar disponible para todos los usuarios
+        ttk.Button(
+            controls_frame,
+            text="🔄 ACTUALIZAR",
+            command=self.refresh_products
+        ).pack(side=tk.LEFT, padx=5)
 
-
-        for text, cmd, *style in actions:
-            ttk.Button(
-                controls_frame,
-                text=text,
-                command=cmd,
-                style=style[0] if style else 'TButton'
-            ).pack(side=tk.LEFT, padx=5)
-
-        # Búsqueda
+        # Búsqueda (disponible para todos)
         search_frame = ttk.Frame(controls_frame)
         search_frame.pack(side=tk.RIGHT)
         ttk.Label(search_frame, text="🔍").pack(side=tk.LEFT)
@@ -126,7 +133,9 @@ class InventoryWindow:
 
         # Eventos
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
-        self.tree.bind("<Double-1>", lambda e: self.edit_product())
+        # Solo permitir doble click para editar si es administrador
+        if self.user.role == 'admin':
+            self.tree.bind("<Double-1>", lambda e: self.edit_product())
 
         # SECCIÓN ESTADÍSTICAS (reposicionada más arriba)
         stats_frame = ttk.LabelFrame(
@@ -145,7 +154,10 @@ class InventoryWindow:
         self.stats_label.pack()
 
     def import_from_excel(self):
-        """Abre ventana para importar productos desde Excel"""
+        """Abre ventana para importar productos desde Excel - Solo administradores"""
+        if self.user.role != 'admin':
+            messagebox.showwarning("Acceso denegado", "Solo los administradores pueden importar desde Excel")
+            return
         ExcelImportWindow(self.window, self)
     
     def refresh_products(self):
@@ -249,11 +261,18 @@ class InventoryWindow:
         self.stats_label.config(text=stats_text)
     
     def add_product(self):
-        """Abre ventana para agregar producto"""
+        """Abre ventana para agregar producto - Solo administradores"""
+        if self.user.role != 'admin':
+            messagebox.showwarning("Acceso denegado", "Solo los administradores pueden agregar productos")
+            return
         ProductFormWindow(self.window, self, mode="add")
     
     def edit_product(self):
-        """Abre ventana para editar producto"""
+        """Abre ventana para editar producto - Solo administradores"""
+        if self.user.role != 'admin':
+            messagebox.showwarning("Acceso denegado", "Solo los administradores pueden editar productos")
+            return
+            
         if not self.selected_product:
             messagebox.showwarning("Selección requerida", 
                                  "Por favor seleccione un producto para editar")
@@ -262,7 +281,11 @@ class InventoryWindow:
         ProductFormWindow(self.window, self, mode="edit", product=self.selected_product)
     
     def delete_product(self):
-        """Elimina el producto seleccionado"""
+        """Elimina el producto seleccionado - Solo administradores"""
+        if self.user.role != 'admin':
+            messagebox.showwarning("Acceso denegado", "Solo los administradores pueden eliminar productos")
+            return
+            
         if not self.selected_product:
             messagebox.showwarning("Selección requerida", 
                                  "Por favor seleccione un producto para eliminar")
