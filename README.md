@@ -6,23 +6,40 @@ Sistema de escritorio para la gestión integral de un negocio comercial, desarro
 
 ## 📌 Descripción
 
-Aplicación de escritorio con interfaz gráfica que centraliza las operaciones de un negocio: ventas, compras, inventario, clientes y control de pérdidas. Implementa un sistema de autenticación con roles diferenciados para administrador y empleado.
+Aplicación de escritorio con interfaz gráfica que centraliza las operaciones de un negocio: ventas, compras, inventario, clientes y control de pérdidas. Implementa autenticación con roles diferenciados y respaldo automático de la base de datos en Google Drive.
+
+---
+
+## 🏗️ Arquitectura
+
+El proyecto sigue el patrón **MVC (Modelo-Vista-Controlador)**:
+
+```
+tienda/
+├── models/         → Acceso y lógica de datos (SQLite)
+├── views/          → Interfaz gráfica (Tkinter)
+├── controllers/    → Lógica de negocio
+├── utils/          → Utilidades generales
+├── config/         → Configuración del sistema
+├── assets/         → Recursos visuales
+└── data/           → Base de datos SQLite
+```
 
 ---
 
 ## ⚙️ Funcionalidades
 
 **Ventas**
-- Registro detallado de ventas con fecha, hora y productos vendidos
-- Asociación de ventas a clientes registrados o venta al contado
+- Registro detallado con fecha, hora y productos vendidos
+- Asociación a clientes registrados o venta al contado
 - Historial completo de transacciones
 
 **Compras**
 - Registro de compras con soporte para flete e IVA
-- Control de proveedores y costos de adquisición
+- Control de costos de adquisición
 
 **Inventario**
-- Listado completo de productos con stock actualizado
+- Listado de productos con stock actualizado
 - Agregar, editar y eliminar productos
 - Visibilidad restringida según rol de usuario
 
@@ -34,24 +51,11 @@ Aplicación de escritorio con interfaz gráfica que centraliza las operaciones d
 
 **Usuarios**
 - Gestión de usuarios del sistema
-- Dos roles: **Administrador** (acceso total) y **Empleado** (acceso restringido a ventas e inventario)
-
-**Respaldo de datos**
-- Exportación y copia de seguridad de la base de datos directamente a **Google Drive**
-
----
-
-## 🗄️ Base de datos
-
-- Motor: **SQLite**
-- Estructura relacional con tablas para ventas, detalle de ventas, compras, inventario, clientes, pérdidas y usuarios
-- Respaldo automático en la nube mediante integración con Google Drive
+- Dos roles: **Administrador** (acceso total) y **Empleado** (acceso restringido)
 
 ---
 
 ## 🔐 Sistema de autenticación
-
-El sistema requiere usuario y contraseña para acceder. Los permisos se aplican dinámicamente según el rol:
 
 | Funcionalidad | Empleado | Administrador |
 |---|---|---|
@@ -65,12 +69,32 @@ El sistema requiere usuario y contraseña para acceder. Los permisos se aplican 
 
 ---
 
+## 💾 Sistema de respaldo
+
+El módulo de backup realiza las siguientes operaciones de forma automática:
+
+- **Exportación segura** usando la API nativa de SQLite (`sqlite3.backup`) para evitar bloqueos durante la copia
+- **Verificación de integridad** mediante `PRAGMA integrity_check` antes de confirmar el backup
+- **Sincronización con Google Drive** copiando la base de datos a la carpeta local de Drive (requiere Google Drive Desktop activo en el equipo)
+- **Rotación automática** — mantiene los últimos 30 backups y elimina los más antiguos
+- **Reintentos con backoff exponencial** para manejar archivos bloqueados por otros procesos
+- **Logging completo** de todas las operaciones en archivo `.log`
+
+---
+
+## 🗄️ Base de datos
+
+- Motor: **SQLite**
+- Estructura relacional con tablas para ventas, detalle de ventas, compras, inventario, clientes, pérdidas y usuarios
+
+---
+
 ## 🛠️ Tecnologías utilizadas
 
 - Python 3
 - SQLite
 - Tkinter (interfaz gráfica)
-- Google Drive API (respaldo en la nube)
+- Google Drive Desktop (respaldo en la nube vía carpeta sincronizada)
 
 ---
 
