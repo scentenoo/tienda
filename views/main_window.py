@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from views.users_window import UsersWindow
 from views.losses_window import LossesWindow
-
+from utils.backup import backup_y_sync_drive
 class MainWindow:
     def __init__(self, parent, user):
         self.parent = parent
@@ -105,6 +105,11 @@ class MainWindow:
         # Menú Archivo
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Archivo", menu=file_menu)
+        file_menu.add_command(
+            label="Guardar base de datos en Google Drive",
+            command=self.subir_a_google_drive
+        )
+        file_menu.add_separator()
         file_menu.add_command(label="Cerrar Sesión", command=self.logout)
         file_menu.add_separator()
         file_menu.add_command(label="Salir", command=self.on_closing)
@@ -153,6 +158,20 @@ class MainWindow:
         """Maneja el cierre de la ventana"""
         if messagebox.askyesno("Salir", "¿Está seguro que desea salir del sistema?"):
             self.parent.quit()
+
+    def subir_a_google_drive(self):
+        try:
+            info = backup_y_sync_drive()
+
+            messagebox.showinfo(
+                "Google Drive actualizado",
+                f"✔ Backup creado:\n{info['backup']}\n\n"
+                f"✔ Base sincronizada:\n{info['sync']}\n\n"
+                f"Fecha: {info['fecha']}"
+            )
+
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
     
     def show_about(self):
         """Muestra información sobre el sistema"""

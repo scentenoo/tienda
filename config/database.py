@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from utils.paths import get_db_path
 
 
 def get_connection():
@@ -7,7 +8,7 @@ def get_connection():
     if not os.path.exists('data'):
         os.makedirs('data')
     
-    conn = sqlite3.connect('data/tienda.db', timeout=30.0)  # Timeout de 30 segundos
+    conn = sqlite3.connect(get_db_path(), timeout=30.0)  # Timeout de 30 segundos
     conn.row_factory = sqlite3.Row
     
     # Configuraciones adicionales para mejorar rendimiento
@@ -160,6 +161,8 @@ def init_database():
                 payment_method TEXT NULL,
                 paid_amount REAL DEFAULT 0.0,
                 remaining_debt REAL DEFAULT 0.0,
+                adjustment REAL DEFAULT 0.0,
+                adjustment_reason TEXT,
                 notes TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 user_id INTEGER,
@@ -274,13 +277,12 @@ def init_database():
                 print(f"Columna {column} agregada a {table}")
             except sqlite3.OperationalError:
                 pass  # La columna ya existe
-        
+        add_adjustment_column_to_sales()
         # Migrar datos de unit_price a sale_price en sale_details si es necesario
         try:
             cursor.execute('UPDATE sale_details SET sale_price = unit_price WHERE sale_price IS NULL')
         except sqlite3.OperationalError:
             pass
-        
         conn.commit()
         print("Base de datos inicializada correctamente")
         
@@ -851,6 +853,44 @@ def fix_client_sales_relationship():
     except Exception as e:
         print(f"❌ Error en corrección completa: {e}")
         return False
+    
+def add_adjustment_column_to_sales():
+    """Agrega columna de ajuste a la tabla sales"""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar si la columna ya existe
+        cursor.execute("PRAGMA table_info(sales)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'adjustment' not in columns:
+            cursor.execute('''
+                ALTER TABLE sales 
+                ADD COLUMN adjustment REAL DEFAULT 0.0
+            ''')
+            print("✅ Columna 'adjustment' agregada a la tabla sales")
+        
+        if 'adjustment_reason' not in columns:
+            cursor.execute('''
+                ALTER TABLE sales 
+                ADD COLUMN adjustment_reason TEXT
+            ''')
+            print("✅ Columna 'adjustment_reason' agregada a la tabla sales")
+        
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error al agregar columna de ajuste: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn:
+            conn.close()
+
 def sync_client_sales_status_on_payment(client_id):
     """
     Sincroniza automáticamente el estado de las ventas cuando se hace un pago
@@ -1035,6 +1075,7 @@ def fix_all_client_sales_statuses():
     finally:
         if conn:
             conn.close()
+
 
 def sync_client_sales_status_on_payment(client_id):
     """

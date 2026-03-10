@@ -1,24 +1,45 @@
 from config.database import get_connection
 from datetime import datetime
-from utils.validators import safe_float_conversion
-from models.client import Client
+
+# Importaciones condicionales para evitar errores
+try:
+    from utils.validators import safe_float_conversion
+except ImportError:
+    # Fallback si no existe utils
+    def safe_float_conversion(value):
+        """Conversión segura a float"""
+        try:
+            if value is None or value == '':
+                return 0.0
+            return float(str(value).replace(',', ''))
+        except:
+            return 0.0
+
+try:
+    from models.client import Client
+except ImportError:
+    Client = None
+
 
 class Sale:
     def __init__(self, id=None, client_id=None, client_name=None, total=None, 
                  payment_method=None, notes=None, created_at=None, items=None, 
-                 user_id=None, status=None, paid_amount=0, remaining_debt=0):
+                 user_id=None, status=None, paid_amount=0, remaining_debt=0,
+                 adjustment=0.0, adjustment_reason=None):
         self.id = id
         self.client_id = client_id
         self.client_name = client_name
         self.total = total
-        self.payment_method = payment_method or 'cash'  # Valor por defecto
+        self.payment_method = payment_method or 'cash'
         self.notes = notes
         self.created_at = created_at or datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.items = items or []
         self.user_id = user_id
-        self.status = status or 'paid'  # Valor por defecto
+        self.status = status or 'paid'
         self.paid_amount = paid_amount
         self.remaining_debt = remaining_debt
+        self.adjustment = adjustment or 0.0
+        self.adjustment_reason = adjustment_reason
     
     def save(self):
         conn = get_connection()
@@ -29,17 +50,30 @@ class Sale:
             if self.payment_method == 'credit' and not self.client_id:
                 raise ValueError("Ventas a crédito requieren un cliente")
 
-            # Guardar venta
+            # Guardar venta CON AJUSTE
             cursor.execute('''
-                INSERT INTO sales (client_id, total, payment_method, notes, created_at, user_id, status) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO sales (client_id, total, payment_method, notes, created_at, 
+                                 user_id, status, adjustment, adjustment_reason) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (self.client_id, self.total, self.payment_method, self.notes, 
-                self.created_at, self.user_id, self.status))
+                self.created_at, self.user_id, self.status, self.adjustment, 
+                self.adjustment_reason))
             self.id = cursor.lastrowid
 
             # Solo registrar en historial si es a crédito
             if self.payment_method == 'credit' and self.client_id:
                 product_list = ", ".join([f"{item['product_name']} x{item['quantity']}" for item in self.items])
+                
+                # Construir descripción con información del ajuste
+                description = f"Venta fiada #{self.id}: {product_list}"
+                if self.adjustment and self.adjustment != 0:
+                    if self.adjustment > 0:
+                        description += f" (+cargo: ${self.adjustment:,.2f})"
+                    else:
+                        description += f" (desc: ${abs(self.adjustment):,.2f})"
+                    
+                    if self.adjustment_reason:
+                        description += f" - {self.adjustment_reason}"
                 
                 # Registrar como DEUDA (tipo 'debit')
                 cursor.execute('''
@@ -49,7 +83,7 @@ class Sale:
                 ''', (
                     self.client_id,
                     self.total,
-                    f"Venta fiada #{self.id}: {product_list}"
+                    description
                 ))
                 
                 # Actualizar deuda del cliente
@@ -74,6 +108,9 @@ class Sale:
     
     def _update_client_debt(self, amount, operation):
         """Actualiza la deuda del cliente y registra la transacción"""
+        if Client is None:
+            raise ImportError("Client model not available")
+            
         client = Client.get_by_id(self.client_id)
         if not client:
             raise ValueError("Cliente no encontrado")
@@ -83,7 +120,6 @@ class Sale:
         elif operation == 'subtract':
             client.pay_debt(amount, f"Pago de venta #{self.id}")
         
-        # Actualizar montos en la venta
         if operation == 'subtract':
             self.paid_amount = self.total
             self.remaining_debt = 0
@@ -99,18 +135,16 @@ class Sale:
         cursor = conn.cursor()
         
         try:
-            # Registrar el pago como 'credit' (verde)
             cursor.execute('''
                 INSERT INTO client_transactions
                     (client_id, transaction_type, amount, description)
                 VALUES (?, 'credit', ?, ?)
             ''', (
                 self.client_id,
-                -amount,  # Monto negativo (pago reduce deuda)
+                -amount,
                 f"Pago: {description} (Venta #{self.id})"
             ))
 
-            # Resto de la lógica de actualización...
             conn.commit()
             return True
         except Exception as e:
@@ -120,10 +154,32 @@ class Sale:
         finally:
             conn.close()
     
-    # Resto de métodos permanecen igual...
+    def get_subtotal(self):
+        """Calcula el subtotal de productos (sin ajuste)"""
+        return self.total - (self.adjustment or 0)
+    
+    def has_adjustment(self):
+        """Verifica si la venta tiene algún ajuste"""
+        return self.adjustment is not None and self.adjustment != 0
+    
+    def get_adjustment_type(self):
+        """Retorna el tipo de ajuste: 'cargo', 'descuento', o None"""
+        if not self.has_adjustment():
+            return None
+        return 'cargo' if self.adjustment > 0 else 'descuento'
+    
+    @staticmethod
+    def _safe_get(row, key, default=None):
+        """Obtiene valor de Row de forma segura - SOLUCIÓN AL ERROR"""
+        try:
+            # Intentar acceso directo por nombre
+            return row[key] if row[key] is not None else default
+        except (KeyError, IndexError, TypeError):
+            return default
+    
     @staticmethod
     def get_all():
-        """Obtiene todas las ventas con información completa - VERSIÓN CORREGIDA"""
+        """Obtiene todas las ventas con información completa - CORREGIDO"""
         conn = get_connection()
         cursor = conn.cursor()
         
@@ -137,24 +193,29 @@ class Sale:
             
             sales = []
             for row in cursor.fetchall():
-                # Determinar estado correctamente
-                status = row['status'] if row['status'] else ('pending' if row['client_id'] else 'paid')
+                # Usar acceso seguro a Row
+                status = Sale._safe_get(row, 'status', 'paid')
+                if not status:
+                    status = 'pending' if row['client_id'] else 'paid'
                 
-                # Determinar método de pago
-                payment_method = row['payment_method'] or row['payment_type'] or 'cash'
+                # Método de pago
+                payment_method = (Sale._safe_get(row, 'payment_method') or 
+                                Sale._safe_get(row, 'payment_type') or 'cash')
                 
                 sale = Sale(
                     id=row['id'],
                     client_id=row['client_id'],
-                    client_name=row['client_name'],
+                    client_name=Sale._safe_get(row, 'client_name'),
                     total=row['total'],
                     payment_method=payment_method,
-                    notes=row['notes'],
+                    notes=Sale._safe_get(row, 'notes'),
                     created_at=row['created_at'],
-                    user_id=row['user_id'],
+                    user_id=Sale._safe_get(row, 'user_id'),
                     status=status,
-                    paid_amount=row['paid_amount'] or 0,
-                    remaining_debt=row['remaining_debt'] or 0
+                    paid_amount=Sale._safe_get(row, 'paid_amount', 0),
+                    remaining_debt=Sale._safe_get(row, 'remaining_debt', 0),
+                    adjustment=Sale._safe_get(row, 'adjustment', 0.0),
+                    adjustment_reason=Sale._safe_get(row, 'adjustment_reason')
                 )
                 sales.append(sale)
             
@@ -162,13 +223,15 @@ class Sale:
             
         except Exception as e:
             print(f"Error en Sale.get_all(): {e}")
+            import traceback
+            traceback.print_exc()
             return []
         finally:
             conn.close()
     
     @staticmethod
     def get_by_id(sale_id):
-        """Obtiene una venta por ID - VERSIÓN CORREGIDA"""
+        """Obtiene una venta por ID - CORREGIDO"""
         conn = get_connection()
         cursor = conn.cursor()
         
@@ -182,24 +245,27 @@ class Sale:
             
             row = cursor.fetchone()
             if row:
-                # Determinar estado correctamente
-                status = row['status'] if row['status'] else ('pending' if row['client_id'] else 'paid')
+                status = Sale._safe_get(row, 'status', 'paid')
+                if not status:
+                    status = 'pending' if row['client_id'] else 'paid'
                 
-                # Determinar método de pago
-                payment_method = row['payment_method'] or row['payment_type'] or 'cash'
+                payment_method = (Sale._safe_get(row, 'payment_method') or 
+                                Sale._safe_get(row, 'payment_type') or 'cash')
                 
                 return Sale(
                     id=row['id'],
                     client_id=row['client_id'],
-                    client_name=row['client_name'],
+                    client_name=Sale._safe_get(row, 'client_name'),
                     total=row['total'],
                     payment_method=payment_method,
-                    notes=row['notes'],
+                    notes=Sale._safe_get(row, 'notes'),
                     created_at=row['created_at'],
-                    user_id=row['user_id'],
+                    user_id=Sale._safe_get(row, 'user_id'),
                     status=status,
-                    paid_amount=row['paid_amount'] or 0,
-                    remaining_debt=row['remaining_debt'] or 0
+                    paid_amount=Sale._safe_get(row, 'paid_amount', 0),
+                    remaining_debt=Sale._safe_get(row, 'remaining_debt', 0),
+                    adjustment=Sale._safe_get(row, 'adjustment', 0.0),
+                    adjustment_reason=Sale._safe_get(row, 'adjustment_reason')
                 )
             return None
         except Exception as e:
@@ -239,32 +305,25 @@ class Sale:
             
             sales = []
             for row in cursor.fetchall():
-                # APLICAR MISMA LÓGICA DE CORRECCIÓN
-                payment_method = None
-                if 'payment_method' in row.keys() and row['payment_method']:
-                    payment_method = row['payment_method']
-                elif 'payment_type' in row.keys() and row['payment_type']:
-                    payment_method = row['payment_type']
-                else:
-                    payment_method = 'cash'
+                payment_method = (Sale._safe_get(row, 'payment_method') or 
+                                Sale._safe_get(row, 'payment_type') or 'cash')
                 
-                status = 'paid'
-                if 'status' in row.keys() and row['status']:
-                    status = row['status']
-                else:
-                    if row['client_id'] is not None:
-                        status = 'pending'
+                status = Sale._safe_get(row, 'status', 'paid')
+                if not status and row['client_id']:
+                    status = 'pending'
                 
                 sale = Sale(
                     id=row['id'],
                     client_id=row['client_id'],
-                    client_name=row['client_name'],
+                    client_name=Sale._safe_get(row, 'client_name'),
                     total=row['total'],
                     payment_method=payment_method,
-                    notes=row['notes'] if 'notes' in row.keys() else None,
+                    notes=Sale._safe_get(row, 'notes'),
                     created_at=row['created_at'],
-                    user_id=row['user_id'] if 'user_id' in row.keys() else None,
-                    status=status
+                    user_id=Sale._safe_get(row, 'user_id'),
+                    status=status,
+                    adjustment=Sale._safe_get(row, 'adjustment', 0.0),
+                    adjustment_reason=Sale._safe_get(row, 'adjustment_reason')
                 )
                 sales.append(sale)
             
@@ -284,12 +343,10 @@ class Sale:
         cursor = conn.cursor()
         
         try:
-            # Verificar deuda del cliente
             cursor.execute('SELECT total_debt FROM clients WHERE id = ?', (self.client_id,))
             result = cursor.fetchone()
             
             if result and result[0] <= 0:
-                # Cliente sin deuda, marcar venta como pagada
                 cursor.execute('''
                     UPDATE sales 
                     SET status = 'paid' 
@@ -316,7 +373,6 @@ class Sale:
         cursor = conn.cursor()
         
         try:
-            # Construir query dinámico
             query = '''
                 SELECT s.*, c.name as client_name
                 FROM sales s
@@ -342,7 +398,6 @@ class Sale:
                 params.append(status)
             
             if payment_method:
-                # BUSCAR EN AMBOS CAMPOS POSIBLES
                 query += ' AND (s.payment_method = ? OR s.payment_type = ?)'
                 params.extend([payment_method, payment_method])
             
@@ -352,32 +407,25 @@ class Sale:
             
             sales = []
             for row in cursor.fetchall():
-                # APLICAR MISMA LÓGICA DE CORRECCIÓN
-                payment_method_value = None
-                if 'payment_method' in row.keys() and row['payment_method']:
-                    payment_method_value = row['payment_method']
-                elif 'payment_type' in row.keys() and row['payment_type']:
-                    payment_method_value = row['payment_type']
-                else:
-                    payment_method_value = 'cash'
+                payment_method_value = (Sale._safe_get(row, 'payment_method') or 
+                                       Sale._safe_get(row, 'payment_type') or 'cash')
                 
-                status_value = 'paid'
-                if 'status' in row.keys() and row['status']:
-                    status_value = row['status']
-                else:
-                    if row['client_id'] is not None:
-                        status_value = 'pending'
+                status_value = Sale._safe_get(row, 'status', 'paid')
+                if not status_value and row['client_id']:
+                    status_value = 'pending'
                 
                 sale = Sale(
                     id=row['id'],
                     client_id=row['client_id'],
-                    client_name=row['client_name'],
+                    client_name=Sale._safe_get(row, 'client_name'),
                     total=row['total'],
                     payment_method=payment_method_value,
-                    notes=row['notes'] if 'notes' in row.keys() else None,
+                    notes=Sale._safe_get(row, 'notes'),
                     created_at=row['created_at'],
-                    user_id=row['user_id'] if 'user_id' in row.keys() else None,
-                    status=status_value
+                    user_id=Sale._safe_get(row, 'user_id'),
+                    status=status_value,
+                    adjustment=Sale._safe_get(row, 'adjustment', 0.0),
+                    adjustment_reason=Sale._safe_get(row, 'adjustment_reason')
                 )
                 sales.append(sale)
             
@@ -418,24 +466,19 @@ class Sale:
         finally:
             conn.close()
     
-    # MÉTODOS ADICIONALES PARA MEJOR FUNCIONALIDAD
-    
     @staticmethod
-    def get_pending_sales(self):
+    def get_pending_sales(client_id):
         """Obtiene las ventas pendientes del cliente"""
         try:
-            from config.database import get_connection
-            
             conn = get_connection()
             cursor = conn.cursor()
             
-            # CORRECCIÓN: Usar 'created_at' en lugar de 'sale_date'
             cursor.execute('''
                 SELECT id, created_at, total, notes
                 FROM sales 
                 WHERE client_id = ? AND status = 'pending'
                 ORDER BY created_at ASC
-            ''', (self.client.id,))
+            ''', (client_id,))
             
             pending_sales = cursor.fetchall()
             conn.close()
@@ -463,16 +506,20 @@ class Sale:
     
     def get_client(self):
         """Obtiene el objeto Client asociado a esta venta"""
-        if not self.client_id:
+        if not self.client_id or Client is None:
             return None
-        
-        from models.client import Client
         return Client.get_by_id(self.client_id)
     
     def __str__(self):
         """Representación en string de la venta"""
         client_info = f"Cliente: {self.client_name}" if self.client_name else "Venta al contado"
-        return f"Venta #{self.id} - {client_info} - Total: ${self.total:,.2f} - Estado: {self.status}"
+        adjustment_info = ""
+        if self.has_adjustment():
+            if self.adjustment > 0:
+                adjustment_info = f" (+${self.adjustment:,.2f})"
+            else:
+                adjustment_info = f" (-${abs(self.adjustment):,.2f})"
+        return f"Venta #{self.id} - {client_info} - Total: ${self.total:,.2f}{adjustment_info} - Estado: {self.status}"
     
     def __repr__(self):
-        return f"Sale(id={self.id}, total={self.total}, status='{self.status}', client_id={self.client_id})"
+        return f"Sale(id={self.id}, total={self.total}, status='{self.status}', client_id={self.client_id}, adjustment={self.adjustment})"

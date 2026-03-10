@@ -30,6 +30,9 @@ class SalesWindow:
         self._typing_timer = None
         self._last_search = ""
         self._is_clicking = False
+        # AGREGAR ESTAS NUEVAS VARIABLES:
+        self.adjustment_var = tk.StringVar(value="0")
+        self.adjustment_reason_var = tk.StringVar()
                 
         # Crear notebook y frames para las pestañas
         self.notebook = ttk.Notebook(self.window)
@@ -46,25 +49,11 @@ class SalesWindow:
         self.setup_ui()
         self.load_data()
     
+    # REDISEÑO DE INTERFAZ DE VENTAS - SIN SCROLL
+# Reemplaza la función setup_ui() en sales_window.py
+
     def setup_ui(self):
-        # Frame contenedor principal para centrado
-        container = ttk.Frame(self.new_sale_frame)
-        container.pack(fill=tk.BOTH, expand=True, padx=50, pady=10)  # Ajusta padx para el margen
-        
-        # Configuración del scroll
-        canvas = tk.Canvas(container, bg='#f8f9fa', highlightthickness=0)
-        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        
-        # Frame scrollable
-        scrollable_frame = ttk.Frame(canvas, style='TFrame')
-        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        # Frame centrado para el contenido
-        centered_frame = ttk.Frame(scrollable_frame)
-        centered_frame.pack(expand=True, fill=tk.BOTH, padx=100)  # Ajusta padx para centrado
+        """Configura la interfaz optimizada - TODO EN UNA PANTALLA"""
         
         # Configurar estilos
         self.style = ttk.Style()
@@ -86,297 +75,306 @@ class SalesWindow:
         self.style.configure('Success.TButton', foreground='white', background=success_color)
         self.style.configure('Danger.TButton', foreground='white', background=danger_color)
         
-        # Contenido principal dentro del frame centrado
-        main_frame = ttk.Frame(centered_frame, padding="20")
+        # ═══════════════════════════════════════════════════════════
+        # DISEÑO EN 2 COLUMNAS: IZQUIERDA (productos) | DERECHA (info)
+        # ═══════════════════════════════════════════════════════════
+        
+        # Frame principal con padding reducido
+        main_frame = ttk.Frame(self.new_sale_frame, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Título
+        # ─────────────────────────────────────────────────────────────
+        # TÍTULO COMPACTO
+        # ─────────────────────────────────────────────────────────────
         title_frame = ttk.Frame(main_frame)
-        title_frame.pack(fill=tk.X, pady=(0, 20))
-        ttk.Label(title_frame, text="Registrar Nueva Venta", 
-                font=("Arial", 16, "bold"), foreground=accent_color).pack(side=tk.LEFT)
+        title_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(title_frame, text="📝 Nueva Venta", 
+                font=("Arial", 14, "bold"), foreground=accent_color).pack(side=tk.LEFT)
         
-        # SECCIÓN 1: AGREGAR PRODUCTOS
-        products_section = ttk.LabelFrame(main_frame, text=" Agregar Productos ", padding="15", style='TLabelframe')
-        products_section.pack(fill=tk.X, pady=(0, 15))
+        # ─────────────────────────────────────────────────────────────
+        # CONTENEDOR DE 2 COLUMNAS
+        # ─────────────────────────────────────────────────────────────
+        content_frame = ttk.Frame(main_frame)
+        content_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Controles de producto
-        product_controls = ttk.Frame(products_section)
-        product_controls.pack(fill=tk.X, pady=(0, 10))
+        # COLUMNA IZQUIERDA (60%) - Productos
+        left_column = ttk.Frame(content_frame)
+        left_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
-        # Producto
-        ttk.Label(product_controls, text="Producto:").grid(row=0, column=0, sticky=tk.W, pady=5, padx=(0, 5))
+        # COLUMNA DERECHA (40%) - Información de venta
+        right_column = ttk.Frame(content_frame)
+        right_column.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(5, 0))
+        
+        # ═══════════════════════════════════════════════════════════
+        # COLUMNA IZQUIERDA - AGREGAR PRODUCTOS
+        # ═══════════════════════════════════════════════════════════
+        
+        # ─── Sección: Buscar Producto ───
+        product_search_frame = ttk.LabelFrame(left_column, text=" 🔍 Buscar Producto ", padding="8")
+        product_search_frame.pack(fill=tk.X, pady=(0, 8))
+        
+        # Fila 1: Producto y Precio
+        row1 = ttk.Frame(product_search_frame)
+        row1.pack(fill=tk.X, pady=2)
+        
+        ttk.Label(row1, text="Producto:", width=10).pack(side=tk.LEFT)
         self.product_var = tk.StringVar()
         self.product_combo = ttk.Combobox(
-            product_controls, 
+            row1, 
             textvariable=self.product_var, 
             state="normal",
             width=25,
-            font=('Arial', 10)
+            font=('Arial', 9)
         )
-        #MPLAZA la sección donde se configuran los eventos del combobox (líneas ~132-136):
-        self.product_combo.grid(row=0, column=1, pady=5, padx=(0, 15))
-        # EVENTOS CORREGIDOS:
+        self.product_combo.pack(side=tk.LEFT, padx=5)
         self.product_combo.bind('<KeyRelease>', self._on_product_typing)
-        self.product_combo.bind('<<ComboboxSelected>>', self.on_product_selected)  # ¡IMPORTANTE!
+        self.product_combo.bind('<<ComboboxSelected>>', self.on_product_selected)
         self.product_combo.bind('<Button-1>', self._on_combo_click)
         self.product_combo.bind('<Return>', self._on_product_enter)
         self.product_combo.bind('<Tab>', self._on_product_tab)
-        self.product_combo.bind('<FocusOut>', self._on_product_focus_out)  # NUEVO
-
+        self.product_combo.bind('<FocusOut>', self._on_product_focus_out)
         
-        # Precio unitario
-        ttk.Label(product_controls, text="Precio:").grid(row=0, column=2, sticky=tk.W, pady=5, padx=(0, 5))
+        ttk.Label(row1, text="Precio:", width=6).pack(side=tk.LEFT, padx=(10, 0))
         self.unit_price_var = tk.StringVar()
-        ttk.Entry(
-            product_controls, 
-            textvariable=self.unit_price_var, 
-            state="readonly", 
-            width=12,
-            font=('Arial', 10),
-            justify=tk.RIGHT
-        ).grid(row=0, column=3, pady=5, padx=(0, 15))
+        ttk.Entry(row1, textvariable=self.unit_price_var, state="readonly", 
+                width=10, font=('Arial', 9), justify=tk.RIGHT).pack(side=tk.LEFT, padx=5)
         
-        # Stock disponible
-        ttk.Label(product_controls, text="Stock:").grid(row=0, column=4, sticky=tk.W, pady=5, padx=(0, 5))
+        ttk.Label(row1, text="Stock:", width=6).pack(side=tk.LEFT)
         self.stock_var = tk.StringVar()
-        ttk.Entry(
-            product_controls, 
-            textvariable=self.stock_var, 
-            state="readonly", 
-            width=8,
-            font=('Arial', 10),
-            justify=tk.RIGHT
-        ).grid(row=0, column=5, pady=5, padx=(0, 15))
+        ttk.Entry(row1, textvariable=self.stock_var, state="readonly", 
+                width=8, font=('Arial', 9), justify=tk.RIGHT).pack(side=tk.LEFT, padx=5)
         
-        # Segunda fila de controles - Diseño más limpio
-        product_controls2 = ttk.Frame(products_section)
-        product_controls2.pack(fill=tk.X, pady=(0, 10))
+        # Fila 2: Cantidad, Dinero, Subtotal
+        row2 = ttk.Frame(product_search_frame)
+        row2.pack(fill=tk.X, pady=2)
         
-        # Cantidad
-        ttk.Label(product_controls2, text="Cantidad:").grid(row=0, column=0, sticky=tk.W, pady=5, padx=(0, 5))
+        ttk.Label(row2, text="Cantidad:", width=10).pack(side=tk.LEFT)
         self.quantity_var = tk.StringVar()
-        quantity_entry = ttk.Entry(
-            product_controls2, 
+        self.quantity_entry = ttk.Entry(
+            row2, 
             textvariable=self.quantity_var, 
             width=10,
-            font=('Arial', 10),
+            font=('Arial', 9),
             justify=tk.RIGHT
         )
-        quantity_entry.grid(row=0, column=1, pady=5, padx=(0, 15))
-        quantity_entry.bind('<KeyRelease>', self.calculate_item_total)
+        self.quantity_entry.pack(side=tk.LEFT, padx=5)
+        self.quantity_entry.bind('<KeyRelease>', self.calculate_item_total)
         
-        # O Dinero
-        ttk.Label(product_controls2, text="O Dinero:").grid(row=0, column=2, sticky=tk.W, pady=5, padx=(0, 5))
+        ttk.Label(row2, text="O Dinero:", width=9).pack(side=tk.LEFT, padx=(10, 0))
         self.money_var = tk.StringVar()
-        money_entry = ttk.Entry(
-            product_controls2, 
+        self.money_entry = ttk.Entry(
+            row2, 
             textvariable=self.money_var, 
-            width=12,
-            font=('Arial', 10),
+            width=10,
+            font=('Arial', 9),
             justify=tk.RIGHT
         )
-        money_entry.grid(row=0, column=3, pady=5, padx=(0, 15))
-        money_entry.bind('<KeyRelease>', self.calculate_quantity_from_money)
+        self.money_entry.pack(side=tk.LEFT, padx=5)
+        self.money_entry.bind('<KeyRelease>', self.calculate_quantity_from_money)
         
-        # Subtotal
-        ttk.Label(product_controls2, text="Subtotal:").grid(row=0, column=4, sticky=tk.W, pady=5, padx=(0, 5))
+        ttk.Label(row2, text="Subtotal:", width=8).pack(side=tk.LEFT)
         self.subtotal_var = tk.StringVar()
-        ttk.Entry(
-            product_controls2, 
-            textvariable=self.subtotal_var, 
-            state="readonly", 
-            width=12,
-            font=('Arial', 10),
-            justify=tk.RIGHT
-        ).grid(row=0, column=5, pady=5, padx=(0, 15))
+        ttk.Entry(row2, textvariable=self.subtotal_var, state="readonly", 
+                width=10, font=('Arial', 9), justify=tk.RIGHT).pack(side=tk.LEFT, padx=5)
         
-        # Botón agregar producto con estilo
+        # Botón Agregar
         ttk.Button(
-            product_controls2, 
-            text="➕ Agregar", 
+            product_search_frame, 
+            text="➕ Agregar Producto", 
             command=self.add_product_to_sale,
             style='Success.TButton'
-        ).grid(row=0, column=6, pady=5, padx=(10, 0))
+        ).pack(pady=(5, 0))
         
-        # LISTA DE PRODUCTOS EN LA VENTA - Diseño mejorado
-        items_section = ttk.LabelFrame(
-            main_frame, 
-            text=" Productos en la Venta ",
-            padding="10",
-            style='TLabelframe'
-        )
-        items_section.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        # ─── Sección: Lista de Productos ───
+        items_frame = ttk.LabelFrame(left_column, text=" 🛒 Productos en la Venta ", padding="8")
+        items_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
         
-        # Treeview con estilo mejorado
-        style = ttk.Style()
-        style.configure("Treeview.Heading", font=('Arial', 10, 'bold'))
-        style.configure("Treeview", font=('Arial', 10), rowheight=25)
-        
-        columns = ('Producto', 'Cantidad', 'Precio Unit.', 'Subtotal')
+        # Treeview
+        columns = ('Producto', 'Cant.', 'P.Unit', 'Subtotal')
         self.items_tree = ttk.Treeview(
-            items_section, 
+            items_frame, 
             columns=columns, 
             show='headings',
-            style='Treeview'
+            height=8
         )
         
-        # Configurar columnas
-        for col in columns:
-            self.items_tree.heading(col, text=col)
-            if col == 'Cantidad':
-                self.items_tree.column(col, width=80, anchor=tk.E)
-            elif col in ['Precio Unit.', 'Subtotal']:
-                self.items_tree.column(col, width=100, anchor=tk.E)
-            else:
-                self.items_tree.column(col, width=200, anchor=tk.W)
+        # Configurar columnas más compactas
+        self.items_tree.heading('Producto', text='Producto')
+        self.items_tree.heading('Cant.', text='Cant.')
+        self.items_tree.heading('P.Unit', text='P.Unit')
+        self.items_tree.heading('Subtotal', text='Subtotal')
+        
+        self.items_tree.column('Producto', width=180, anchor=tk.W)
+        self.items_tree.column('Cant.', width=60, anchor=tk.E)
+        self.items_tree.column('P.Unit', width=80, anchor=tk.E)
+        self.items_tree.column('Subtotal', width=80, anchor=tk.E)
         
         # Scrollbar
-        items_scrollbar = ttk.Scrollbar(items_section, orient=tk.VERTICAL, command=self.items_tree.yview)
+        items_scrollbar = ttk.Scrollbar(items_frame, orient=tk.VERTICAL, command=self.items_tree.yview)
         self.items_tree.configure(yscrollcommand=items_scrollbar.set)
         
-        # Empaquetado
         self.items_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         items_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Botones de acción con nuevos estilos
-        items_buttons = ttk.Frame(items_section)
-        items_buttons.pack(fill=tk.X, pady=(10, 0))
+        # Botones de acciones
+        items_buttons = ttk.Frame(items_frame)
+        items_buttons.pack(fill=tk.X, pady=(5, 0))
         
-        ttk.Button(
-            items_buttons, 
-            text="🗑️ Eliminar", 
-            command=self.remove_product_from_sale,
-            style='Danger.TButton'
-        ).pack(side=tk.LEFT, padx=5)
+        ttk.Button(items_buttons, text="🗑️ Quitar", 
+                command=self.remove_product_from_sale,
+                style='Danger.TButton').pack(side=tk.LEFT, padx=2)
         
-        ttk.Button(
-            items_buttons, 
-            text="🧹 Limpiar", 
-            command=self.clear_sale_items,
-            style='Danger.TButton'
-        ).pack(side=tk.LEFT, padx=5)
+        ttk.Button(items_buttons, text="🧹 Limpiar Todo", 
+                command=self.clear_sale_items,
+                style='Danger.TButton').pack(side=tk.LEFT, padx=2)
         
-        # SECCIÓN 2: INFORMACIÓN DE LA VENTA - Diseño mejorado
-        sale_info_section = ttk.LabelFrame(
-            main_frame, 
-            text=" Información de la Venta ",
-            padding="15",
-            style='TLabelframe'
-        )
-        sale_info_section.pack(fill=tk.X, pady=(0, 15))
+        # ═══════════════════════════════════════════════════════════
+        # COLUMNA DERECHA - INFORMACIÓN DE VENTA
+        # ═══════════════════════════════════════════════════════════
         
-        # Grid mejor organizado
-        sale_info_frame = ttk.Frame(sale_info_section)
-        sale_info_frame.pack(fill=tk.X)
-        
-        # Total de la venta - Destacado
-        ttk.Label(
-            sale_info_frame, 
-            text="TOTAL VENTA:", 
-            font=("Arial", 12, "bold")
-        ).grid(row=0, column=0, sticky=tk.W, pady=5)
+        # ─── Total de la Venta (destacado) ───
+        total_frame = ttk.LabelFrame(right_column, text=" 💰 Total ", padding="10")
+        total_frame.pack(fill=tk.X, pady=(0, 10))
         
         self.total_sale_var = tk.StringVar(value="$0.00")
         ttk.Label(
-            sale_info_frame, 
+            total_frame, 
             textvariable=self.total_sale_var, 
-            font=("Arial", 12, "bold"), 
+            font=("Arial", 18, "bold"), 
             foreground=accent_color
-        ).grid(row=0, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        ).pack()
         
-        # Estado de pago - Mejor presentación
-        ttk.Label(sale_info_frame, text="Estado:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        # ─── Estado y Tipo de Pago ───
+        payment_frame = ttk.LabelFrame(right_column, text=" 💳 Forma de Pago ", padding="10")
+        payment_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Estado de pago
+        ttk.Label(payment_frame, text="Estado:", font=('Arial', 9, 'bold')).pack(anchor=tk.W, pady=(0, 5))
         self.status_var = tk.StringVar(value="paid")
         
-        status_frame = ttk.Frame(sale_info_frame)
-        status_frame.grid(row=1, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        status_buttons = ttk.Frame(payment_frame)
+        status_buttons.pack(fill=tk.X, pady=(0, 10))
         
         ttk.Radiobutton(
-            status_frame, 
-            text="💵 Pagado", 
+            status_buttons, 
+            text="💵 Al Contado", 
             variable=self.status_var, 
             value="paid", 
             command=self.on_status_changed
-        ).pack(side=tk.LEFT)
+        ).pack(side=tk.LEFT, padx=(0, 10))
         
         ttk.Radiobutton(
-            status_frame, 
+            status_buttons, 
             text="📝 Fiado", 
             variable=self.status_var, 
             value="pending", 
             command=self.on_status_changed
-        ).pack(side=tk.LEFT, padx=(15, 0))
+        ).pack(side=tk.LEFT)
         
-        # Cliente - Diseño más compacto
-        ttk.Label(sale_info_frame, text="Cliente:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        client_frame = ttk.Frame(sale_info_frame)
-        client_frame.grid(row=2, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        # Tipo de pago
+        ttk.Label(payment_frame, text="Tipo:", font=('Arial', 9, 'bold')).pack(anchor=tk.W, pady=(0, 5))
+        self.payment_type_var = tk.StringVar(value="cash")
+        payment_combo = ttk.Combobox(
+            payment_frame, 
+            textvariable=self.payment_type_var, 
+            width=18, 
+            state="readonly",
+            font=('Arial', 9)
+        )
+        payment_combo['values'] = ["Efectivo", "Crédito"]
+        payment_combo.pack(fill=tk.X)
+        
+        # ─── Cliente (para ventas fiadas) ───
+        client_frame = ttk.LabelFrame(right_column, text=" 👤 Cliente ", padding="10")
+        client_frame.pack(fill=tk.X, pady=(0, 10))
         
         self.client_var = tk.StringVar()
         self.client_combo = ttk.Combobox(
             client_frame, 
             textvariable=self.client_var, 
-            width=25, 
+            width=22, 
             state="disabled",
-            font=('Arial', 10)
+            font=('Arial', 9)
         )
-        self.client_combo.pack(side=tk.LEFT)
+        self.client_combo.pack(fill=tk.X, pady=(0, 5))
         
         self.add_client_btn = ttk.Button(
             client_frame, 
-            text="➕ Nuevo", 
+            text="➕ Nuevo Cliente", 
             command=self.add_new_client, 
             state="disabled",
             style='Success.TButton'
         )
-        self.add_client_btn.pack(side=tk.LEFT, padx=(10, 0))
+        self.add_client_btn.pack(fill=tk.X)
         
-        # Tipo de pago - Diseño mejorado
-        ttk.Label(sale_info_frame, text="Tipo de Pago:").grid(row=3, column=0, sticky=tk.W, pady=5)
-        payment_frame = ttk.Frame(sale_info_frame)
-        payment_frame.grid(row=3, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        # ─── Ajustes (solo ventas fiadas) ───
+        adjustment_frame = ttk.LabelFrame(right_column, text=" ⚖️ Ajustes ", padding="10")
+        adjustment_frame.pack(fill=tk.X, pady=(0, 10))
         
-        self.payment_type_var = tk.StringVar(value="cash")
-        payment_type_combo = ttk.Combobox(
-            payment_frame, 
-            textvariable=self.payment_type_var, 
-            width=15, 
-            state="readonly",
-            font=('Arial', 10)
+        # Ajuste numérico
+        adj_row1 = ttk.Frame(adjustment_frame)
+        adj_row1.pack(fill=tk.X, pady=(0, 5))
+        
+        ttk.Label(adj_row1, text="Monto:", font=('Arial', 9)).pack(side=tk.LEFT)
+        self.adjustment_var = tk.StringVar(value="0")
+        self.adjustment_entry = ttk.Entry(
+            adj_row1, 
+            textvariable=self.adjustment_var, 
+            width=12,
+            font=('Arial', 9),
+            justify=tk.RIGHT,
+            state="disabled"
         )
-        payment_type_combo['values'] = ["Efectivo", "Crédito"]
-        payment_type_combo.pack(side=tk.LEFT)
+        self.adjustment_entry.pack(side=tk.LEFT, padx=(5, 0))
+        self.adjustment_entry.bind('<KeyRelease>', self.calculate_total_with_adjustment)
         
-        # BOTONES FINALES - Diseño destacado
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(pady=(20, 10))
+        ttk.Label(
+            adj_row1, 
+            text="(+/-)",
+            font=('Arial', 8),
+            foreground='gray'
+        ).pack(side=tk.LEFT, padx=(5, 0))
+        
+        # Razón del ajuste
+        ttk.Label(adjustment_frame, text="Razón:", font=('Arial', 9)).pack(anchor=tk.W, pady=(0, 2))
+        self.adjustment_reason_var = tk.StringVar()
+        self.adjustment_reason_entry = ttk.Entry(
+            adjustment_frame,
+            textvariable=self.adjustment_reason_var,
+            font=('Arial', 9),
+            state="disabled"
+        )
+        self.adjustment_reason_entry.pack(fill=tk.X)
+        
+        # ─── Botones de Acción ───
+        action_frame = ttk.Frame(right_column)
+        action_frame.pack(fill=tk.X, pady=(10, 0))
         
         ttk.Button(
-            button_frame, 
+            action_frame, 
             text="💾 Guardar Venta", 
             command=self.save_complete_sale, 
-            style='Accent.TButton',
-            padding=10
-        ).pack(side=tk.LEFT, padx=10)
+            style='Accent.TButton'
+        ).pack(fill=tk.X, pady=(0, 5))
         
         ttk.Button(
-            button_frame, 
+            action_frame, 
             text="🗑️ Limpiar Todo", 
             command=self.clear_all_form,
-            style='Danger.TButton',
-            padding=10
-        ).pack(side=tk.LEFT, padx=10)
+            style='Danger.TButton'
+        ).pack(fill=tk.X)
         
-       # Configurar scrollbars
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # Configurar pestaña de lista de ventas
+        # ═══════════════════════════════════════════════════════════
+        # CONFIGURAR PESTAÑA DE LISTA DE VENTAS
+        # ═══════════════════════════════════════════════════════════
         self.setup_sales_list_ui()
         
-        # Ajustar focus
+        # Ajustar focus inicial
         self.product_combo.focus_set()
+
+
+    # NOTA: Esta función reemplaza completamente tu setup_ui() actual
+    # El resto de funciones (load_data, add_product_to_sale, etc.) permanecen igual
     
     def setup_sales_list_ui(self):
         """Configura la UI para lista de ventas"""
@@ -408,15 +406,15 @@ class SalesWindow:
                   command=self.delete_sale).pack(side=tk.LEFT, padx=5)
         
         # Treeview para mostrar ventas
-        columns = ('ID', 'Cliente', 'Total', 'Estado', 'Tipo Pago', 'Fecha')
+        columns = ('ID', 'Cliente', 'Subtotal', 'Ajuste', 'Total', 'Estado', 'Tipo Pago', 'Fecha')
         self.sales_tree = ttk.Treeview(main_frame, columns=columns, show='headings')
-        
+
         # Configurar columnas
         for col in columns:
             self.sales_tree.heading(col, text=col)
             if col == 'ID':
                 self.sales_tree.column(col, width=50)
-            elif col == 'Total':
+            elif col in ['Subtotal', 'Ajuste', 'Total']:
                 self.sales_tree.column(col, width=100)
             elif col in ['Estado', 'Tipo Pago']:
                 self.sales_tree.column(col, width=100)
@@ -572,7 +570,8 @@ class SalesWindow:
         self._verify_and_load_product()
         # Enfocar el campo de cantidad si hay un producto válido seleccionado
         if self.unit_price_var.get() and self.stock_var.get():
-            self.quantity_var.focus_set() if hasattr(self, 'quantity_var') else None
+            if self.unit_price_var.get() and self.stock_var.get():
+                self.quantity_entry.focus_set()
         return 'break'  # Evitar que se propague el evento
 
 
@@ -862,9 +861,8 @@ class SalesWindow:
             ))
     
     def calculate_total_sale(self):
-        """Calcula el total de la venta"""
-        total = sum(item['subtotal'] for item in self.sale_items)
-        self.total_sale_var.set(format_currency(total))
+        """Calcula el total de la venta - AHORA LLAMA A LA FUNCIÓN CON AJUSTE"""
+        self.calculate_total_with_adjustment()
     
     def clear_product_fields(self):
         """Limpia los campos de producto - VERSIÓN ACTUALIZADA"""
@@ -879,17 +877,51 @@ class SalesWindow:
         self._update_combo_values(available_products)
         
     def on_status_changed(self):
-        """Maneja el cambio de estado de pago - CORREGIDO"""
+        """Maneja el cambio de estado de pago - ACTUALIZADO CON AJUSTES"""
         if self.status_var.get() == "pending":
-            # FIADO - Requiere cliente
+            # FIADO - Requiere cliente y permite ajustes
             self.client_combo.configure(state="readonly")
             self.add_client_btn.configure(state="normal")
+            self.adjustment_entry.configure(state="normal")
+            self.adjustment_reason_entry.configure(state="normal")
         else:
-            # AL CONTADO - No requiere cliente
+            # AL CONTADO - No requiere cliente ni ajustes
             self.client_combo.configure(state="disabled")
             self.add_client_btn.configure(state="disabled")
-            self.client_var.set("")  # Limpiar cliente seleccionado
+            self.adjustment_entry.configure(state="disabled")
+            self.adjustment_reason_entry.configure(state="disabled")
+            self.client_var.set("")
+            self.adjustment_var.set("0")
+            self.adjustment_reason_var.set("")
+        
+        # Recalcular total con ajuste
+        self.calculate_total_with_adjustment()
     
+    def calculate_total_with_adjustment(self, event=None):
+        """Calcula el total de la venta incluyendo ajustes"""
+        # Calcular subtotal de productos
+        subtotal = sum(item['subtotal'] for item in self.sale_items)
+        
+        # Obtener ajuste
+        try:
+            adjustment = safe_float_conversion(self.adjustment_var.get() or 0)
+        except:
+            adjustment = 0.0
+        
+        # Calcular total final
+        total = subtotal + adjustment
+        
+        # Formatear y mostrar
+        self.total_sale_var.set(format_currency(total))
+        
+        # Actualizar color del total según el ajuste
+        if adjustment > 0:
+            # Cargo adicional - color naranja
+            pass  # Puedes agregar estilo si quieres
+        elif adjustment < 0:
+            # Descuento - color verde
+            pass  # Puedes agregar estilo si quieres
+
     def add_new_client(self):
         """Abre diálogo para agregar nuevo cliente"""
         dialog = tk.Toplevel(self.window)
@@ -968,20 +1000,36 @@ class SalesWindow:
                 client_id = client.id
                 client_name = client.name
 
-            # Calcular total de la venta
-            total = sum(item['subtotal'] for item in self.sale_items)
+            # Calcular subtotal de productos
+            subtotal = sum(item['subtotal'] for item in self.sale_items)
+            
+            # Obtener ajuste
+            adjustment = 0.0
+            adjustment_reason = None
+            if self.status_var.get() == 'pending':
+                try:
+                    adjustment = safe_float_conversion(self.adjustment_var.get() or 0)
+                    adjustment_reason = self.adjustment_reason_var.get().strip() or None
+                except:
+                    adjustment = 0.0
+            
+            # Calcular total final
+            total = subtotal + adjustment
+            
             status = self.status_var.get()
             payment_method = 'credit' if status == 'pending' else 'cash'
 
-            # 1. Insertar la venta
+            # 1. Insertar la venta CON AJUSTE
             cursor.execute('''
-                INSERT INTO sales (client_id, total, status, payment_method, created_at, user_id)
-                VALUES (?, ?, ?, ?, datetime('now', 'localtime'), ?)
-            ''', (client_id, total, status, payment_method, self.user.id))
+                INSERT INTO sales (client_id, total, status, payment_method, adjustment, 
+                                adjustment_reason, created_at, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), ?)
+            ''', (client_id, total, status, payment_method, adjustment, 
+                adjustment_reason, self.user.id))
             
             sale_id = cursor.lastrowid
 
-            # 2. Insertar detalles de venta
+            # 2. Insertar detalles de venta (sin cambios)
             for item in self.sale_items:
                 product = next((p for p in self.products if p.id == item['product_id']), None)
                 if not product:
@@ -1008,7 +1056,7 @@ class SalesWindow:
 
             # 3. ACTUALIZAR DEUDA DEL CLIENTE SI ES VENTA FIADA
             if status == 'pending' and client_id:
-                # Actualizar deuda total del cliente
+                # Actualizar deuda total del cliente (con el total que incluye ajuste)
                 cursor.execute('''
                     UPDATE clients 
                     SET total_debt = total_debt + ?
@@ -1016,6 +1064,16 @@ class SalesWindow:
                 ''', (total, client_id))
 
                 # Registrar transacción de deuda
+                description = f"Venta fiada #{sale_id}"
+                if adjustment != 0:
+                    if adjustment > 0:
+                        description += f" (+ cargo: ${adjustment:,.2f})"
+                    else:
+                        description += f" (descuento: ${abs(adjustment):,.2f})"
+                
+                if adjustment_reason:
+                    description += f" - {adjustment_reason}"
+                
                 cursor.execute('''
                     INSERT INTO client_transactions 
                     (client_id, transaction_type, amount, description, sale_id, created_at)
@@ -1023,14 +1081,23 @@ class SalesWindow:
                 ''', (
                     client_id,
                     total,
-                    f"Venta fiada #{sale_id}",
+                    description,
                     sale_id
                 ))
 
             conn.commit()
-            messagebox.showinfo("Éxito", f"Venta #{sale_id} guardada correctamente")
+            
+            # Mensaje de éxito con información del ajuste
+            success_msg = f"Venta #{sale_id} guardada correctamente"
+            if adjustment != 0:
+                if adjustment > 0:
+                    success_msg += f"\n(Cargo adicional: ${adjustment:,.2f})"
+                else:
+                    success_msg += f"\n(Descuento aplicado: ${abs(adjustment):,.2f})"
+            
+            messagebox.showinfo("Éxito", success_msg)
             self.clear_all_form()
-            self.load_data()  # Actualizar todas las vistas
+            self.load_data()
 
         except Exception as e:
             if conn:
@@ -1041,16 +1108,18 @@ class SalesWindow:
                 conn.close()
     
     def clear_all_form(self):
-        """Limpia todo el formulario - MEJORADO"""
+        """Limpia todo el formulario - MEJORADO CON AJUSTES"""
         self.clear_product_fields()
         self.sale_items.clear()
         self.update_items_tree()
         self.total_sale_var.set("$0.00")
         
         # RESETEAR A VALORES POR DEFECTO
-        self.status_var.set("paid")  # Por defecto AL CONTADO
+        self.status_var.set("paid")
         self.client_var.set("")
         self.payment_type_var.set("cash")
+        self.adjustment_var.set("0")          # NUEVO
+        self.adjustment_reason_var.set("")    # NUEVO
         
         # Actualizar estado de controles
         self.on_status_changed()
@@ -1096,7 +1165,20 @@ class SalesWindow:
             ttk.Label(info_frame, text=f"Estado: {'Pagado' if sale.status == 'paid' else 'Pendiente'}").pack(anchor=tk.W)
             ttk.Label(info_frame, text=f"Tipo de Pago: {'Efectivo' if sale.payment_method == 'cash' else 'Crédito'}").pack(anchor=tk.W)
             ttk.Label(info_frame, text=f"Total: {format_currency(sale.total)}", font=("Arial", 12, "bold")).pack(anchor=tk.W)
-            
+            # En la sección de información general, después del Total:
+            if hasattr(sale, 'adjustment') and sale.adjustment and sale.adjustment != 0:
+                adjustment_text = f"Ajuste: "
+                if sale.adjustment > 0:
+                    adjustment_text += f"+${abs(sale.adjustment):,.2f}"
+                else:
+                    adjustment_text += f"-${abs(sale.adjustment):,.2f}"
+                
+                ttk.Label(info_frame, text=adjustment_text, 
+                        foreground='orange' if sale.adjustment > 0 else 'green').pack(anchor=tk.W)
+                
+                if hasattr(sale, 'adjustment_reason') and sale.adjustment_reason:
+                    ttk.Label(info_frame, text=f"Razón: {sale.adjustment_reason}").pack(anchor=tk.W)
+
             # Productos
             products_frame = ttk.LabelFrame(main_frame, text="Productos Vendidos", padding=10)
             products_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
@@ -1330,25 +1412,30 @@ class SalesWindow:
             messagebox.showerror("Error", f"Error inesperado: {str(e)}")
     
     def update_sales_tree(self):
-        """Muestra las ventas asegurando que las fiadas tengan cliente"""
+        """Muestra las ventas con información de ajustes"""
         for item in self.sales_tree.get_children():
             self.sales_tree.delete(item)
         
         for sale in self.sales:
-            # Obtener nombre del cliente si existe
+            # Obtener nombre del cliente
             client_name = "Venta al contado"
             if sale.client_id:
                 client = next((c for c in self.clients if c.id == sale.client_id), None)
                 client_name = client.name if client else "Cliente no encontrado"
             
-            # Validación estricta para ventas fiadas
+            # Validación para ventas fiadas
             if sale.status == 'pending' and client_name == "Venta al contado":
-                client_name = "CLIENTE FALTANTE"  # Mensaje claro de error
-                print(f"¡Alerta! Venta fiada sin cliente (ID: {sale.id})")
+                client_name = "CLIENTE FALTANTE"
+            
+            # Calcular subtotal y ajuste
+            adjustment = getattr(sale, 'adjustment', 0) or 0
+            subtotal = sale.total - adjustment
             
             self.sales_tree.insert('', tk.END, values=(
                 sale.id,
                 client_name,
+                format_currency(subtotal),
+                format_currency(adjustment),
                 format_currency(sale.total),
                 "PENDIENTE" if sale.status == 'pending' else "PAGADO",
                 "Crédito" if sale.status == 'pending' else "Efectivo",
