@@ -74,14 +74,16 @@ class MainWindow:
         buttons = [
             ("💰 VENTAS", self.open_sales),
             ("👥 CLIENTES", self.open_clients),
-            ("📦 INVENTARIO", self.open_inventory)
+            ("📦 INVENTARIO", self.open_inventory),
+            ("💵 CAJA DEL DÍA", self.open_cash_register)
         ]
         
         if self.user.role == 'admin':
             buttons.extend([
                 ("🛒 COMPRAS", self.open_purchases),
                 ("📉 PÉRDIDAS", self.open_losses),
-                ("⚙️ USUARIOS", self.open_users)
+                ("⚙️ USUARIOS", self.open_users),
+                ("💸 GASTOS OPERATIVOS", self.open_expenses)
             ])
         
         for text, command in buttons:
@@ -316,3 +318,11 @@ class MainWindow:
         else:
             messagebox.showwarning("Acceso Denegado", 
                                 "Solo los administradores pueden acceder a este módulo.")
+            
+    def open_cash_register(self):
+        """Abre el módulo de caja del día"""
+        try:
+            from views.cash_register_window import CashRegisterWindow
+            CashRegisterWindow(self.parent, self.user)
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo abrir caja: {e}")
