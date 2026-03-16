@@ -16,7 +16,10 @@ class MainWindow:
         
         # Configurar ventana principal
         self.parent.title(f"Sistema de Gestión - {user.username} ({user.role})")
-        self.parent.geometry("900x700")
+        x = (self.parent.winfo_screenwidth() - 900) // 2
+        y = (self.parent.winfo_screenheight() - 820) // 2
+        self.parent.geometry(f"900x820+{x}+{y}")
+
         
         # Centrar ventana
         self.center_window()
@@ -30,8 +33,8 @@ class MainWindow:
         """Centra la ventana en la pantalla"""
         self.parent.update_idletasks()
         x = (self.parent.winfo_screenwidth() - 900) // 2
-        y = (self.parent.winfo_screenheight() - 700) // 2
-        self.parent.geometry(f"900x700+{x}+{y}")
+        y = (self.parent.winfo_screenheight() - 820) // 2
+        self.parent.geometry(f"900x820+{x}+{y}")
     
     def setup_ui(self):
         """Configura la interfaz de usuario"""
@@ -140,21 +143,22 @@ class MainWindow:
         help_menu.add_command(label="Acerca de", command=self.show_about)
 
     def logout(self):
-        """Cierra la sesión actual y muestra la ventana de login"""
-        if messagebox.askyesno("Cerrar Sesión", "¿Está seguro que desea cerrar sesión?"):
-            # Ocultar ventana principal
-            self.parent.withdraw()
-            
-            # Limpiar cualquier dato de sesión si es necesario
-            self.user = None
-            
-            # Destruir todos los widgets hijos de la ventana principal
-            for widget in self.parent.winfo_children():
-                widget.destroy()
-            
-            # Mostrar ventana de login nuevamente
-            from views.login_window import LoginWindow
-            LoginWindow(self.parent)
+        from models.user import User
+        users = User.get_all()
+        
+        if len(users) == 1:
+            # Un solo usuario: cerrar sesión = cerrar app
+            if messagebox.askyesno("Salir", "¿Está seguro que desea salir del sistema?"):
+                self.parent.quit()
+        else:
+            # Varios usuarios: volver al login
+            if messagebox.askyesno("Cerrar Sesión", "¿Está seguro que desea cerrar sesión?"):
+                self.parent.withdraw()
+                self.user = None
+                for widget in self.parent.winfo_children():
+                    widget.destroy()
+                from views.login_window import LoginWindow
+                LoginWindow(self.parent)
     
     def on_closing(self):
         """Maneja el cierre de la ventana"""
