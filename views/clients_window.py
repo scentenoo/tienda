@@ -4,6 +4,7 @@ from models.client import Client
 from config.database import get_connection
 import sqlite3
 from config.database import sync_client_sales_status_on_payment
+from views.sale_detail_window import SaleDetailWindow
 
 class ClientsWindow:
     def __init__(self, parent, user, main_window=None):
@@ -1880,6 +1881,28 @@ class ClientHistoryWindow:
         """Cierra la ventana del historial del cliente"""
         self.window.destroy()
 
+    def _on_history_row_double_click(self, event=None):
+        """Doble clic sobre una fila del historial: abre el detalle de la venta"""
+        self.view_selected_sale_detail()
+
+    def view_selected_sale_detail(self):
+        """Abre el detalle de la venta asociada a la fila seleccionada"""
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showinfo("Información", "Seleccione una fila del historial primero")
+            return
+
+        sale_id = self.row_sale_map.get(selected[0])
+        if not sale_id:
+            messagebox.showinfo(
+                "Sin venta asociada",
+                "Esta fila del historial no corresponde a una venta "
+                "(por ejemplo, es un pago o un ajuste sin venta asociada)."
+            )
+            return
+
+        SaleDetailWindow(self.window, sale_id)
+
     def on_closing(self):
         """Maneja el evento de cerrar la ventana"""
         self.window.destroy()
@@ -1942,10 +1965,25 @@ class ClientHistoryWindow:
         self.tree.tag_configure('deuda', background='#ffdddd', foreground='black')  # Rojo claro
         self.tree.tag_configure('pago', background='#ddffdd', foreground='black')   # Verde claro
 
+        # Mapa fila -> sale_id, para poder abrir el detalle de la venta
+        # directamente desde el historial (sin tener que ir a buscarla
+        # manualmente a la lista de ventas).
+        self.row_sale_map = {}
+
+        # Doble clic sobre una fila con venta asociada = ver detalle
+        self.tree.bind('<Double-1>', self._on_history_row_double_click)
+
         # Frame para botones
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=(15, 0))
         
+        # Botón para ver el detalle de la venta seleccionada
+        ttk.Button(
+            button_frame,
+            text="🧾 Ver Detalle de Venta",
+            command=self.view_selected_sale_detail
+        ).pack(side=tk.LEFT)
+
         # Botón de cerrar
         ttk.Button(
             button_frame, 
@@ -1979,6 +2017,7 @@ class ClientHistoryWindow:
             ''', (self.selected_client.id,))
 
             self.tree.delete(*self.tree.get_children())
+            self.row_sale_map = {}
             self.configure_tree_styles()
 
             for row in cursor.fetchall():
@@ -2036,7 +2075,7 @@ class ClientHistoryWindow:
             # CORRECCIÓN: Mostrar fecha completa con segundos
             fecha_display = fecha_completa  # Ya incluye segundos del SELECT
             
-            self.tree.insert('', 'end',
+            item_id = self.tree.insert('', 'end',
                 values=(
                     fecha_display,
                     tipo_display,
@@ -2045,6 +2084,11 @@ class ClientHistoryWindow:
                 ),
                 tags=(tag,)
             )
+
+            # Registrar la venta asociada (si existe) para poder abrir su
+            # detalle directamente desde esta ventana de historial.
+            if sale_id:
+                self.row_sale_map[item_id] = sale_id
         except Exception as e:
             print(f"Error al procesar transacción: {e}")
             self.tree.insert('', 'end',

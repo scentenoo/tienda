@@ -10,6 +10,7 @@ from utils.formatters import format_number, format_currency
 from utils.validators import safe_float_conversion
 
 from config.database import get_connection
+from views.sale_detail_window import SaleDetailWindow
 
 class SalesWindow:
     def __init__(self, parent, user):
@@ -297,6 +298,23 @@ class SalesWindow:
             font=('Arial', 9)
         )
         self.client_combo.pack(fill=tk.X, pady=(0, 5))
+
+        # Búsqueda incremental: al escribir se filtra la lista de clientes,
+        # en lugar de tener que deslizar el combo completo para encontrarlo.
+        self._client_typing_timer = None
+        self._last_client_search = None
+        self.client_combo.bind('<KeyRelease>', self._on_client_typing)
+        self.client_combo.bind('<Return>', self._on_client_enter)
+        self.client_combo.bind('<Tab>', lambda e: self._verify_and_set_client())
+        self.client_combo.bind('<FocusOut>', lambda e: self._verify_and_set_client())
+        self.client_combo.bind('<Button-1>', self._on_client_combo_click)
+
+        ttk.Label(
+            client_frame,
+            text="Escriba para buscar por nombre",
+            font=('Arial', 8),
+            foreground='gray'
+        ).pack(anchor=tk.W)
         
         self.add_client_btn = ttk.Button(
             client_frame, 
@@ -424,13 +442,17 @@ class SalesWindow:
         # Scrollbar
         v_scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.sales_tree.yview)
         self.sales_tree.configure(yscrollcommand=v_scrollbar.set)
-        
-        # Frame para treeview y scrollbars
-        tree_frame = ttk.Frame(main_frame)
-        tree_frame.pack(fill=tk.BOTH, expand=True)
-        
+
+        # NOTA: antes existía aquí un Frame vacío ("tree_frame") empaquetado con
+        # fill=BOTH, expand=True por encima de la tabla. Al no contener nada,
+        # ese frame igual reclamaba espacio vertical disponible y empujaba la
+        # tabla hacia abajo, dejando el hueco entre los botones y la lista.
+        # Se elimina y la tabla/scrollbar se empacan directamente en main_frame.
         self.sales_tree.pack(fill=tk.BOTH, expand=True)
         v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Doble clic sobre una venta = ver el detalle directamente
+        self.sales_tree.bind('<Double-1>', lambda e: self.view_sale_details())
 
     def _on_product_typing(self, event=None):
         """Maneja la escritura en el campo de producto SIN interferencias"""
@@ -578,6 +600,71 @@ class SalesWindow:
     def _on_product_tab(self, event=None):
         """Maneja Tab en el campo de producto"""
         self._verify_and_load_product()
+
+    # ─────────────────────────────────────────────────────────────
+    # Búsqueda incremental de cliente (venta fiada)
+    # ─────────────────────────────────────────────────────────────
+    def _on_client_typing(self, event=None):
+        """Programa el filtrado de clientes mientras se escribe"""
+        if event is not None and event.keysym in ('Tab', 'Return', 'Escape'):
+            return
+        if self._client_typing_timer:
+            self.window.after_cancel(self._client_typing_timer)
+        self._client_typing_timer = self.window.after(250, self._perform_client_filtering)
+
+    def _perform_client_filtering(self):
+        """Filtra la lista del combo de clientes según el texto escrito"""
+        search_text = self.client_var.get().lower().strip()
+        if search_text == self._last_client_search:
+            return
+        self._last_client_search = search_text
+
+        if not search_text:
+            self.client_combo['values'] = [c.name for c in self.clients]
+            return
+
+        filtered = [c.name for c in self.clients if search_text in c.name.lower()]
+        self.client_combo['values'] = filtered
+
+        # Mostrar la lista filtrada automáticamente para que sea evidente
+        # que se está buscando (en vez de escribir "a ciegas")
+        try:
+            self.client_combo.event_generate('<Down>')
+        except Exception:
+            pass
+
+    def _on_client_combo_click(self, event=None):
+        """Si el campo está vacío, mostrar todos los clientes al hacer clic"""
+        if not self.client_var.get().strip():
+            self.client_combo['values'] = [c.name for c in self.clients]
+
+    def _on_client_enter(self, event=None):
+        """Maneja Enter en el campo de cliente"""
+        self._verify_and_set_client()
+        return 'break'
+
+    def _verify_and_set_client(self):
+        """
+        Verifica que el texto escrito corresponda a un cliente real.
+        Si hay una única coincidencia clara, autocompleta el nombre exacto.
+        """
+        typed = self.client_var.get().strip()
+        if not typed:
+            return
+
+        # Coincidencia exacta (sin importar mayúsculas/minúsculas)
+        for client in self.clients:
+            if client.name.lower() == typed.lower():
+                self.client_var.set(client.name)
+                return
+
+        # Coincidencia única por contención de texto -> autocompletar
+        matches = [c for c in self.clients if typed.lower() in c.name.lower()]
+        if len(matches) == 1:
+            self.client_var.set(matches[0].name)
+        # Si hay varias coincidencias o ninguna, se deja el texto tal cual
+        # para que el usuario siga afinando la búsqueda; la validación final
+        # de "cliente existente" ocurre al guardar la venta.
 
     def debug_products(self):
         """Método de debug para verificar productos cargados"""
@@ -880,7 +967,8 @@ class SalesWindow:
         """Maneja el cambio de estado de pago - ACTUALIZADO CON AJUSTES"""
         if self.status_var.get() == "pending":
             # FIADO - Requiere cliente y permite ajustes
-            self.client_combo.configure(state="readonly")
+            # "normal" (en vez de "readonly") para poder escribir y filtrar
+            self.client_combo.configure(state="normal")
             self.add_client_btn.configure(state="normal")
             self.adjustment_entry.configure(state="normal")
             self.adjustment_reason_entry.configure(state="normal")
@@ -981,8 +1069,16 @@ class SalesWindow:
 
         # Validación estricta para ventas fiadas
         if self.status_var.get() == 'pending':
+            self._verify_and_set_client()  # último intento de autocompletar por nombre
             if not self.client_var.get() or self.client_var.get() == "Sin cliente":
                 messagebox.showerror("Error", "Debe seleccionar un cliente válido para ventas fiadas")
+                return
+            if not any(c.name == self.client_var.get() for c in self.clients):
+                messagebox.showerror(
+                    "Error",
+                    f"'{self.client_var.get()}' no coincide con ningún cliente registrado.\n"
+                    "Verifique el nombre o cree el cliente con '➕ Nuevo Cliente'."
+                )
                 return
 
         conn = None
@@ -1124,112 +1220,18 @@ class SalesWindow:
         # Actualizar estado de controles
         self.on_status_changed()
     
+
+    
     def view_sale_details(self):
-        """Ver detalles completos de una venta"""
+        """Ver detalles completos de una venta seleccionada en la lista"""
         selected = self.sales_tree.selection()
         if not selected:
             messagebox.showwarning("Advertencia", "Por favor seleccione una venta para ver detalles")
             return
-        
-        try:
-            sale_id = self.sales_tree.item(selected[0], 'values')[0]
-            
-            # Buscar la venta
-            sale = None
-            for s in self.sales:
-                if str(s.id) == str(sale_id):
-                    sale = s
-                    break
-            
-            if not sale:
-                messagebox.showerror("Error", "No se encontró la venta seleccionada")
-                return
-            
-            # Crear ventana de detalles
-            details_window = tk.Toplevel(self.window)
-            details_window.title(f"Detalles de Venta #{sale.id}")
-            details_window.geometry("600x500")
-            details_window.resizable(True, True)
-            
-            # Frame principal
-            main_frame = ttk.Frame(details_window, padding=20)
-            main_frame.pack(fill=tk.BOTH, expand=True)
-            
-            # Información general
-            info_frame = ttk.LabelFrame(main_frame, text="Información General", padding=10)
-            info_frame.pack(fill=tk.X, pady=(0, 15))
-            
-            ttk.Label(info_frame, text=f"Venta ID: {sale.id}", font=("Arial", 12, "bold")).pack(anchor=tk.W)
-            ttk.Label(info_frame, text=f"Fecha: {sale.created_at}").pack(anchor=tk.W)
-            ttk.Label(info_frame, text=f"Cliente: {sale.client_name if sale.client_name else 'Venta al contado'}").pack(anchor=tk.W)
-            ttk.Label(info_frame, text=f"Estado: {'Pagado' if sale.status == 'paid' else 'Pendiente'}").pack(anchor=tk.W)
-            ttk.Label(info_frame, text=f"Tipo de Pago: {'Efectivo' if sale.payment_method == 'cash' else 'Crédito'}").pack(anchor=tk.W)
-            ttk.Label(info_frame, text=f"Total: {format_currency(sale.total)}", font=("Arial", 12, "bold")).pack(anchor=tk.W)
-            # En la sección de información general, después del Total:
-            if hasattr(sale, 'adjustment') and sale.adjustment and sale.adjustment != 0:
-                adjustment_text = f"Ajuste: "
-                if sale.adjustment > 0:
-                    adjustment_text += f"+${abs(sale.adjustment):,.2f}"
-                else:
-                    adjustment_text += f"-${abs(sale.adjustment):,.2f}"
-                
-                ttk.Label(info_frame, text=adjustment_text, 
-                        foreground='orange' if sale.adjustment > 0 else 'green').pack(anchor=tk.W)
-                
-                if hasattr(sale, 'adjustment_reason') and sale.adjustment_reason:
-                    ttk.Label(info_frame, text=f"Razón: {sale.adjustment_reason}").pack(anchor=tk.W)
 
-            # Productos
-            products_frame = ttk.LabelFrame(main_frame, text="Productos Vendidos", padding=10)
-            products_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
-            
-            # Treeview para productos
-            columns = ('Producto', 'Cantidad', 'Precio Unit.', 'Subtotal')
-            details_tree = ttk.Treeview(products_frame, columns=columns, show='headings')
-            
-            for col in columns:
-                details_tree.heading(col, text=col)
-                if col == 'Cantidad':
-                    details_tree.column(col, width=100)
-                elif col in ['Precio Unit.', 'Subtotal']:
-                    details_tree.column(col, width=120)
-                else:
-                    details_tree.column(col, width=150)
-            
-            # Scrollbar
-            details_scrollbar = ttk.Scrollbar(products_frame, orient=tk.VERTICAL, command=details_tree.yview)
-            details_tree.configure(yscrollcommand=details_scrollbar.set)
-            
-            details_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-            details_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-            
-            # Cargar detalles de la venta
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT sd.*, p.name as product_name 
-                FROM sale_details sd
-                JOIN products p ON sd.product_id = p.id
-                WHERE sd.sale_id = ?
-            ''', (sale.id,))
-            
-            details = cursor.fetchall()
-            conn.close()
-            
-            for detail in details:
-                details_tree.insert('', tk.END, values=(
-                    detail['product_name'],
-                    format_number(detail['quantity']),
-                    format_currency(detail['unit_price']),
-                    format_currency(detail['subtotal'])
-                ))
-            
-            # Botón cerrar
-            ttk.Button(main_frame, text="Cerrar", command=details_window.destroy).pack(pady=10)
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al mostrar detalles: {str(e)}")
-    
+        sale_id = self.sales_tree.item(selected[0], 'values')[0]
+        SaleDetailWindow(self.window, sale_id)
+
     def edit_sale(self):
         """Editar venta - SIMPLIFICADO"""
         selected = self.sales_tree.selection()
