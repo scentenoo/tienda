@@ -4,8 +4,14 @@ build/
 *.spec
 *.exe
 
-# Base de datos local
-data/*.db
+# Base de datos (cualquier copia, en cualquier carpeta)
+*.db
+*.db-journal
+
+# Entornos virtuales
+.venv/
+venv/
+env/
 
 # Python
 __pycache__/
