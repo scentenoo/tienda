@@ -1276,67 +1276,72 @@ class PurchasesWindow:
             messagebox.showerror("Error", "Por favor ingrese valores numéricos válidos")
     
     def save_batch(self):
-        """Guarda todo el lote de compras con IVA distribuido correctamente"""
+        """Guarda todo el lote de compras. El flete total se registra UNA sola vez
+        en el primer ítem del lote. Todos los ítems comparten el mismo lote_id."""
         if not self.current_batch:
             messagebox.showwarning("Advertencia", "No hay artículos en el lote")
             return
         
-        # Calcular totales primero
         self.calculate_batch_total()
         
         try:
-            # OBTENER VALORES TOTALES
             freight_total = float(self.freight_var.get() or 0)
             tax_total = float(self.tax_var.get() or 0)
-            
-            # DISTRIBUIR POR PRODUCTO
             num_products = len(self.current_batch)
-            freight_per_item = freight_total / num_products if num_products > 0 else 0
             tax_per_item = tax_total / num_products if num_products > 0 else 0
-            
+
+            # Generar un lote_id único para todo este lote
+            lote_id = datetime.now().strftime("%Y%m%d%H%M%S")
+
             saved_count = 0
             invoice_number = self.current_batch[0].get('invoice_number', '') if self.current_batch else ''
-            
-            for item in self.current_batch:
-                # Buscar o crear producto
+
+            for index, item in enumerate(self.current_batch):
+                # El flete total solo se registra en el primer ítem; los demás van en 0
+                shipping_this_item = freight_total if index == 0 else 0.0
+
                 product = Product.get_by_name(item['product_name'])
                 if not product:
                     estimated_sale_price = item['unit_price'] * 1.3
-                    product = Product(name=item['product_name'], 
+                    product = Product(name=item['product_name'],
                                     price=estimated_sale_price, stock=0)
                     if not product.save():
                         messagebox.showerror("Error", f"No se pudo crear el producto {item['product_name']}")
                         continue
-                
-                # CALCULAR TOTAL POR PRODUCTO
-                product_total = item['subtotal'] + freight_per_item + tax_per_item
-                
-                # Crear compra con valores distribuidos
+
+                product_total = item['subtotal'] + shipping_this_item + tax_per_item
+
                 purchase = Purchase(
                     user_id=self.user.id,
-                    total=product_total,  # TOTAL CON FLETE E IVA
-                    iva=tax_per_item,     # IVA DISTRIBUIDO
-                    shipping=freight_per_item,  # FLETE DISTRIBUIDO
+                    total=product_total,
+                    iva=tax_per_item,
+                    shipping=shipping_this_item,  # FLETE TOTAL solo en el primero
                     date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     invoice_number=invoice_number,
                     supplier="Sin proveedor"
                 )
-                
+
                 if purchase.save():
-                    # Guardar detalles y actualizar stock
                     conn = None
                     try:
                         conn = get_connection()
                         cursor = conn.cursor()
+
+                        # Guardar lote_id y shipping_total en purchases
                         cursor.execute('''
-                        INSERT INTO purchase_details (purchase_id, product_id, quantity, unit_cost, unit_price, subtotal)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (purchase.id, product.id, item['quantity'], item['unit_price'], item['unit_price'], item['subtotal']))
+                            UPDATE purchases SET lote_id = ?, shipping_total = ? WHERE id = ?
+                        ''', (lote_id, freight_total, purchase.id))
+
+                        cursor.execute('''
+                            INSERT INTO purchase_details (purchase_id, product_id, quantity, unit_cost, unit_price, subtotal)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        ''', (purchase.id, product.id, item['quantity'], item['unit_price'], item['unit_price'], item['subtotal']))
+
                         cursor.execute('''
                             UPDATE products SET cost_price = ? WHERE id = ?
                         ''', (item['unit_price'], product.id))
+
                         conn.commit()
-                        
                         product.update_stock(item['quantity'])
                         saved_count += 1
                     except Exception as e:
@@ -1344,17 +1349,17 @@ class PurchasesWindow:
                     finally:
                         if conn:
                             conn.close()
-            
+
             if saved_count > 0:
-                messagebox.showinfo("Éxito", 
+                messagebox.showinfo("Éxito",
                     f"Se guardaron {saved_count} compras correctamente.\n\n"
-                    f"Distribución:\n"
-                    f"• IVA: {self.format_currency(tax_total)} → {self.format_currency(tax_per_item)} por producto\n"
-                    f"• Flete: {self.format_currency(freight_total)} → {self.format_currency(freight_per_item)} por producto")
-                
+                    f"Lote ID: {lote_id}\n"
+                    f"• IVA total: {self.format_currency(tax_total)} → {self.format_currency(tax_per_item)} por producto\n"
+                    f"• Flete total: {self.format_currency(freight_total)} (registrado en el primer ítem del lote)")
+
                 self.clear_batch()
                 self.load_data()
-            
+
         except Exception as e:
             messagebox.showerror("Error", f"Error al guardar el lote: {e}")
     

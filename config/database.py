@@ -269,6 +269,8 @@ def init_database():
             ('purchases', 'freight', 'TEXT'),
             ('purchases', 'tax', 'TEXT'),
             ('purchases', 'subtotal', 'TEXT'),
+            ('purchases', 'lote_id', 'TEXT'),
+            ('purchases', 'shipping_total', 'REAL DEFAULT 0.0'),
         ]
         
         for table, column, definition in safe_add_columns:
