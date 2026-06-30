@@ -6,8 +6,10 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+from utils.paths import get_db_path
+
 # ── Configuración ────────────────────────────────────────────────────────────
-ORIGEN_DB   = Path(r"C:\Users\Samir\Documents\GitHub\tienda\data\tienda.db")
+ORIGEN_DB   = Path(get_db_path())
 BACKUP_DIR  = Path(r"G:\Mi unidad\Emprendimiento\backups_db")
 SYNC_DIR    = Path(r"G:\Mi unidad\Emprendimiento\db_actual")
 SYNC_DB     = SYNC_DIR / "tienda.db"
