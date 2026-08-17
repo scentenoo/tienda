@@ -207,15 +207,21 @@ def copiar_en_drive(origen_remoto: str, destino_remoto: str) -> None:
     _ejecutar_rclone(["copyto", origen_remoto, destino_remoto, "--retries", "3"])
 
 
-def limpiar_backups_remotos(remoto: str, max_backups: int) -> None:
+def limpiar_backups_remotos(remoto: str, max_backups: int, holgura: int = 5) -> None:
     """Deja en Drive solo los últimos max_backups, igual que en local.
-    rclone los manda a la papelera de Drive, así que son recuperables."""
+
+    Se deja crecer `holgura` archivos de más antes de limpiar: cada pasada
+    cuesta un listado y un borrado (unos segundos), y hacerlo en cada
+    respaldo no aporta nada. rclone los manda a la papelera de Drive.
+    """
     salida = _ejecutar_rclone(["lsf", f"{remoto}/backups_db"]).stdout
     backups = sorted(
         nombre for nombre in (linea.strip() for linea in salida.splitlines())
         if nombre.startswith("tienda_backup_") and nombre.endswith(".db")
     )
-    for nombre in backups[: max(0, len(backups) - max_backups)]:
+    if len(backups) <= max_backups + holgura:
+        return
+    for nombre in backups[: len(backups) - max_backups]:
         _ejecutar_rclone(["deletefile", f"{remoto}/backups_db/{nombre}"])
         log.info("Backup remoto eliminado: %s", nombre)
 
@@ -283,7 +289,7 @@ def backup_y_sync_drive() -> dict:
     if not ORIGEN_DB.exists():
         raise FileNotFoundError(f"BD origen no encontrada: {ORIGEN_DB}")
 
-    if not DENTRO_DE_DRIVE:
+    if not DENTRO_DE_DRIVE and not _remoto_configurado(RCLONE_REMOTE):
         # Falla antes de tocar nada si Drive no está accesible
         verificar_remoto(RCLONE_REMOTE)
 

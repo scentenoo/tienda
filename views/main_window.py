@@ -1,5 +1,7 @@
 import os
 import queue
+import subprocess
+import sys
 import threading
 import tkinter as tk
 from tkinter import messagebox
@@ -177,8 +179,8 @@ class MainWindow:
         respuesta = messagebox.askyesnocancel(
             "Salir",
             "Hubo cambios en la base de datos durante esta sesión.\n\n"
-            "¿Respaldar en Google Drive antes de salir?\n\n"
-            "Sí — respaldar y salir (tarda menos de un minuto)\n"
+            "¿Respaldar en Google Drive?\n\n"
+            "Sí — el respaldo sigue en segundo plano y la app cierra ya\n"
             "No — salir sin respaldar")
 
         if respuesta is None:      # Canceló: no se sale
@@ -187,7 +189,32 @@ class MainWindow:
             self.parent.quit()
             return
 
-        self._respaldar_y_salir()
+        if self._lanzar_respaldo_aparte():
+            self.parent.quit()
+        else:
+            # Sin ejecutable propio (modo desarrollo): se espera con ventana
+            self._respaldar_y_salir()
+
+    def _lanzar_respaldo_aparte(self) -> bool:
+        """Lanza el respaldo como proceso independiente y devuelve el control.
+
+        Así el cierre es inmediato: la subida a Drive tarda cerca de un minuto
+        por el coste de conexión, y no tiene sentido que el usuario lo espere.
+        """
+        if not getattr(sys, "frozen", False):
+            return False
+        try:
+            registro = open(os.path.join(os.path.dirname(sys.executable),
+                                         "respaldo.log"), "a")
+            subprocess.Popen(
+                [sys.executable, "--respaldo"],
+                stdout=registro, stderr=registro,
+                start_new_session=True,      # sobrevive al cierre de la app
+            )
+            return True
+        except Exception as e:
+            print(f"No se pudo lanzar el respaldo aparte: {e}")
+            return False
 
     def _respaldar_y_salir(self):
         """Respalda en segundo plano y cierra al terminar, sin congelar nada."""

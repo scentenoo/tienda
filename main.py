@@ -22,6 +22,22 @@ if not os.path.exists(data_dir):
 from config.database import init_database
 from models.user import User
 
+def respaldo_en_segundo_plano():
+    """Modo sin ventana: solo respalda y sale.
+
+    Lo lanza la propia aplicación al cerrarse, como proceso aparte, para que
+    el usuario no espere el minuto que tarda la subida a Drive.
+    """
+    from utils.backup import backup_y_sync_drive
+    try:
+        info = backup_y_sync_drive()
+        print(f"Respaldo completado: {info['drive']}")
+        return 0
+    except Exception as e:
+        print(f"Respaldo fallido: {e}")
+        return 1
+
+
 def main():
     try:
         init_database()
@@ -68,4 +84,6 @@ def main():
             f.write(f"{datetime.now()}: {error_msg}\n")
 
 if __name__ == "__main__":
+    if "--respaldo" in sys.argv:
+        sys.exit(respaldo_en_segundo_plano())
     main()
