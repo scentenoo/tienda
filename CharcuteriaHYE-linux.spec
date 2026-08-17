@@ -9,7 +9,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=collect_data_files('ttkbootstrap'),
+    datas=collect_data_files('ttkbootstrap') + [('assets/icon.ico', 'assets')],
     # PIL._tkinter_finder lo carga Pillow dinámicamente desde ImageTk;
     # sin declararlo, ttkbootstrap falla al construir el tema.
     hiddenimports=['openpyxl', 'PIL.ImageTk', 'PIL._tkinter_finder'],

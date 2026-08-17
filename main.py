@@ -22,6 +22,24 @@ if not os.path.exists(data_dir):
 from config.database import init_database
 from models.user import User
 
+def aplicar_icono(root):
+    """Pone el logo en la barra de título de todas las ventanas.
+
+    iconphoto(True, …) lo hereda cualquier Toplevel que se abra después, así
+    que basta con hacerlo una vez sobre la raíz.
+    """
+    try:
+        from PIL import Image, ImageTk
+        from utils.paths import get_resource_path
+
+        imagen = Image.open(get_resource_path("assets", "icon.ico"))
+        # Hay que conservar la referencia o el recolector se lleva la imagen
+        root._icono = ImageTk.PhotoImage(imagen.convert("RGBA"))
+        root.iconphoto(True, root._icono)
+    except Exception as e:
+        print(f"No se pudo aplicar el icono: {e}")
+
+
 def respaldo_en_segundo_plano():
     """Modo sin ventana: solo respalda y sale.
 
@@ -57,6 +75,7 @@ def main():
             messagebox.showerror("Error", f"{valor}\n\n{detalle[-800:]}")
 
         root.report_callback_exception = reportar_error
+        aplicar_icono(root)
         root.protocol("WM_DELETE_WINDOW", root.quit)
 
         # Contar usuarios registrados
