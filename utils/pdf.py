@@ -148,7 +148,7 @@ def exportar_pendientes(filas, total) -> Path:
     return ruta
 
 
-def exportar_capital(situacion, meses, inventario) -> Path:
+def exportar_capital(situacion, meses, inventario, ahora=None) -> Path:
     """Informe de capital de trabajo: dónde está el dinero y cuánto se puede girar."""
     ruta = _ruta("capital_de_trabajo")
     doc = SimpleDocTemplate(str(ruta), pagesize=A4,
@@ -160,8 +160,29 @@ def exportar_capital(situacion, meses, inventario) -> Path:
         Paragraph(datetime.now().strftime("Generado el %d/%m/%Y a las %H:%M"),
                   estilos["Normal"]),
         Spacer(1, 6 * mm),
-        Paragraph("Dónde está el dinero", estilos["Heading2"]),
     ]
+
+    if ahora:
+        contenido.append(Paragraph("¿Cuánto se puede girar ahora?", estilos["Heading2"]))
+        tabla = [
+            ["Efectivo real (contado y abonos cobrados)", _moneda(ahora["efectivo"])],
+            ["(−) Reponer inventario", _moneda(-ahora["reponer_inventario"])],
+            ["(−) Colchón de operación", _moneda(-ahora["colchon"])],
+            ["DISPONIBLE PARA GIRAR", _moneda(ahora["disponible"])],
+            [f"Por cada uno de los {ahora['socios']} socios", _moneda(ahora["por_socio"])],
+        ]
+        t = Table(tabla, colWidths=[95 * mm, 45 * mm])
+        t.setStyle(TableStyle([
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#bdc3c7")),
+            ("FONTNAME", (0, 3), (-1, 4), "Helvetica-Bold"),
+            ("BACKGROUND", (0, 3), (-1, 4), colors.HexColor(
+                "#d4edda" if ahora["disponible"] > 0 else "#f8d7da")),
+        ]))
+        contenido += [t, Spacer(1, 7 * mm)]
+
+    contenido.append(Paragraph("Dónde está el dinero", estilos["Heading2"]))
 
     resumen = [
         ["Efectivo libre (de la conciliación)", _moneda(situacion["efectivo_libre"])],

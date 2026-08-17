@@ -454,6 +454,11 @@ class ConciliacionWindow:
         ttk.Button(cabecera, text="Exportar PDF", command=self.exportar_capital_pdf,
                    bootstyle="info").pack(side=tk.RIGHT, padx=4)
 
+        # Lo primero que se ve: cuánto se puede sacar hoy
+        self.ahora_cap = ttk.Labelframe(marco, text="¿Cuánto puedo girar ahora mismo?",
+                                        padding=12)
+        self.ahora_cap.pack(fill=tk.X, pady=(0, 12))
+
         self.tarjetas_cap = ttk.Frame(marco)
         self.tarjetas_cap.pack(fill=tk.X, pady=(0, 12))
 
@@ -490,11 +495,12 @@ class ConciliacionWindow:
         self.tree_inv.pack(fill=tk.BOTH, expand=True)
 
     def cargar_capital(self):
-        from utils.capital import (DIAS_COBERTURA, diagnostico,
+        from utils.capital import (DIAS_COBERTURA, diagnostico, girable_ahora,
                                    girable_por_mes, inventario_objetivo, situacion)
         conn = get_connection()
         try:
             self.cap = situacion(conn)
+            self.cap_ahora = girable_ahora(conn)
             self.cap_meses = girable_por_mes(conn)
             self.cap_inv = inventario_objetivo(conn)
             avisos = diagnostico(conn)
@@ -502,6 +508,37 @@ class ConciliacionWindow:
             conn.close()
 
         s = self.cap
+        for hijo in self.ahora_cap.winfo_children():
+            hijo.destroy()
+
+        g = self.cap_ahora
+        cuenta = ttk.Frame(self.ahora_cap)
+        cuenta.pack(side=tk.LEFT, padx=(0, 30))
+        for etiqueta, valor, estilo in [
+                ("Efectivo real (contado y abonos cobrados)", g["efectivo"], "secondary"),
+                ("(−) Reponer inventario", -g["reponer_inventario"], "warning"),
+                ("(−) Colchón de operación", -g["colchon"], "warning")]:
+            fila = ttk.Frame(cuenta)
+            fila.pack(fill=tk.X, pady=1)
+            ttk.Label(fila, text=etiqueta, font=FONT_SMALL, width=38,
+                      bootstyle=estilo).pack(side=tk.LEFT)
+            ttk.Label(fila, text=format_currency(valor), font=FONT_SMALL,
+                      bootstyle=estilo).pack(side=tk.RIGHT)
+
+        hay = g["disponible"] > 0
+        destaque = ttk.Frame(self.ahora_cap)
+        destaque.pack(side=tk.LEFT)
+        ttk.Label(destaque, text="DISPONIBLE PARA GIRAR", font=FONT_SMALL,
+                  bootstyle="secondary").pack(anchor=tk.W)
+        ttk.Label(destaque, text=format_currency(g["disponible"]),
+                  font=(FONT_HEADER[0], 22, "bold"),
+                  bootstyle="success" if hay else "danger").pack(anchor=tk.W)
+        detalle = (f"{format_currency(g['por_socio'])} por cada uno de los "
+                   f"{g['socios']} socios" if hay else
+                   f"Faltan {format_currency(g['faltante'])} para poder girar algo")
+        ttk.Label(destaque, text=detalle, font=FONT_SMALL,
+                  bootstyle="success" if hay else "danger").pack(anchor=tk.W)
+
         for hijo in self.tarjetas_cap.winfo_children():
             hijo.destroy()
         tarjetas = [
@@ -539,7 +576,8 @@ class ConciliacionWindow:
     def exportar_capital_pdf(self):
         from utils.pdf import exportar_capital
         try:
-            ruta = exportar_capital(self.cap, self.cap_meses, self.cap_inv)
+            ruta = exportar_capital(self.cap, self.cap_meses, self.cap_inv,
+                                    self.cap_ahora)
             messagebox.showinfo("PDF generado", f"Guardado en:\n{ruta}")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo generar el PDF:\n{e}")

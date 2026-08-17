@@ -118,12 +118,46 @@ def girable_por_mes(conn) -> list:
     return resultado
 
 
+def girable_ahora(conn, socios=3) -> dict:
+    """Cuánto se puede sacar en este momento, no en el mes.
+
+    Parte del efectivo real de la conciliación —que solo cuenta ventas de
+    contado y abonos cobrados, nunca lo fiado— y le descuenta lo que el
+    negocio necesita para seguir funcionando: reponer el inventario que falta
+    y conservar el colchón de operación.
+    """
+    s = situacion(conn)
+    inv = inventario_objetivo(conn)
+    reponer = max(inv["brecha"], 0)
+
+    disponible = s["efectivo_libre"] - reponer - COLCHON_MINIMO
+    return {
+        "efectivo": s["efectivo_libre"],
+        "reponer_inventario": reponer,
+        "colchon": COLCHON_MINIMO,
+        "disponible": max(disponible, 0),
+        "faltante": max(-disponible, 0),
+        "por_socio": max(disponible, 0) / socios,
+        "socios": socios,
+    }
+
+
 def diagnostico(conn) -> list:
     """Avisos en lenguaje llano, para saber qué hacer sin interpretar tablas."""
     s = situacion(conn)
     inv = inventario_objetivo(conn)
     meses = girable_por_mes(conn)
     avisos = []
+
+    ahora = girable_ahora(conn)
+    if ahora["disponible"] > 0:
+        avisos.append(("success",
+            f"Ahora mismo se puede girar {ahora['disponible']:,.0f} en total, "
+            f"o sea {ahora['por_socio']:,.0f} por socio, sin descuidar el negocio."))
+    else:
+        avisos.append(("danger",
+            f"Ahora mismo no hay nada que girar: faltan {ahora['faltante']:,.0f} "
+            f"para cubrir la reposición de inventario y el colchón de operación."))
 
     if s["efectivo_libre"] < COLCHON_MINIMO:
         avisos.append(("danger",
