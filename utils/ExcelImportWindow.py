@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox
 from tkinter import filedialog
 import os
 from config.database import get_connection
+from utils.ventanas import hacer_modal
 
 class ExcelImportWindow:
     def __init__(self, parent, inventory_window):
@@ -16,7 +17,7 @@ class ExcelImportWindow:
         self.window.title("Importar Productos desde Excel")
         self.window.geometry("900x700")
         self.window.transient(parent)
-        self.window.grab_set()
+        hacer_modal(self.window)
         
         self.center_window()
         self.setup_ui()
@@ -24,14 +25,11 @@ class ExcelImportWindow:
     def center_window(self):
         """Centra la ventana en la pantalla"""
         self.window.update_idletasks()
-        x = (self.window.winfo_screenwidth() - 800) // 2
-        y = (self.window.winfo_screenheight() - 600) // 2
+        x = (self.window.winfo_screenwidth() - 900) // 2
+        y = (self.window.winfo_screenheight() - 700) // 2
         self.window.geometry(f"900x700+{x}+{y}")
     
     def setup_ui(self):
-        # Cambiar el tamaño de la ventana a uno más manejable
-        self.window.geometry("900x700")  # Ajustado de 800x600
-        
         main_frame = ttk.Frame(self.window, padding="15")  # Reducir padding
         main_frame.pack(fill=tk.BOTH, expand=True)
         

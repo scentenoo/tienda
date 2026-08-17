@@ -1,7 +1,9 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
+import ttkbootstrap as ttk
 from models.user import User
 from utils.security import hash_password
+from utils.theme import FONT_TITLE
 
 class UsersWindow:
     def __init__(self, parent, user):
@@ -16,13 +18,13 @@ class UsersWindow:
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Gestión de Usuarios")
-        self.window.geometry("1300x500")
+        self.window.geometry("1200x500")
         self.window.resizable(True, True)
         
         # Centrar ventana
         self.window.update_idletasks()
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
+        width = 1200
+        height = 500
         x = (self.window.winfo_screenwidth() // 2) - (width // 2)
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
         self.window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
@@ -40,8 +42,8 @@ class UsersWindow:
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Título
-        title_label = ttk.Label(main_frame, text="Gestión de Usuarios", 
-                               font=("Arial", 16, "bold"))
+        title_label = ttk.Label(main_frame, text="Gestión de Usuarios",
+                               font=FONT_TITLE)
         title_label.pack(pady=(0, 20))
         
         # Frame para formulario y lista
@@ -79,8 +81,8 @@ class UsersWindow:
         button_frame = ttk.Frame(form_frame)
         button_frame.grid(row=5, column=0, columnspan=2, pady=10)
         
-        ttk.Button(button_frame, text="Guardar", command=self.save_user).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Limpiar", command=self.clear_form).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Guardar", command=self.save_user, bootstyle="primary").pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Limpiar", command=self.clear_form, bootstyle="secondary").pack(side=tk.LEFT, padx=5)
         
         # Frame para lista de usuarios
         list_frame = ttk.LabelFrame(content_frame, text="Usuarios Registrados", padding="10")
@@ -115,9 +117,9 @@ class UsersWindow:
         action_frame = ttk.Frame(list_frame)
         action_frame.pack(fill=tk.X, pady=10)
         
-        ttk.Button(action_frame, text="Editar", command=self.edit_user).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Eliminar", command=self.delete_user).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Actualizar", command=self.load_data).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(action_frame, text="Editar", command=self.edit_user, bootstyle="info").pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_frame, text="Eliminar", command=self.delete_user, bootstyle="danger").pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_frame, text="Actualizar", command=self.load_data, bootstyle="secondary-outline").pack(side=tk.RIGHT, padx=5)
     
     def load_data(self):
         """Carga los usuarios en el treeview"""
@@ -205,8 +207,8 @@ class UsersWindow:
         
         # Centrar ventana
         edit_window.update_idletasks()
-        width = edit_window.winfo_width()
-        height = edit_window.winfo_height()
+        width = 400
+        height = 300
         x = (edit_window.winfo_screenwidth() // 2) - (width // 2)
         y = (edit_window.winfo_screenheight() // 2) - (height // 2)
         edit_window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
@@ -251,9 +253,9 @@ class UsersWindow:
         
         ttk.Button(button_frame, text="Guardar", command=lambda: self.save_edited_user(
             edit_window, user, name_var.get(), password_var.get(), role_var.get(), position_var.get()
-        )).pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(button_frame, text="Cancelar", command=edit_window.destroy).pack(side=tk.LEFT, padx=5)
+        ), bootstyle="primary").pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(button_frame, text="Cancelar", command=edit_window.destroy, bootstyle="secondary").pack(side=tk.LEFT, padx=5)
     
     def save_edited_user(self, window, user, name, password, role, position):
         """Guarda los cambios de un usuario editado"""

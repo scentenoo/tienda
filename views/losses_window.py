@@ -1,9 +1,11 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
+import ttkbootstrap as ttk
 from datetime import datetime, timedelta
 from models.loss import Loss
 from models.product import Product
 from utils.validators import validate_number, validate_positive
+from utils.theme import FONT_TITLE, FONT_BOLD, FONT_HEADER
 
 class LossesWindow:
     def __init__(self, parent, user):
@@ -24,13 +26,13 @@ class LossesWindow:
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Gestión de Pérdidas y Mermas")
-        self.window.geometry("1500x650")
+        self.window.geometry("1280x650")
         self.window.resizable(True, True)
         
         # Centrar ventana
         self.window.update_idletasks()
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
+        width = 1280
+        height = 650
         x = (self.window.winfo_screenwidth() // 2) - (width // 2)
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
         self.window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
@@ -74,8 +76,8 @@ class LossesWindow:
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Título
-        title_label = ttk.Label(main_frame, text="Gestión de Pérdidas y Mermas", 
-                               font=("Arial", 16, "bold"))
+        title_label = ttk.Label(main_frame, text="Gestión de Pérdidas y Mermas",
+                               font=FONT_TITLE)
         title_label.pack(pady=(0, 20))
         
         # Frame para filtros
@@ -101,8 +103,8 @@ class LossesWindow:
         loss_type_combo.grid(row=0, column=5, pady=5, padx=5)
         
         # Botones de filtro
-        ttk.Button(filter_frame, text="Filtrar", command=self.apply_filters).grid(row=0, column=6, padx=5)
-        ttk.Button(filter_frame, text="Limpiar", command=self.clear_filters).grid(row=0, column=7, padx=5)
+        ttk.Button(filter_frame, text="Filtrar", command=self.apply_filters, bootstyle="primary").grid(row=0, column=6, padx=5)
+        ttk.Button(filter_frame, text="Limpiar", command=self.clear_filters, bootstyle="secondary").grid(row=0, column=7, padx=5)
         
         # Frame para lista y formulario
         content_frame = ttk.Frame(main_frame)
@@ -169,8 +171,8 @@ class LossesWindow:
         button_frame = ttk.Frame(form_frame)
         button_frame.grid(row=7, column=0, columnspan=2, pady=10)
         
-        ttk.Button(button_frame, text="Guardar", command=self.save_loss).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Limpiar", command=self.clear_form).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Guardar", command=self.save_loss, bootstyle="primary").pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Limpiar", command=self.clear_form, bootstyle="secondary").pack(side=tk.LEFT, padx=5)
         
         # Frame para lista de pérdidas
         list_frame = ttk.LabelFrame(content_frame, text="Pérdidas Registradas", padding="10")
@@ -209,25 +211,29 @@ class LossesWindow:
         action_frame = ttk.Frame(list_frame)
         action_frame.pack(fill=tk.X, pady=10)
         
-        ttk.Button(action_frame, text="Ver Detalles", command=self.view_loss_details).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Eliminar", command=self.delete_loss).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Actualizar", command=self.load_data).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(action_frame, text="Ver Detalles", command=self.view_loss_details, bootstyle="info").pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_frame, text="Eliminar", command=self.delete_loss, bootstyle="danger").pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_frame, text="Actualizar", command=self.load_data, bootstyle="secondary-outline").pack(side=tk.RIGHT, padx=5)
         
         # Frame para resumen
         summary_frame = ttk.LabelFrame(main_frame, text="Resumen de Pérdidas", padding="10")
         summary_frame.pack(fill=tk.X, pady=10)
         
         # Etiquetas de resumen
-        self.total_losses_label = ttk.Label(summary_frame, text="Total de Pérdidas: $0")
+        self.total_losses_label = ttk.Label(summary_frame, text="Total de Pérdidas: $0",
+                                             font=FONT_BOLD, bootstyle="danger")
         self.total_losses_label.pack(side=tk.LEFT, padx=20)
-        
-        self.expiration_losses_label = ttk.Label(summary_frame, text="Por Vencimiento: $0")
+
+        self.expiration_losses_label = ttk.Label(summary_frame, text="Por Vencimiento: $0",
+                                                  bootstyle="warning")
         self.expiration_losses_label.pack(side=tk.LEFT, padx=20)
-        
-        self.damage_losses_label = ttk.Label(summary_frame, text="Por Daño: $0")
+
+        self.damage_losses_label = ttk.Label(summary_frame, text="Por Daño: $0",
+                                              bootstyle="secondary")
         self.damage_losses_label.pack(side=tk.LEFT, padx=20)
-        
-        self.other_losses_label = ttk.Label(summary_frame, text="Otros: $0")
+
+        self.other_losses_label = ttk.Label(summary_frame, text="Otros: $0",
+                                             bootstyle="secondary")
         self.other_losses_label.pack(side=tk.LEFT, padx=20)
     
     def load_products(self):
@@ -457,8 +463,8 @@ class LossesWindow:
         
         # Centrar ventana
         details_window.update_idletasks()
-        width = details_window.winfo_width()
-        height = details_window.winfo_height()
+        width = 500
+        height = 400
         x = (details_window.winfo_screenwidth() // 2) - (width // 2)
         y = (details_window.winfo_screenheight() // 2) - (height // 2)
         details_window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
@@ -468,8 +474,8 @@ class LossesWindow:
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Título
-        ttk.Label(main_frame, text=f"Detalles de Pérdida #{loss.id}", 
-                 font=("Arial", 14, "bold")).pack(pady=(0, 20))
+        ttk.Label(main_frame, text=f"Detalles de Pérdida #{loss.id}",
+                 font=FONT_HEADER).pack(pady=(0, 20))
         
         # Detalles
         details_frame = ttk.Frame(main_frame)
@@ -479,49 +485,49 @@ class LossesWindow:
         col1 = ttk.Frame(details_frame)
         col1.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         
-        ttk.Label(col1, text="Producto:", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(col1, text="Producto:", font=FONT_BOLD).grid(row=0, column=0, sticky=tk.W, pady=5)
         ttk.Label(col1, text=loss.product_name).grid(row=0, column=1, sticky=tk.W, pady=5)
         
-        ttk.Label(col1, text="Cantidad:", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(col1, text="Cantidad:", font=FONT_BOLD).grid(row=1, column=0, sticky=tk.W, pady=5)
         ttk.Label(col1, text=self.format_number(loss.quantity)).grid(row=1, column=1, sticky=tk.W, pady=5)
         
-        ttk.Label(col1, text="Costo Unitario:", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(col1, text="Costo Unitario:", font=FONT_BOLD).grid(row=2, column=0, sticky=tk.W, pady=5)
         ttk.Label(col1, text=self.format_currency(loss.unit_cost)).grid(row=2, column=1, sticky=tk.W, pady=5)
         
-        ttk.Label(col1, text="Costo Total:", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(col1, text="Costo Total:", font=FONT_BOLD).grid(row=3, column=0, sticky=tk.W, pady=5)
         ttk.Label(col1, text=self.format_currency(loss.total_cost)).grid(row=3, column=1, sticky=tk.W, pady=5)
         
         # Columna 2
         col2 = ttk.Frame(details_frame)
         col2.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
-        ttk.Label(col2, text="Fecha:", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(col2, text="Fecha:", font=FONT_BOLD).grid(row=0, column=0, sticky=tk.W, pady=5)
         ttk.Label(col2, text=loss.loss_date.strftime("%Y-%m-%d") if isinstance(loss.loss_date, datetime) else loss.loss_date).grid(row=0, column=1, sticky=tk.W, pady=5)
         
-        ttk.Label(col2, text="Tipo:", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(col2, text="Tipo:", font=FONT_BOLD).grid(row=1, column=0, sticky=tk.W, pady=5)
         ttk.Label(col2, text=loss.loss_type).grid(row=1, column=1, sticky=tk.W, pady=5)
         
-        ttk.Label(col2, text="Registrado por:", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(col2, text="Registrado por:", font=FONT_BOLD).grid(row=2, column=0, sticky=tk.W, pady=5)
         ttk.Label(col2, text=loss.user_name).grid(row=2, column=1, sticky=tk.W, pady=5)
         
-        ttk.Label(col2, text="Fecha de registro:", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(col2, text="Fecha de registro:", font=FONT_BOLD).grid(row=3, column=0, sticky=tk.W, pady=5)
         ttk.Label(col2, text=loss.created_at.strftime("%Y-%m-%d %H:%M") if isinstance(loss.created_at, datetime) else loss.created_at).grid(row=3, column=1, sticky=tk.W, pady=5)
         
         # Motivo y notas
         notes_frame = ttk.Frame(main_frame)
         notes_frame.pack(fill=tk.X, pady=10)
         
-        ttk.Label(notes_frame, text="Motivo:", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(notes_frame, text="Motivo:", font=FONT_BOLD).grid(row=0, column=0, sticky=tk.W, pady=5)
         ttk.Label(notes_frame, text=loss.reason).grid(row=0, column=1, sticky=tk.W, pady=5)
         
-        ttk.Label(notes_frame, text="Notas:", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky=tk.NW, pady=5)
+        ttk.Label(notes_frame, text="Notas:", font=FONT_BOLD).grid(row=1, column=0, sticky=tk.NW, pady=5)
         notes_text = tk.Text(notes_frame, height=4, width=40, wrap=tk.WORD)
         notes_text.grid(row=1, column=1, pady=5)
         notes_text.insert(tk.END, loss.notes if loss.notes else "")
         notes_text.config(state=tk.DISABLED)
         
         # Botón de cerrar
-        ttk.Button(main_frame, text="Cerrar", command=details_window.destroy).pack(pady=10)
+        ttk.Button(main_frame, text="Cerrar", command=details_window.destroy, bootstyle="secondary").pack(pady=10)
     
     def delete_loss(self):
         """Elimina una pérdida seleccionada"""

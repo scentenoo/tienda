@@ -1,35 +1,25 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
+import ttkbootstrap as ttk
 from models.product import Product
 from models.purchase import Purchase
 from utils.validators import validate_number, validate_positive
 from datetime import datetime
 from config.database import get_connection
-from tkinter import simpledialog
+from utils.theme import FONT_TITLE, FONT_HEADER, FONT_BOLD, FONT_NORMAL, header_bar
+from utils.ventanas import hacer_modal
 
 class PurchasesWindow:
     def __init__(self, parent, user):
         self.parent = parent
         self.user = user
-        
+
         # Verificar permisos PRIMERO
         if self.user.role != 'admin':
-            messagebox.showerror("Acceso Denegado", 
+            messagebox.showerror("Acceso Denegado",
                             "Solo los administradores pueden acceder a este módulo.")
             return
-        
-        # Inicializar atributos esenciales ANTES de cualquier uso
-        self.colors = {
-            'primary': '#2c3e50',
-            'secondary': '#3498db',
-            'success': '#27ae60',
-            'warning': '#f39c12',
-            'danger': '#e74c3c',
-            'light': '#ecf0f1',
-            'dark': '#34495e',
-            'background': '#f8f9fa'
-        }
-        
+
         # Variables de datos
         self.products = []
         self.purchases = []
@@ -45,12 +35,7 @@ class PurchasesWindow:
         self.window.title("Gestión de Compras")
         self.window.geometry("1100x750")
         self.window.resizable(True, True)
-        
-        # Configurar estilos (usa self.colors)
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        self.configure_styles()  # Este método usa self.colors
-        
+
         # Finalmente configurar la UI
         self.setup_ui()
         self.load_data()
@@ -81,68 +66,31 @@ class PurchasesWindow:
         except (ValueError, TypeError):
             return "0"
 
-    def configure_styles(self):
-        """Configura los estilos usando self.colors"""
-        try:
-            self.style.configure('TFrame', background=self.colors['background'])
-            self.style.configure('TButton', 
-                            font=('Arial', 10), 
-                            padding=8,
-                            background=self.colors['secondary'],
-                            foreground='white')
-            self.style.map('TButton',
-                        background=[('active', self.colors['primary'])])
-            self.style.configure('Header.TLabel', 
-                            font=('Arial', 12, 'bold'), 
-                            foreground=self.colors['dark'])
-            self.style.configure('TNotebook', background=self.colors['background'])
-            self.style.configure('TNotebook.Tab', 
-                            font=('Arial', 10, 'bold'), 
-                            padding=[15, 5],
-                            background=self.colors['light'],
-                            foreground=self.colors['dark'])
-            self.style.map('TNotebook.Tab',
-                        background=[('selected', self.colors['primary'])],
-                        foreground=[('selected', 'white')])
-        except AttributeError as e:
-            messagebox.showerror("Error de Configuración", 
-                            f"No se pudo configurar estilos: {str(e)}")
-            # Valores por defecto si colors no está disponible
-            self.style.configure('TFrame', background='#f0f0f0')
-            self.style.configure('TButton', background='#cccccc')
-
     def setup_ui(self):
         """Configura la interfaz principal"""
-        # Frame principal con fondo claro
-        main_frame = ttk.Frame(self.window, style='TFrame')
+        # Frame principal
+        main_frame = ttk.Frame(self.window)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
+
         # Header con título
-        header = tk.Frame(main_frame, bg=self.colors['primary'], height=60)
-        header.pack(fill=tk.X, pady=(0, 15))
-        
-        ttk.Label(header, 
-                text="Gestión de Compras", 
-                font=("Arial", 18, "bold"),
-                foreground="white",
-                background=self.colors['primary']).pack(side=tk.LEFT, padx=20)
-        
+        header_bar(main_frame, "Gestión de Compras")
+
         # Notebook para pestañas
         notebook = ttk.Notebook(main_frame)
-        notebook.pack(fill=tk.BOTH, expand=True)
-        
+        notebook.pack(fill=tk.BOTH, expand=True, pady=(15, 0))
+
         # Pestaña nueva compra
-        self.new_purchase_frame = ttk.Frame(notebook, style='TFrame')
+        self.new_purchase_frame = ttk.Frame(notebook)
         notebook.add(self.new_purchase_frame, text="➕ Nueva Compra")
         self.setup_new_purchase_ui()
-        
+
         # Pestaña lote actual
-        self.batch_frame = ttk.Frame(notebook, style='TFrame')
+        self.batch_frame = ttk.Frame(notebook)
         notebook.add(self.batch_frame, text="📦 Lote Actual")
         self.setup_batch_ui()
-        
+
         # Pestaña lista de compras
-        self.purchases_list_frame = ttk.Frame(notebook, style='TFrame')
+        self.purchases_list_frame = ttk.Frame(notebook)
         notebook.add(self.purchases_list_frame, text="📋 Historial")
         self.setup_purchases_list_ui()
 
@@ -160,14 +108,14 @@ class PurchasesWindow:
         form_frame.columnconfigure(3, weight=1)
         
         # Producto
-        ttk.Label(form_frame, text="Producto:", font=('Arial', 10, 'bold')).grid(
+        ttk.Label(form_frame, text="Producto:", font=FONT_BOLD).grid(
     row=0, column=0, sticky=tk.W, pady=8)
 
         self.product_var = tk.StringVar()
         self.product_combo = ttk.Combobox(
-            form_frame, 
-            textvariable=self.product_var, 
-            font=('Arial', 10),
+            form_frame,
+            textvariable=self.product_var,
+            font=FONT_NORMAL,
             state='normal',  # CAMBIO: de 'readonly' a 'normal' para permitir escribir
             width=30)
         self.product_combo.grid(row=0, column=1, pady=8, padx=5, sticky=tk.EW)
@@ -177,49 +125,49 @@ class PurchasesWindow:
         self.product_combo.bind('<Button-1>', self._on_combo_click)
         self.product_combo.bind('<Return>', self._on_product_enter)
         self.product_combo.bind('<Tab>', self._on_product_tab)
-        
+
         # Cantidad y Precio
-        ttk.Label(form_frame, text="Cantidad:", font=('Arial', 10, 'bold')).grid(
+        ttk.Label(form_frame, text="Cantidad:", font=FONT_BOLD).grid(
             row=1, column=0, sticky=tk.W, pady=8)
-        
+
         self.quantity_var = tk.StringVar()
-        ttk.Entry(form_frame, 
-                textvariable=self.quantity_var, 
-                font=('Arial', 10),
+        ttk.Entry(form_frame,
+                textvariable=self.quantity_var,
+                font=FONT_NORMAL,
                 width=15).grid(row=1, column=1, pady=8, padx=5, sticky=tk.W)
-        
-        ttk.Label(form_frame, text="Precio Unitario:", font=('Arial', 10, 'bold')).grid(
+
+        ttk.Label(form_frame, text="Precio Unitario:", font=FONT_BOLD).grid(
             row=1, column=2, sticky=tk.W, pady=8)
-        
+
         self.unit_price_var = tk.StringVar()
-        ttk.Entry(form_frame, 
-                textvariable=self.unit_price_var, 
-                font=('Arial', 10),
+        ttk.Entry(form_frame,
+                textvariable=self.unit_price_var,
+                font=FONT_NORMAL,
                 width=15).grid(row=1, column=3, pady=8, padx=5, sticky=tk.W)
-        
+
         # Factura
-        ttk.Label(form_frame, text="N° Factura:", font=('Arial', 10, 'bold')).grid(
+        ttk.Label(form_frame, text="N° Factura:", font=FONT_BOLD).grid(
             row=2, column=0, sticky=tk.W, pady=8)
-        
+
         self.invoice_var = tk.StringVar()
-        ttk.Entry(form_frame, 
-                textvariable=self.invoice_var, 
-                font=('Arial', 10),
+        ttk.Entry(form_frame,
+                textvariable=self.invoice_var,
+                font=FONT_NORMAL,
                 width=30).grid(row=2, column=1, columnspan=3, pady=8, padx=5, sticky=tk.W)
-        
+
         # Botones
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=20)
-        
-        ttk.Button(button_frame, 
-                text="🛒 Agregar al Lote", 
+
+        ttk.Button(button_frame,
+                text="🛒 Agregar al Lote",
                 command=self.add_to_batch,
-                style='TButton').pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(button_frame, 
-                text="🧹 Limpiar Formulario", 
+                bootstyle='success').pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(button_frame,
+                text="🧹 Limpiar Formulario",
                 command=self.clear_form,
-                style='TButton').pack(side=tk.LEFT, padx=5)
+                bootstyle='secondary').pack(side=tk.LEFT, padx=5)
         
     def _on_product_typing(self, event=None):
         """Maneja la escritura en el campo de producto SIN interferencias"""
@@ -339,8 +287,8 @@ class PurchasesWindow:
         
         # Centrar ventana
         edit_window.update_idletasks()
-        width = edit_window.winfo_width()
-        height = edit_window.winfo_height()
+        width = 400
+        height = 300
         x = (edit_window.winfo_screenwidth() // 2) - (width // 2)
         y = (edit_window.winfo_screenheight() // 2) - (height // 2)
         edit_window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
@@ -379,9 +327,9 @@ class PurchasesWindow:
         
         ttk.Button(button_frame, text="Guardar", command=lambda: self.save_edited_purchase(
             edit_window, purchase, total_var.get(), iva_var.get(), shipping_var.get(), invoice_var.get()
-        )).pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(button_frame, text="Cancelar", command=edit_window.destroy).pack(side=tk.LEFT, padx=5)
+        ), bootstyle="primary").pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(button_frame, text="Cancelar", command=edit_window.destroy, bootstyle="secondary").pack(side=tk.LEFT, padx=5)
     
     def setup_batch_ui(self):
         """Configura la UI para el lote actual"""
@@ -397,35 +345,34 @@ class PurchasesWindow:
         info_frame.columnconfigure(3, weight=1)
         
         # Flete
-        ttk.Label(info_frame, text="Flete Total:", font=('Arial', 10, 'bold')).grid(
+        ttk.Label(info_frame, text="Flete Total:", font=FONT_BOLD).grid(
             row=0, column=0, sticky=tk.W, pady=5)
-        
+
         self.freight_var = tk.StringVar(value="0")
-        ttk.Entry(info_frame, 
-                textvariable=self.freight_var, 
-                font=('Arial', 10),
+        ttk.Entry(info_frame,
+                textvariable=self.freight_var,
+                font=FONT_NORMAL,
                 width=15).grid(row=0, column=1, pady=5, padx=5, sticky=tk.W)
-        
+
         # IVA
-        ttk.Label(info_frame, text="IVA Total:", font=('Arial', 10, 'bold')).grid(
+        ttk.Label(info_frame, text="IVA Total:", font=FONT_BOLD).grid(
             row=0, column=2, sticky=tk.W, pady=5)
-        
+
         self.tax_var = tk.StringVar(value="0")
-        ttk.Entry(info_frame, 
-                textvariable=self.tax_var, 
-                font=('Arial', 10),
+        ttk.Entry(info_frame,
+                textvariable=self.tax_var,
+                font=FONT_NORMAL,
                 width=15).grid(row=0, column=3, pady=5, padx=5, sticky=tk.W)
-        
+
         # Treeview para artículos del lote
         tree_frame = ttk.Frame(main_frame)
         tree_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         columns = ('Producto', 'Cantidad', 'Precio Unit.', 'Subtotal')
         self.batch_tree = ttk.Treeview(
-            tree_frame, 
-            columns=columns, 
-            show='headings',
-            style='Treeview')
+            tree_frame,
+            columns=columns,
+            show='headings')
         
         # Configurar columnas
         col_widths = {'Producto': 250, 'Cantidad': 100, 'Precio Unit.': 120, 'Subtotal': 120}
@@ -446,28 +393,28 @@ class PurchasesWindow:
         
         # Total del lote
         self.total_label = ttk.Label(
-            bottom_frame, 
-            text="Total del Lote: $0", 
-            font=("Arial", 12, "bold"),
-            foreground=self.colors['primary'])
+            bottom_frame,
+            text="Total del Lote: $0",
+            font=FONT_HEADER,
+            bootstyle="primary")
         self.total_label.pack(side=tk.LEFT, padx=10)
-        
+
         # Botones
         button_frame = ttk.Frame(bottom_frame)
         button_frame.pack(side=tk.RIGHT)
-        
+
         buttons = [
-            ("🧮 Calcular Total", self.calculate_batch_total),
-            ("🗑️ Eliminar Selección", self.remove_from_batch),
-            ("🧹 Limpiar Lote", self.clear_batch),
-            ("💾 Guardar Lote", self.save_batch)
+            ("🧮 Calcular Total", self.calculate_batch_total, "secondary-outline"),
+            ("🗑️ Eliminar Selección", self.remove_from_batch, "danger"),
+            ("🧹 Limpiar Lote", self.clear_batch, "secondary"),
+            ("💾 Guardar Lote", self.save_batch, "success")
         ]
-        
-        for text, cmd in buttons:
-            ttk.Button(button_frame, 
-                    text=text, 
+
+        for text, cmd, bootstyle in buttons:
+            ttk.Button(button_frame,
+                    text=text,
                     command=cmd,
-                    style='TButton').pack(side=tk.LEFT, padx=5)
+                    bootstyle=bootstyle).pack(side=tk.LEFT, padx=5)
     
     def setup_purchases_list_ui(self):
         """Configura la UI para lista de compras"""
@@ -475,22 +422,22 @@ class PurchasesWindow:
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Título
-        title_label = ttk.Label(main_frame, text="Lista de Compras", 
-                            font=("Arial", 14, "bold"))
+        title_label = ttk.Label(main_frame, text="Lista de Compras",
+                            font=FONT_TITLE)
         title_label.pack(pady=(0, 10))
-        
+
         # Frame para controles
         controls_frame = ttk.Frame(main_frame)
         controls_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Button(controls_frame, text="Actualizar", 
-                command=self.load_purchases).pack(side=tk.LEFT, padx=5)
-        
+
+        ttk.Button(controls_frame, text="Actualizar",
+                command=self.load_purchases, bootstyle="secondary-outline").pack(side=tk.LEFT, padx=5)
+
         # Botones de editar y eliminar
-        ttk.Button(controls_frame, text="Editar Compra", 
-                command=self.edit_purchase).pack(side=tk.LEFT, padx=5)
-        ttk.Button(controls_frame, text="Eliminar Compra", 
-                command=self.delete_purchase).pack(side=tk.LEFT, padx=5)
+        ttk.Button(controls_frame, text="Editar Compra",
+                command=self.edit_purchase, bootstyle="info").pack(side=tk.LEFT, padx=5)
+        ttk.Button(controls_frame, text="Eliminar Compra",
+                command=self.delete_purchase, bootstyle="danger").pack(side=tk.LEFT, padx=5)
         
         # Treeview para mostrar compras
         columns = ('ID', 'Producto', 'Cantidad', 'Precio Unit.', 'Flete', 'IVA', 'Total', 'Factura', 'Fecha')
@@ -704,7 +651,7 @@ class PurchasesWindow:
         dialog.geometry("400x250")
         dialog.resizable(False, False)
         dialog.transient(self.window)
-        dialog.grab_set()
+        hacer_modal(dialog)
         
         # Centrar
         dialog.update_idletasks()
@@ -719,7 +666,7 @@ class PurchasesWindow:
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         ttk.Label(main_frame, text="🏭 Crear Nuevo Producto", 
-                font=('Arial', 14, 'bold')).pack(pady=(0, 15))
+                font=FONT_HEADER).pack(pady=(0, 15))
         
         # Campos
         fields_frame = ttk.Frame(main_frame)
@@ -767,8 +714,8 @@ class PurchasesWindow:
         button_frame = ttk.Frame(main_frame)
         button_frame.pack()
         
-        ttk.Button(button_frame, text="✅ Crear", command=create_product).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="✅ Crear", command=create_product, bootstyle="primary").pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="❌ Cancelar", command=dialog.destroy, bootstyle="secondary").pack(side=tk.LEFT, padx=5)
         
         dialog.wait_window()
         return result['created']
@@ -866,7 +813,7 @@ class PurchasesWindow:
         dialog.geometry("400x300")
         dialog.resizable(False, False)
         dialog.transient(self.window)
-        dialog.grab_set()
+        hacer_modal(dialog)
         
         # Centrar diálogo
         dialog.update_idletasks()
@@ -881,10 +828,10 @@ class PurchasesWindow:
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         ttk.Label(main_frame, text="Seleccione el producto correcto:", 
-                font=('Arial', 12, 'bold')).pack(pady=(0, 15))
+                font=FONT_HEADER).pack(pady=(0, 15))
         
         # Lista de productos
-        listbox = tk.Listbox(main_frame, height=8, font=('Arial', 10))
+        listbox = tk.Listbox(main_frame, height=8, font=FONT_NORMAL)
         listbox.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
         
         for product in partial_matches:
@@ -908,8 +855,8 @@ class PurchasesWindow:
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X)
         
-        ttk.Button(button_frame, text="Seleccionar", command=select_product).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(button_frame, text="Cancelar", command=cancel_selection).pack(side=tk.LEFT)
+        ttk.Button(button_frame, text="Seleccionar", command=select_product, bootstyle="primary").pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Cancelar", command=cancel_selection, bootstyle="secondary").pack(side=tk.LEFT)
         
         # Permitir doble clic para seleccionar
         listbox.bind('<Double-Button-1>', lambda e: select_product())
@@ -938,12 +885,12 @@ class PurchasesWindow:
             dialog.geometry("400x300")
             dialog.resizable(False, False)
             dialog.transient(self.window)
-            dialog.grab_set()
+            hacer_modal(dialog)
             
             # Centrar diálogo
             dialog.update_idletasks()
-            x = dialog.winfo_reqwidth()
-            y = dialog.winfo_reqheight()
+            x = max(400, dialog.winfo_reqwidth())
+            y = max(300, dialog.winfo_reqheight())
             pos_x = (dialog.winfo_screenwidth() // 2) - (x // 2)
             pos_y = (dialog.winfo_screenheight() // 2) - (y // 2)
             dialog.geometry(f"{x}x{y}+{pos_x}+{pos_y}")
@@ -956,7 +903,7 @@ class PurchasesWindow:
             main_frame.pack(fill=tk.BOTH, expand=True)
             
             ttk.Label(main_frame, text="Crear Nuevo Producto", 
-                    font=('Arial', 12, 'bold')).pack(pady=(0, 15))
+                    font=FONT_HEADER).pack(pady=(0, 15))
             
             # Información del producto
             info_frame = ttk.Frame(main_frame)
@@ -1013,8 +960,8 @@ class PurchasesWindow:
             button_frame = ttk.Frame(main_frame)
             button_frame.pack(pady=(15, 0))
             
-            ttk.Button(button_frame, text="Crear Producto", command=create_product).pack(side=tk.LEFT, padx=5)
-            ttk.Button(button_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+            ttk.Button(button_frame, text="Crear Producto", command=create_product, bootstyle="primary").pack(side=tk.LEFT, padx=5)
+            ttk.Button(button_frame, text="Cancelar", command=dialog.destroy, bootstyle="secondary").pack(side=tk.LEFT, padx=5)
             
             # Esperar hasta que se cierre el diálogo
             dialog.wait_window()
@@ -1055,15 +1002,15 @@ class PurchasesWindow:
         """Abre diálogo para agregar nuevo producto"""
         dialog = tk.Toplevel(self.window)
         dialog.title("Nuevo Producto")
-        dialog.geometry("500x800")
+        dialog.geometry("500x700")
         dialog.resizable(True, True)
         dialog.transient(self.window)
-        dialog.grab_set()
+        hacer_modal(dialog)
         
         # Centrar diálogo
         dialog.update_idletasks()
-        x = dialog.winfo_reqwidth()
-        y = dialog.winfo_reqheight()
+        x = max(500, dialog.winfo_reqwidth())
+        y = max(700, dialog.winfo_reqheight())
         pos_x = (dialog.winfo_screenwidth() // 2) - (x // 2)
         pos_y = (dialog.winfo_screenheight() // 2) - (y // 2)
         dialog.geometry(f"{x}x{y}+{pos_x}+{pos_y}")
@@ -1110,8 +1057,8 @@ class PurchasesWindow:
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=2, column=0, columnspan=2, pady=20)
         
-        ttk.Button(button_frame, text="Guardar", command=save_product).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Guardar", command=save_product, bootstyle="primary").pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancelar", command=dialog.destroy, bootstyle="secondary").pack(side=tk.LEFT, padx=5)
         
         name_entry.focus()
         dialog.bind('<Return>', lambda e: save_product())
@@ -1262,7 +1209,7 @@ class PurchasesWindow:
             main_frame.pack(fill=tk.BOTH, expand=True)
             
             ttk.Label(main_frame, text="Distribución de Costos por Producto", 
-                    font=("Arial", 12, "bold")).pack(pady=(0, 10))
+                    font=FONT_HEADER).pack(pady=(0, 10))
             
             ttk.Label(main_frame, text=f"Número de productos en lote: {num_items}").pack(anchor=tk.W)
             ttk.Label(main_frame, text=f"IVA total: {self.format_currency(tax_total)}").pack(anchor=tk.W)
@@ -1270,7 +1217,7 @@ class PurchasesWindow:
             ttk.Label(main_frame, text=f"Flete total: {self.format_currency(freight_total)}").pack(anchor=tk.W)
             ttk.Label(main_frame, text=f"Flete por producto: {self.format_currency(freight_per_item)}").pack(anchor=tk.W)
             
-            ttk.Button(main_frame, text="Cerrar", command=info_window.destroy).pack(pady=10)
+            ttk.Button(main_frame, text="Cerrar", command=info_window.destroy, bootstyle="secondary").pack(pady=10)
             
         except ValueError:
             messagebox.showerror("Error", "Por favor ingrese valores numéricos válidos")

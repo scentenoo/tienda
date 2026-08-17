@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import messagebox, filedialog
+import ttkbootstrap as ttk
 from models.sale import Sale
 from models.purchase import Purchase
 from models.expense import Expense
@@ -8,6 +9,15 @@ from utils.excel_exporter import ExcelExporter
 import os
 from config.database import get_connection
 from utils.formatters import format_currency, format_number
+from utils.theme import FONT_TITLE, FONT_HEADER, FONT_BOLD, FONT_NORMAL, header_bar
+
+COLOR_TO_BOOTSTYLE = {
+    "green": "success",
+    "red": "danger",
+    "blue": "info",
+    "purple": "dark",
+    "orange": "warning",
+}
 
 class ReportsWindow:
     def __init__(self, parent, user):
@@ -36,31 +46,16 @@ class ReportsWindow:
     
     def setup_ui(self):
         """Configura la interfaz de usuario con pestañas y nuevo estilo"""
-        # Configuración de estilos
-        self.style = ttk.Style()
-        self.style.configure('TFrame', background='#f5f5f5')
-        self.style.configure('TButton', font=('Arial', 10), padding=8)
-        self.style.configure('Header.TLabel', font=('Arial', 12, 'bold'), foreground='#495057')
-        self.style.configure('TNotebook', background='#f5f5f5')
-        self.style.configure('TNotebook.Tab', font=('Arial', 10, 'bold'), padding=[10, 5])
-        
         # Frame principal
-        main_frame = ttk.Frame(self.window, style='TFrame')
+        main_frame = ttk.Frame(self.window)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
+
         # Header
-        header = tk.Frame(main_frame, bg='#343a40', height=50)
-        header.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Label(header, 
-                text="Reportes y Análisis Financiero", 
-                font=("Arial", 16, "bold"),
-                foreground="white",
-                background="#343a40").pack(side=tk.LEFT, padx=20)
-        
+        header_bar(main_frame, "Reportes y Análisis Financiero")
+
         # Notebook (pestañas)
         notebook = ttk.Notebook(main_frame)
-        notebook.pack(fill=tk.BOTH, expand=True)
+        notebook.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
         
         # Pestaña 1: Resumen Financiero
         summary_tab = ttk.Frame(notebook)
@@ -75,23 +70,9 @@ class ReportsWindow:
     def setup_summary_tab(self, parent):
         """Configura la pestaña de resumen financiero con herramientas de diagnóstico MEJORADAS"""
         # Frame con scroll
-        canvas = tk.Canvas(parent, borderwidth=0, background="#ffffff")
-        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(
-                scrollregion=canvas.bbox("all")
-            )
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
+        scrollable_frame = ttk.ScrolledFrame(parent, auto_hide=True)
+        scrollable_frame.pack(fill="both", expand=True)
+
         # Sección de flujo de efectivo
         cash_frame = ttk.LabelFrame(scrollable_frame, text="Flujo de Efectivo", padding=10)
         cash_frame.pack(fill=tk.X, pady=5, padx=5)
@@ -121,28 +102,28 @@ class ReportsWindow:
         row1 = ttk.Frame(buttons_frame)
         row1.pack(pady=5)
         
-        ttk.Button(row1, 
-                text="🔄 Actualizar Datos", 
+        ttk.Button(row1,
+                text="🔄 Actualizar Datos",
                 command=self.load_financial_summary,
-                style='TButton').pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(row1, 
-                text="💳 Sincronizar Pagos", 
+                bootstyle='primary').pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(row1,
+                text="💳 Sincronizar Pagos",
                 command=self.sync_sales_with_partial_payments,
-                style='TButton').pack(side=tk.LEFT, padx=5)
-        
+                bootstyle='secondary').pack(side=tk.LEFT, padx=5)
+
     def create_summary_row(self, parent, label_text, key, color, bold=False):
         """Crea una fila de resumen financiero"""
         frame = ttk.Frame(parent)
         frame.pack(fill=tk.X, pady=2)
-        
-        font = ("Arial", 11, "bold") if bold else ("Arial", 10, "bold")
+
+        font = FONT_HEADER if bold else FONT_BOLD
         ttk.Label(frame, text=label_text, font=font).pack(side=tk.LEFT)
-        
-        value_font = ("Arial", 12, "bold") if bold else ("Arial", 10)
-        self.financial_labels[key] = ttk.Label(frame, text="$0.00", 
-                                            font=value_font, 
-                                            foreground=color,
+
+        value_font = FONT_HEADER if bold else FONT_NORMAL
+        self.financial_labels[key] = ttk.Label(frame, text="$0.00",
+                                            font=value_font,
+                                            bootstyle=COLOR_TO_BOOTSTYLE.get(color, "default"),
                                             anchor='e')
         self.financial_labels[key].pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
@@ -171,9 +152,9 @@ class ReportsWindow:
         frame = ttk.Frame(parent)
         frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
-        ttk.Label(frame, 
-                text="Exportar Reportes", 
-                font=("Arial", 14, "bold")).pack(pady=(0, 20))
+        ttk.Label(frame,
+                text="Exportar Reportes",
+                font=FONT_HEADER).pack(pady=(0, 20))
         
         # Botones de exportación
         export_buttons = [
@@ -186,7 +167,7 @@ class ReportsWindow:
         ]
         
         for text, command in export_buttons:
-            btn = ttk.Button(frame, text=text, command=command, style='TButton')
+            btn = ttk.Button(frame, text=text, command=command, bootstyle='secondary')
             btn.pack(fill=tk.X, pady=5)
         
     def setup_products_analysis(self, parent):
@@ -213,7 +194,7 @@ class ReportsWindow:
         
         # Botón para actualizar análisis
         ttk.Button(parent, text="Actualizar Análisis", 
-                  command=self.load_products_analysis).pack(pady=5)
+                  command=self.load_products_analysis, bootstyle="secondary-outline").pack(pady=5)
     
     def setup_clients_analysis(self, parent):
         """Configura el análisis de clientes"""
@@ -239,7 +220,7 @@ class ReportsWindow:
         
         # Botón para actualizar análisis
         ttk.Button(parent, text="Actualizar Análisis", 
-                  command=self.load_clients_analysis).pack(pady=5)
+                  command=self.load_clients_analysis, bootstyle="secondary-outline").pack(pady=5)
     
     def setup_losses_analysis(self, parent):
         """Configura el análisis de pérdidas - NUEVO"""
@@ -267,7 +248,7 @@ class ReportsWindow:
         
         # Botón para actualizar análisis
         ttk.Button(parent, text="Actualizar Análisis", 
-                  command=self.load_losses_analysis).pack(pady=5)
+                  command=self.load_losses_analysis, bootstyle="secondary-outline").pack(pady=5)
         
     def calculate_inventory_sold_with_full_costs(self):
         """
@@ -361,13 +342,13 @@ class ReportsWindow:
             # Actualizar UI con ambos tipos de ventas
             self.financial_labels['sales'].config(
                 text=f"{format_currency(sales_data['paid_sales'])} (Pagadas)",
-                foreground="green"
+                bootstyle="success"
             )
-            
+
             if 'credit_sales' in self.financial_labels:
                 self.financial_labels['credit_sales'].config(
                     text=f"{format_currency(sales_data['credit_sales'])} (Fiadas)",
-                    foreground="orange"
+                    bootstyle="warning"
                 )
 
 
@@ -1115,30 +1096,30 @@ class ReportsWindow:
         try:
             # Flujo de efectivo
             sales_text = f"{format_currency(data['total_sales'])} (P:{format_currency(data['paid_sales'])}, F:{format_currency(data['credit_sales'])}, Deben:{format_currency(data['current_debt'])})"
-            self.financial_labels['sales'].config(text=sales_text, foreground="green")
-            self.financial_labels['purchases'].config(text=format_currency(data['total_purchases']), foreground="red")
-            self.financial_labels['expenses'].config(text=format_currency(data['total_expenses']), foreground="red")
+            self.financial_labels['sales'].config(text=sales_text, bootstyle="success")
+            self.financial_labels['purchases'].config(text=format_currency(data['total_purchases']), bootstyle="danger")
+            self.financial_labels['expenses'].config(text=format_currency(data['total_expenses']), bootstyle="danger")
             self.financial_labels['cash'].config(
-                text=format_currency(calculations['cash_in_hand']), 
-                foreground="green" if calculations['cash_in_hand'] >= 0 else "red"
+                text=format_currency(calculations['cash_in_hand']),
+                bootstyle="success" if calculations['cash_in_hand'] >= 0 else "danger"
             )
-            
+
             # Inventario
-            self.financial_labels['inventory_purchases'].config(text=format_currency(data['total_purchases']), foreground="blue")
-            self.financial_labels['inventory_sold'].config(text=format_currency(data['inventory_sold']), foreground="green")
-            self.financial_labels['losses'].config(text=format_currency(data['total_losses']), foreground="orange")
+            self.financial_labels['inventory_purchases'].config(text=format_currency(data['total_purchases']), bootstyle="info")
+            self.financial_labels['inventory_sold'].config(text=format_currency(data['inventory_sold']), bootstyle="success")
+            self.financial_labels['losses'].config(text=format_currency(data['total_losses']), bootstyle="warning")
             self.financial_labels['current_inventory'].config(
-                text=format_currency(calculations['current_inventory_value']), 
-                foreground="purple" if calculations['current_inventory_value'] >= 0 else "red"
+                text=format_currency(calculations['current_inventory_value']),
+                bootstyle="dark" if calculations['current_inventory_value'] >= 0 else "danger"
             )
-            
+
             # Utilidad (SOLO ventas pagadas)
-            self.financial_labels['profit_sales'].config(text=format_currency(data['paid_sales']), foreground="green")
-            self.financial_labels['cogs'].config(text=format_currency(data['cogs']), foreground="red")
-            self.financial_labels['profit_expenses'].config(text=format_currency(data['total_expenses']), foreground="red")
+            self.financial_labels['profit_sales'].config(text=format_currency(data['paid_sales']), bootstyle="success")
+            self.financial_labels['cogs'].config(text=format_currency(data['cogs']), bootstyle="danger")
+            self.financial_labels['profit_expenses'].config(text=format_currency(data['total_expenses']), bootstyle="danger")
             self.financial_labels['net_profit'].config(
-                text=format_currency(calculations['net_profit']), 
-                foreground="darkgreen" if calculations['net_profit'] >= 0 else "red"
+                text=format_currency(calculations['net_profit']),
+                bootstyle="success" if calculations['net_profit'] >= 0 else "danger"
             )
             
             print(f"DEBUG - Datos actualizados:")
@@ -1161,20 +1142,20 @@ class ReportsWindow:
             # Actualizar directamente aquí
             # Flujo de efectivo
             sales_text = f"{format_currency(data['total_sales'])} (P:{format_currency(data['paid_sales'])}, F:{format_currency(data['credit_sales'])})"
-            self.financial_labels['sales'].config(text=sales_text, foreground="green")
-            self.financial_labels['purchases'].config(text=format_currency(data['total_purchases']), foreground="red")
-            self.financial_labels['expenses'].config(text=format_currency(data['total_expenses']), foreground="red")
-            self.financial_labels['cash'].config(text=format_currency(calculations['cash_in_hand']), 
-                                            foreground="green" if calculations['cash_in_hand'] >= 0 else "red")
-            
+            self.financial_labels['sales'].config(text=sales_text, bootstyle="success")
+            self.financial_labels['purchases'].config(text=format_currency(data['total_purchases']), bootstyle="danger")
+            self.financial_labels['expenses'].config(text=format_currency(data['total_expenses']), bootstyle="danger")
+            self.financial_labels['cash'].config(text=format_currency(calculations['cash_in_hand']),
+                                            bootstyle="success" if calculations['cash_in_hand'] >= 0 else "danger")
+
             # Inventario
-            self.financial_labels['inventory_purchases'].config(text=format_currency(data['total_purchases']), foreground="blue")
-            self.financial_labels['inventory_sold'].config(text=format_currency(data['inventory_sold']), foreground="green")
-            self.financial_labels['total_freight'].config(text=format_currency(data['total_freight']), foreground="red")     # NUEVO
-            self.financial_labels['total_iva'].config(text=format_currency(data['total_iva']), foreground="red")
-            self.financial_labels['losses'].config(text=format_currency(data['total_losses']), foreground="orange")
-            self.financial_labels['current_inventory'].config(text=format_currency(calculations['current_inventory_value']), 
-                                                            foreground="purple" if calculations['current_inventory_value'] >= 0 else "red")
+            self.financial_labels['inventory_purchases'].config(text=format_currency(data['total_purchases']), bootstyle="info")
+            self.financial_labels['inventory_sold'].config(text=format_currency(data['inventory_sold']), bootstyle="success")
+            self.financial_labels['total_freight'].config(text=format_currency(data['total_freight']), bootstyle="danger")     # NUEVO
+            self.financial_labels['total_iva'].config(text=format_currency(data['total_iva']), bootstyle="danger")
+            self.financial_labels['losses'].config(text=format_currency(data['total_losses']), bootstyle="warning")
+            self.financial_labels['current_inventory'].config(text=format_currency(calculations['current_inventory_value']),
+                                                            bootstyle="dark" if calculations['current_inventory_value'] >= 0 else "danger")
             
 
             
@@ -1186,19 +1167,19 @@ class ReportsWindow:
         """Actualiza la sección de valor del inventario"""
         self.financial_labels['inventory_purchases'].config(
             text=format_currency(data['total_purchases']),
-            foreground="blue"
+            bootstyle="info"
         )
         self.financial_labels['inventory_sold'].config(
             text=format_currency(data['inventory_sold']),
-            foreground="green" if data['inventory_sold'] > 0 else "black"
+            bootstyle="success" if data['inventory_sold'] > 0 else "default"
         )
         self.financial_labels['losses'].config(
             text=format_currency(data['total_losses']),
-            foreground="orange" if data['total_losses'] > 0 else "black"
+            bootstyle="warning" if data['total_losses'] > 0 else "default"
         )
         self.financial_labels['current_inventory'].config(
             text=format_currency(calculations['current_inventory_value']),
-            foreground="purple" if calculations['current_inventory_value'] >= 0 else "red"
+            bootstyle="dark" if calculations['current_inventory_value'] >= 0 else "danger"
         )
 
     def _update_profit_section(self, data, calculations):
@@ -1206,23 +1187,23 @@ class ReportsWindow:
         # USAR SOLO VENTAS PAGADAS para utilidad
         self.financial_labels['profit_sales'].config(
             text=format_currency(data['paid_sales']),  # Era: data['total_sales']
-            foreground="green"
+            bootstyle="success"
         )
         self.financial_labels['cogs'].config(
             text=format_currency(data['cogs']),
-            foreground="red"
+            bootstyle="danger"
         )
         self.financial_labels['profit_expenses'].config(
             text=format_currency(data['total_expenses']),
-            foreground="red"
+            bootstyle="danger"
         )
-        
+
         # Recalcular utilidad neta SOLO con ventas pagadas
         net_profit = data['paid_sales'] - data['cogs'] - data['total_expenses']
         self.financial_labels['net_profit'].config(
             text=format_currency(net_profit),
-            foreground="darkgreen" if net_profit >= 0 else "red",
-            font=("Arial", 12, "bold")
+            bootstyle="success" if net_profit >= 0 else "danger",
+            font=FONT_HEADER
         )
 
     def _handle_error(self, error):
@@ -2120,14 +2101,14 @@ class ReportsWindow:
             main_frame = ttk.Frame(discrepancy_window)
             main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
             
-            ttk.Label(main_frame, 
-                    text="Discrepancias de Inventario Detectadas", 
-                    font=("Arial", 14, "bold")).pack(pady=(0, 10))
-            
-            ttk.Label(main_frame, 
-                    text="Estas diferencias deben revisarse manualmente y registrarse en el módulo de Pérdidas/Mermas si corresponde:", 
-                    font=("Arial", 10), 
-                    foreground="red").pack(pady=(0, 10))
+            ttk.Label(main_frame,
+                    text="Discrepancias de Inventario Detectadas",
+                    font=FONT_HEADER).pack(pady=(0, 10))
+
+            ttk.Label(main_frame,
+                    text="Estas diferencias deben revisarse manualmente y registrarse en el módulo de Pérdidas/Mermas si corresponde:",
+                    font=FONT_NORMAL,
+                    bootstyle="danger").pack(pady=(0, 10))
             
             # Treeview para mostrar discrepancias
             columns = ('Producto', 'Comprado', 'Vendido', 'Perdido', 'Diferencia', 'Valor Diferencia')
@@ -2166,15 +2147,15 @@ class ReportsWindow:
                 ))
             
             # Label con total
-            ttk.Label(main_frame, 
-                    text=f"Valor total de discrepancias: {format_currency(total_discrepancy_value)}", 
-                    font=("Arial", 12, "bold"),
-                    foreground="red").pack(pady=10)
-            
-            ttk.Label(main_frame, 
-                    text="💡 Utiliza el módulo de Pérdidas/Mermas para registrar cualquier pérdida real", 
-                    font=("Arial", 10),
-                    foreground="blue").pack(pady=5)
+            ttk.Label(main_frame,
+                    text=f"Valor total de discrepancias: {format_currency(total_discrepancy_value)}",
+                    font=FONT_HEADER,
+                    bootstyle="danger").pack(pady=10)
+
+            ttk.Label(main_frame,
+                    text="💡 Utiliza el módulo de Pérdidas/Mermas para registrar cualquier pérdida real",
+                    font=FONT_NORMAL,
+                    bootstyle="info").pack(pady=5)
             
         except Exception as e:
             messagebox.showerror("Error", f"Error mostrando discrepancias: {e}")

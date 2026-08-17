@@ -189,6 +189,77 @@ def init_database():
             )
         ''')
         
+        # Conciliación de caja: lo que no se puede calcular desde la base.
+        # Son tablas nuevas e independientes; no tocan ninguna existente.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS giros_socios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha TEXT NOT NULL,
+                socio TEXT NOT NULL,
+                monto REAL NOT NULL,
+                concepto TEXT,
+                tipo TEXT NOT NULL DEFAULT 'giro',
+                created_at TEXT DEFAULT (datetime('now', 'localtime'))
+            )
+        ''')
+
+        # La conciliación solo cuenta los giros; las reinversiones aparecen
+        # únicamente en el resumen por socio.
+        columnas = [c[1] for c in cursor.execute("PRAGMA table_info(giros_socios)")]
+        if columnas and 'tipo' not in columnas:
+            cursor.execute("ALTER TABLE giros_socios ADD COLUMN tipo TEXT NOT NULL DEFAULT 'giro'")
+            print("Columna 'tipo' agregada a giros_socios")
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS conciliacion_manual (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mes TEXT NOT NULL,
+                concepto TEXT NOT NULL,
+                monto REAL NOT NULL DEFAULT 0,
+                nota TEXT,
+                UNIQUE (mes, concepto)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS conciliacion_filas_ocultas (
+                concepto TEXT PRIMARY KEY
+            )
+        ''')
+
+        # Archivo de ventas eliminadas. Al borrar una venta se copia aquí con
+        # sus líneas, para que el historial del cliente pueda seguir mostrando
+        # el detalle. Estas tablas NO entran en reportes ni en el Excel.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sales_eliminadas (
+                id INTEGER PRIMARY KEY,
+                client_id INTEGER,
+                total REAL,
+                payment_method TEXT,
+                notes TEXT,
+                created_at TEXT,
+                user_id INTEGER,
+                status TEXT,
+                adjustment REAL DEFAULT 0,
+                adjustment_reason TEXT,
+                eliminada_en TEXT
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sale_details_eliminados (
+                id INTEGER PRIMARY KEY,
+                sale_id INTEGER NOT NULL,
+                product_id INTEGER,
+                product_name TEXT,
+                quantity REAL,
+                unit_price REAL,
+                sale_price REAL,
+                subtotal REAL,
+                cost_price REAL DEFAULT 0
+            )
+        ''')
+
         # Tabla de compras
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS purchases (

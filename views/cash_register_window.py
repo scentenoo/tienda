@@ -1,8 +1,9 @@
 import tkinter as tk
-from tkinter import ttk
+import ttkbootstrap as ttk
 from datetime import date, timedelta
 from models.cash_register import CashRegister
 from utils.formatters import format_currency
+from utils.theme import FONT_NORMAL, FONT_BOLD, kpi_card, role_color
 
 
 class CashRegisterWindow:
@@ -17,34 +18,8 @@ class CashRegisterWindow:
 
         self._selected_date = date.today().isoformat()
 
-        self._setup_styles()
         self._setup_ui()
         self._load_day(self._selected_date)
-
-    # ─────────────────────────────────────────────────────────────
-    # ESTILOS
-    # ─────────────────────────────────────────────────────────────
-    def _setup_styles(self):
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        self.style.configure('TFrame', background='#f8f9fa')
-        self.style.configure('TLabel', background='#f8f9fa')
-        self.style.configure('TNotebook', background='#f8f9fa')
-        self.style.configure('TNotebook.Tab', font=('Arial', 10, 'bold'), padding=(12, 6))
-        self.style.configure('Header.TLabel',
-                              font=('Arial', 22, 'bold'),
-                              foreground='#2e7d32',
-                              background='#f8f9fa')
-        self.style.configure('Sub.TLabel',
-                              font=('Arial', 11),
-                              foreground='#555',
-                              background='#f8f9fa')
-        self.style.configure('Accent.TButton',
-                              font=('Arial', 10, 'bold'),
-                              foreground='white',
-                              background='#4a6baf')
-        self.style.configure('Treeview', rowheight=26, font=('Arial', 9))
-        self.style.configure('Treeview.Heading', font=('Arial', 9, 'bold'))
 
     # ─────────────────────────────────────────────────────────────
     # LAYOUT PRINCIPAL
@@ -78,62 +53,40 @@ class CashRegisterWindow:
 
         ttk.Button(date_row, text='◀ Día anterior',
                    command=self._prev_day,
-                   style='Accent.TButton').pack(side=tk.LEFT)
+                   bootstyle='secondary-outline').pack(side=tk.LEFT)
 
         self.date_label = ttk.Label(date_row,
                                     text=self._selected_date,
-                                    font=('Arial', 12, 'bold'),
-                                    foreground='#343a40',
-                                    background='#f8f9fa')
+                                    font=FONT_BOLD)
         self.date_label.pack(side=tk.LEFT, padx=15)
 
         ttk.Button(date_row, text='Día siguiente ▶',
                    command=self._next_day,
-                   style='Accent.TButton').pack(side=tk.LEFT)
+                   bootstyle='secondary-outline').pack(side=tk.LEFT)
 
         ttk.Button(date_row, text='🔄 Hoy',
                    command=self._go_today,
-                   style='Accent.TButton').pack(side=tk.LEFT, padx=(15, 0))
+                   bootstyle='primary').pack(side=tk.LEFT, padx=(15, 0))
 
         ttk.Button(date_row, text='↺ Actualizar',
-                   command=lambda: self._load_day(self._selected_date)).pack(side=tk.RIGHT)
+                   command=lambda: self._load_day(self._selected_date),
+                   bootstyle='secondary-outline').pack(side=tk.RIGHT)
 
         # ── Totales del día ────────────────────────────────────
         totals_frame = ttk.Frame(frame)
         totals_frame.pack(fill=tk.X, pady=(0, 12))
 
         # Tarjeta: Ventas contado
-        card1 = tk.Frame(totals_frame, bg='#e8f5e9', bd=1, relief='solid')
+        card1, self.lbl_contado = kpi_card(totals_frame, 'Ventas al contado', '$0', bootstyle='success')
         card1.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6))
-        ttk.Label(card1, text='Ventas al contado',
-                  font=('Arial', 9), foreground='#555',
-                  background='#e8f5e9').pack(pady=(8, 0))
-        self.lbl_contado = tk.Label(card1, text='$0',
-                                    font=('Arial', 16, 'bold'),
-                                    fg='#2e7d32', bg='#e8f5e9')
-        self.lbl_contado.pack(pady=(0, 8))
 
         # Tarjeta: Abonos
-        card2 = tk.Frame(totals_frame, bg='#e3f2fd', bd=1, relief='solid')
+        card2, self.lbl_abonos = kpi_card(totals_frame, 'Abonos de clientes', '$0', bootstyle='info')
         card2.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6))
-        ttk.Label(card2, text='Abonos de clientes',
-                  font=('Arial', 9), foreground='#555',
-                  background='#e3f2fd').pack(pady=(8, 0))
-        self.lbl_abonos = tk.Label(card2, text='$0',
-                                   font=('Arial', 16, 'bold'),
-                                   fg='#1565c0', bg='#e3f2fd')
-        self.lbl_abonos.pack(pady=(0, 8))
 
         # Tarjeta: Total general
-        card3 = tk.Frame(totals_frame, bg='#343a40', bd=1, relief='solid')
+        card3, self.lbl_total = kpi_card(totals_frame, 'TOTAL EN CAJA', '$0', bootstyle='dark')
         card3.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        ttk.Label(card3, text='TOTAL EN CAJA',
-                  font=('Arial', 9, 'bold'), foreground='#aaa',
-                  background='#343a40').pack(pady=(8, 0))
-        self.lbl_total = tk.Label(card3, text='$0',
-                                  font=('Arial', 18, 'bold'),
-                                  fg='white', bg='#343a40')
-        self.lbl_total.pack(pady=(0, 8))
 
         # ── Listado de movimientos ─────────────────────────────
         list_frame = ttk.LabelFrame(frame, text=' Movimientos del día ', padding=6)
@@ -153,8 +106,8 @@ class CashRegisterWindow:
         self.mov_tree.column('Monto', width=110, anchor=tk.E)
 
         # Tags de color por tipo
-        self.mov_tree.tag_configure('contado', foreground='#2e7d32')
-        self.mov_tree.tag_configure('abono', foreground='#1565c0')
+        self.mov_tree.tag_configure('contado', foreground=role_color('success'))
+        self.mov_tree.tag_configure('abono', foreground=role_color('info'))
 
         sb = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.mov_tree.yview)
         self.mov_tree.configure(yscrollcommand=sb.set)
@@ -165,9 +118,8 @@ class CashRegisterWindow:
         # Etiqueta de "sin movimientos"
         self.lbl_empty = ttk.Label(frame,
                                    text='No hay movimientos para esta fecha.',
-                                   font=('Arial', 10, 'italic'),
-                                   foreground='#888',
-                                   background='#f8f9fa')
+                                   font=FONT_NORMAL,
+                                   bootstyle='secondary')
 
     # ─────────────────────────────────────────────────────────────
     # PESTAÑA: HISTORIAL
@@ -179,7 +131,7 @@ class CashRegisterWindow:
         controls.pack(fill=tk.X, pady=(0, 8))
 
         ttk.Label(controls, text='Últimos días:',
-                  font=('Arial', 10)).pack(side=tk.LEFT)
+                  font=FONT_NORMAL).pack(side=tk.LEFT)
 
         self.days_var = tk.StringVar(value='30')
         days_combo = ttk.Combobox(controls, textvariable=self.days_var,
@@ -189,7 +141,7 @@ class CashRegisterWindow:
 
         ttk.Button(controls, text='↺ Cargar historial',
                    command=self._load_history,
-                   style='Accent.TButton').pack(side=tk.LEFT)
+                   bootstyle='primary').pack(side=tk.LEFT)
 
         # Treeview historial
         cols = ('Fecha', 'Ventas contado', 'Abonos', 'Total en caja')
@@ -203,7 +155,7 @@ class CashRegisterWindow:
         self.hist_tree.column('Abonos', width=160, anchor=tk.E)
         self.hist_tree.column('Total en caja', width=160, anchor=tk.E)
 
-        self.hist_tree.tag_configure('alt', background='#f0f4ff')
+        self.hist_tree.tag_configure('alt', background=role_color('light'))
 
         sb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.hist_tree.yview)
         self.hist_tree.configure(yscrollcommand=sb.set)

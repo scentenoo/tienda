@@ -1,8 +1,10 @@
 import os
 import sys
+import traceback
 import tkinter as tk
 from tkinter import messagebox
 from datetime import datetime
+import ttkbootstrap as ttk
 
 def get_base_path():
     if getattr(sys, 'frozen', False):
@@ -24,8 +26,21 @@ def main():
     try:
         init_database()
 
-        root = tk.Tk()
+        root = ttk.Window(themename="flatly")
         root.withdraw()
+
+        def reportar_error(tipo, valor, rastro):
+            """Sin esto, un error dentro de cualquier botón o ventana se traga
+            en silencio y la ventana queda en blanco sin explicación."""
+            detalle = "".join(traceback.format_exception(tipo, valor, rastro))
+            try:
+                with open(os.path.join(base_path, "error_log.txt"), "a") as f:
+                    f.write(f"{datetime.now()}: {detalle}\n")
+            except Exception:
+                pass
+            messagebox.showerror("Error", f"{valor}\n\n{detalle[-800:]}")
+
+        root.report_callback_exception = reportar_error
         root.protocol("WM_DELETE_WINDOW", root.quit)
 
         # Contar usuarios registrados
@@ -46,7 +61,6 @@ def main():
         root.mainloop()
 
     except Exception as e:
-        import traceback
         error_msg = f"Error crítico: {str(e)}\n\n{traceback.format_exc()}"
         messagebox.showerror("Error de Inicialización", error_msg)
         log_path = os.path.join(base_path, "error_log.txt")

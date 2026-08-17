@@ -1,16 +1,18 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
+import ttkbootstrap as ttk
 from models.product import Product
 from models.client import Client
 from models.sale import Sale
 from utils.validators import validate_number, validate_positive
 from datetime import datetime, timedelta
-from tkinter import simpledialog
 from utils.formatters import format_number, format_currency
 from utils.validators import safe_float_conversion
+from utils.theme import FONT_TITLE, FONT_HEADER, FONT_BOLD, FONT_NORMAL, FONT_SMALL, ROW_COLORS
 
 from config.database import get_connection
 from views.sale_detail_window import SaleDetailWindow
+from utils.ventanas import hacer_modal
 
 class SalesWindow:
     def __init__(self, parent, user):
@@ -56,26 +58,8 @@ class SalesWindow:
     def setup_ui(self):
         """Configura la interfaz optimizada - TODO EN UNA PANTALLA"""
         
-        # Configurar estilos
         self.style = ttk.Style()
-        self.style.theme_use('clam')
-        
-        # Colores personalizados
-        bg_color = '#f8f9fa'
-        header_color = '#343a40'
-        accent_color = '#4a6baf'
-        success_color = '#28a745'
-        danger_color = '#dc3545'
-        
-        # Configurar estilos
-        self.style.configure('TFrame', background=bg_color)
-        self.style.configure('TLabel', background=bg_color)
-        self.style.configure('Header.TFrame', background=header_color)
-        self.style.configure('Header.TLabel', foreground='white', background=header_color, font=('Arial', 10))
-        self.style.configure('Accent.TButton', foreground='white', background=accent_color, font=('Arial', 10, 'bold'))
-        self.style.configure('Success.TButton', foreground='white', background=success_color)
-        self.style.configure('Danger.TButton', foreground='white', background=danger_color)
-        
+
         # ═══════════════════════════════════════════════════════════
         # DISEÑO EN 2 COLUMNAS: IZQUIERDA (productos) | DERECHA (info)
         # ═══════════════════════════════════════════════════════════
@@ -89,8 +73,8 @@ class SalesWindow:
         # ─────────────────────────────────────────────────────────────
         title_frame = ttk.Frame(main_frame)
         title_frame.pack(fill=tk.X, pady=(0, 10))
-        ttk.Label(title_frame, text="📝 Nueva Venta", 
-                font=("Arial", 14, "bold"), foreground=accent_color).pack(side=tk.LEFT)
+        ttk.Label(title_frame, text="📝 Nueva Venta",
+                font=FONT_TITLE, bootstyle="primary").pack(side=tk.LEFT)
         
         # ─────────────────────────────────────────────────────────────
         # CONTENEDOR DE 2 COLUMNAS
@@ -125,7 +109,7 @@ class SalesWindow:
             textvariable=self.product_var, 
             state="normal",
             width=25,
-            font=('Arial', 9)
+            font=FONT_NORMAL
         )
         self.product_combo.pack(side=tk.LEFT, padx=5)
         self.product_combo.bind('<KeyRelease>', self._on_product_typing)
@@ -138,12 +122,12 @@ class SalesWindow:
         ttk.Label(row1, text="Precio:", width=6).pack(side=tk.LEFT, padx=(10, 0))
         self.unit_price_var = tk.StringVar()
         ttk.Entry(row1, textvariable=self.unit_price_var, state="readonly", 
-                width=10, font=('Arial', 9), justify=tk.RIGHT).pack(side=tk.LEFT, padx=5)
+                width=10, font=FONT_NORMAL, justify=tk.RIGHT).pack(side=tk.LEFT, padx=5)
         
         ttk.Label(row1, text="Stock:", width=6).pack(side=tk.LEFT)
         self.stock_var = tk.StringVar()
         ttk.Entry(row1, textvariable=self.stock_var, state="readonly", 
-                width=8, font=('Arial', 9), justify=tk.RIGHT).pack(side=tk.LEFT, padx=5)
+                width=8, font=FONT_NORMAL, justify=tk.RIGHT).pack(side=tk.LEFT, padx=5)
         
         # Fila 2: Cantidad, Dinero, Subtotal
         row2 = ttk.Frame(product_search_frame)
@@ -155,7 +139,7 @@ class SalesWindow:
             row2, 
             textvariable=self.quantity_var, 
             width=10,
-            font=('Arial', 9),
+            font=FONT_NORMAL,
             justify=tk.RIGHT
         )
         self.quantity_entry.pack(side=tk.LEFT, padx=5)
@@ -167,7 +151,7 @@ class SalesWindow:
             row2, 
             textvariable=self.money_var, 
             width=10,
-            font=('Arial', 9),
+            font=FONT_NORMAL,
             justify=tk.RIGHT
         )
         self.money_entry.pack(side=tk.LEFT, padx=5)
@@ -176,14 +160,14 @@ class SalesWindow:
         ttk.Label(row2, text="Subtotal:", width=8).pack(side=tk.LEFT)
         self.subtotal_var = tk.StringVar()
         ttk.Entry(row2, textvariable=self.subtotal_var, state="readonly", 
-                width=10, font=('Arial', 9), justify=tk.RIGHT).pack(side=tk.LEFT, padx=5)
+                width=10, font=FONT_NORMAL, justify=tk.RIGHT).pack(side=tk.LEFT, padx=5)
         
         # Botón Agregar
         ttk.Button(
             product_search_frame, 
-            text="➕ Agregar Producto", 
+            text="➕ Agregar Producto",
             command=self.add_product_to_sale,
-            style='Success.TButton'
+            bootstyle='success'
         ).pack(pady=(5, 0))
         
         # ─── Sección: Lista de Productos ───
@@ -221,13 +205,13 @@ class SalesWindow:
         items_buttons = ttk.Frame(items_frame)
         items_buttons.pack(fill=tk.X, pady=(5, 0))
         
-        ttk.Button(items_buttons, text="🗑️ Quitar", 
+        ttk.Button(items_buttons, text="🗑️ Quitar",
                 command=self.remove_product_from_sale,
-                style='Danger.TButton').pack(side=tk.LEFT, padx=2)
-        
-        ttk.Button(items_buttons, text="🧹 Limpiar Todo", 
+                bootstyle='danger').pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(items_buttons, text="🧹 Limpiar Todo",
                 command=self.clear_sale_items,
-                style='Danger.TButton').pack(side=tk.LEFT, padx=2)
+                bootstyle='danger-outline').pack(side=tk.LEFT, padx=2)
         
         # ═══════════════════════════════════════════════════════════
         # COLUMNA DERECHA - INFORMACIÓN DE VENTA
@@ -239,10 +223,10 @@ class SalesWindow:
         
         self.total_sale_var = tk.StringVar(value="$0.00")
         ttk.Label(
-            total_frame, 
-            textvariable=self.total_sale_var, 
-            font=("Arial", 18, "bold"), 
-            foreground=accent_color
+            total_frame,
+            textvariable=self.total_sale_var,
+            font=FONT_TITLE,
+            bootstyle="primary"
         ).pack()
         
         # ─── Estado y Tipo de Pago ───
@@ -250,7 +234,7 @@ class SalesWindow:
         payment_frame.pack(fill=tk.X, pady=(0, 10))
         
         # Estado de pago
-        ttk.Label(payment_frame, text="Estado:", font=('Arial', 9, 'bold')).pack(anchor=tk.W, pady=(0, 5))
+        ttk.Label(payment_frame, text="Estado:", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
         self.status_var = tk.StringVar(value="paid")
         
         status_buttons = ttk.Frame(payment_frame)
@@ -273,14 +257,14 @@ class SalesWindow:
         ).pack(side=tk.LEFT)
         
         # Tipo de pago
-        ttk.Label(payment_frame, text="Tipo:", font=('Arial', 9, 'bold')).pack(anchor=tk.W, pady=(0, 5))
+        ttk.Label(payment_frame, text="Tipo:", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
         self.payment_type_var = tk.StringVar(value="cash")
         payment_combo = ttk.Combobox(
             payment_frame, 
             textvariable=self.payment_type_var, 
             width=18, 
             state="readonly",
-            font=('Arial', 9)
+            font=FONT_NORMAL
         )
         payment_combo['values'] = ["Efectivo", "Crédito"]
         payment_combo.pack(fill=tk.X)
@@ -295,7 +279,7 @@ class SalesWindow:
             textvariable=self.client_var, 
             width=22, 
             state="disabled",
-            font=('Arial', 9)
+            font=FONT_NORMAL
         )
         self.client_combo.pack(fill=tk.X, pady=(0, 5))
 
@@ -312,16 +296,16 @@ class SalesWindow:
         ttk.Label(
             client_frame,
             text="Escriba para buscar por nombre",
-            font=('Arial', 8),
-            foreground='gray'
+            font=FONT_SMALL,
+            bootstyle='secondary'
         ).pack(anchor=tk.W)
         
         self.add_client_btn = ttk.Button(
             client_frame, 
-            text="➕ Nuevo Cliente", 
-            command=self.add_new_client, 
+            text="➕ Nuevo Cliente",
+            command=self.add_new_client,
             state="disabled",
-            style='Success.TButton'
+            bootstyle='success'
         )
         self.add_client_btn.pack(fill=tk.X)
         
@@ -333,13 +317,13 @@ class SalesWindow:
         adj_row1 = ttk.Frame(adjustment_frame)
         adj_row1.pack(fill=tk.X, pady=(0, 5))
         
-        ttk.Label(adj_row1, text="Monto:", font=('Arial', 9)).pack(side=tk.LEFT)
+        ttk.Label(adj_row1, text="Monto:", font=FONT_NORMAL).pack(side=tk.LEFT)
         self.adjustment_var = tk.StringVar(value="0")
         self.adjustment_entry = ttk.Entry(
             adj_row1, 
             textvariable=self.adjustment_var, 
             width=12,
-            font=('Arial', 9),
+            font=FONT_NORMAL,
             justify=tk.RIGHT,
             state="disabled"
         )
@@ -349,17 +333,17 @@ class SalesWindow:
         ttk.Label(
             adj_row1, 
             text="(+/-)",
-            font=('Arial', 8),
-            foreground='gray'
+            font=FONT_SMALL,
+            bootstyle='secondary'
         ).pack(side=tk.LEFT, padx=(5, 0))
         
         # Razón del ajuste
-        ttk.Label(adjustment_frame, text="Razón:", font=('Arial', 9)).pack(anchor=tk.W, pady=(0, 2))
+        ttk.Label(adjustment_frame, text="Razón:", font=FONT_NORMAL).pack(anchor=tk.W, pady=(0, 2))
         self.adjustment_reason_var = tk.StringVar()
         self.adjustment_reason_entry = ttk.Entry(
             adjustment_frame,
             textvariable=self.adjustment_reason_var,
-            font=('Arial', 9),
+            font=FONT_NORMAL,
             state="disabled"
         )
         self.adjustment_reason_entry.pack(fill=tk.X)
@@ -369,17 +353,17 @@ class SalesWindow:
         action_frame.pack(fill=tk.X, pady=(10, 0))
         
         ttk.Button(
-            action_frame, 
-            text="💾 Guardar Venta", 
-            command=self.save_complete_sale, 
-            style='Accent.TButton'
+            action_frame,
+            text="💾 Guardar Venta",
+            command=self.save_complete_sale,
+            bootstyle='primary'
         ).pack(fill=tk.X, pady=(0, 5))
-        
+
         ttk.Button(
-            action_frame, 
-            text="🗑️ Limpiar Todo", 
+            action_frame,
+            text="🗑️ Limpiar Todo",
             command=self.clear_all_form,
-            style='Danger.TButton'
+            bootstyle='danger-outline'
         ).pack(fill=tk.X)
         
         # ═══════════════════════════════════════════════════════════
@@ -402,30 +386,30 @@ class SalesWindow:
         
         # Título
         title_label = ttk.Label(main_frame, text="Lista de Ventas", 
-                               font=("Arial", 14, "bold"))
+                               font=FONT_TITLE)
         title_label.pack(pady=(0, 10))
         
         # Configurar estilos para el treeview
         self.style.configure('Treeview', rowheight=25)
-        self.style.configure('credit.Treeview', foreground='#E65100', background='#FFF3E0')
-        self.style.configure('paid.Treeview', foreground='#2E7D32', background='#E8F5E9')
 
         # Frame para botones
         controls_frame = ttk.Frame(main_frame)
         controls_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Button(controls_frame, text="Actualizar Lista", 
-                  command=self.load_sales).pack(side=tk.LEFT, padx=5)
-        ttk.Button(controls_frame, text="Ver Detalles", 
-                  command=self.view_sale_details).pack(side=tk.LEFT, padx=5)
-        ttk.Button(controls_frame, text="Editar Venta", 
-                  command=self.edit_sale).pack(side=tk.LEFT, padx=5)
-        ttk.Button(controls_frame, text="Eliminar Venta", 
-                  command=self.delete_sale).pack(side=tk.LEFT, padx=5)
-        
+
+        ttk.Button(controls_frame, text="Actualizar Lista",
+                  command=self.load_sales, bootstyle="secondary-outline").pack(side=tk.LEFT, padx=5)
+        ttk.Button(controls_frame, text="Ver Detalles",
+                  command=self.view_sale_details, bootstyle="info").pack(side=tk.LEFT, padx=5)
+        ttk.Button(controls_frame, text="Editar Venta",
+                  command=self.edit_sale, bootstyle="primary").pack(side=tk.LEFT, padx=5)
+        ttk.Button(controls_frame, text="Eliminar Venta",
+                  command=self.delete_sale, bootstyle="danger").pack(side=tk.LEFT, padx=5)
+
         # Treeview para mostrar ventas
         columns = ('ID', 'Cliente', 'Subtotal', 'Ajuste', 'Total', 'Estado', 'Tipo Pago', 'Fecha')
         self.sales_tree = ttk.Treeview(main_frame, columns=columns, show='headings')
+        self.sales_tree.tag_configure('credit', **ROW_COLORS['warning'])
+        self.sales_tree.tag_configure('paid', **ROW_COLORS['success'])
 
         # Configurar columnas
         for col in columns:
@@ -1017,12 +1001,12 @@ class SalesWindow:
         dialog.geometry("300x500")
         dialog.resizable(False, False)
         dialog.transient(self.window)
-        dialog.grab_set()
+        hacer_modal(dialog)
         
         # Centrar diálogo
         dialog.update_idletasks()
-        x = dialog.winfo_reqwidth()
-        y = dialog.winfo_reqheight()
+        x = max(300, dialog.winfo_reqwidth())
+        y = max(500, dialog.winfo_reqheight())
         pos_x = (dialog.winfo_screenwidth() // 2) - (x // 2)
         pos_y = (dialog.winfo_screenheight() // 2) - (y // 2)
         dialog.geometry(f"{x}x{y}+{pos_x}+{pos_y}")
@@ -1056,8 +1040,8 @@ class SalesWindow:
         button_frame = ttk.Frame(main_frame)
         button_frame.pack()
         
-        ttk.Button(button_frame, text="Guardar", command=save_client).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Guardar", command=save_client, bootstyle="primary").pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancelar", command=dialog.destroy, bootstyle="secondary").pack(side=tk.LEFT, padx=5)
         
         dialog.bind('<Return>', lambda e: save_client())
     
@@ -1331,8 +1315,8 @@ class SalesWindow:
             button_frame = ttk.Frame(main_frame)
             button_frame.grid(row=4, column=0, columnspan=2, pady=20)
             
-            ttk.Button(button_frame, text="Guardar", command=save_changes).pack(side=tk.LEFT, padx=5)
-            ttk.Button(button_frame, text="Cancelar", command=edit_window.destroy).pack(side=tk.LEFT, padx=5)
+            ttk.Button(button_frame, text="Guardar", command=save_changes, bootstyle="primary").pack(side=tk.LEFT, padx=5)
+            ttk.Button(button_frame, text="Cancelar", command=edit_window.destroy, bootstyle="secondary").pack(side=tk.LEFT, padx=5)
             
         except Exception as e:
             messagebox.showerror("Error", f"Error al editar venta: {str(e)}")
@@ -1387,13 +1371,38 @@ class SalesWindow:
                     ''', (sale.client_id, sale.total, 
                         f"Reversión de venta #{sale.id}", sale.id))
                 
-                # 3. Eliminar registros
+                # 3. Archivar antes de borrar, para que el historial del cliente
+                #    pueda seguir mostrando el detalle de esta venta. Las
+                #    transacciones del cliente conservan el sale_id y sin esto
+                #    quedaban apuntando a una venta inexistente.
+                cursor.execute('''
+                    INSERT OR REPLACE INTO sales_eliminadas
+                        (id, client_id, total, payment_method, notes, created_at,
+                         user_id, status, adjustment, adjustment_reason, eliminada_en)
+                    SELECT id, client_id, total, payment_method, notes, created_at,
+                           user_id, status, adjustment, adjustment_reason,
+                           datetime('now', 'localtime')
+                      FROM sales WHERE id = ?
+                ''', (sale.id,))
+
+                cursor.execute('''
+                    INSERT OR REPLACE INTO sale_details_eliminados
+                        (id, sale_id, product_id, product_name, quantity,
+                         unit_price, sale_price, subtotal, cost_price)
+                    SELECT sd.id, sd.sale_id, sd.product_id, p.name, sd.quantity,
+                           sd.unit_price, sd.sale_price, sd.subtotal, sd.cost_price
+                      FROM sale_details sd
+                      LEFT JOIN products p ON p.id = sd.product_id
+                     WHERE sd.sale_id = ?
+                ''', (sale.id,))
+
+                # 4. Eliminar registros
                 cursor.execute('DELETE FROM sale_details WHERE sale_id = ?', (sale.id,))
                 cursor.execute('DELETE FROM sales WHERE id = ?', (sale.id,))
                 
                 conn.commit()
                 
-                # 4. Actualizar stock localmente
+                # 5. Actualizar stock localmente
                 for detail in details:
                     product = next((p for p in self.products if p.id == detail['product_id']), None)
                     if product:

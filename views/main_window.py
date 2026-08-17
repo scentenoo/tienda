@@ -1,8 +1,13 @@
+import queue
+import threading
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
+import ttkbootstrap as ttk
 from views.users_window import UsersWindow
 from views.losses_window import LossesWindow
 from utils.backup import backup_y_sync_drive
+from utils.theme import FONT_TITLE, header_bar
+from utils.ventanas import hacer_modal
 class MainWindow:
     def __init__(self, parent, user):
         self.parent = parent
@@ -39,68 +44,52 @@ class MainWindow:
     def setup_ui(self):
         """Configura la interfaz de usuario"""
         self.create_menu()
-        
-        # Configuración de estilos
-        self.style = ttk.Style()
-        self.style.configure('TFrame', background='#f5f5f5')
-        self.style.configure('TButton', font=('Arial', 11), padding=10)
-        self.style.configure('Header.TLabel', font=('Arial', 12, 'bold'), foreground='#495057')
-        
+
         # Frame principal
-        main_frame = ttk.Frame(self.parent, style='TFrame')
+        main_frame = ttk.Frame(self.parent)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Header
-        header = tk.Frame(main_frame, bg='#343a40', height=60)
-        header.pack(fill=tk.X)
-        
-        # Botón de logout
-        logout_btn = ttk.Button(header, text="Cerrar Sesión", command=self.logout, style='Header.TButton')
-        logout_btn.pack(side=tk.RIGHT, padx=20, pady=10)
-        
+        header_bar(main_frame, "Sistema de Gestión Charcutería HYE", on_logout=self.logout,
+                   logout_text="Cerrar Sesión")
+
         # Contenido principal
         content_frame = ttk.Frame(main_frame)
         content_frame.pack(pady=40, padx=30, fill=tk.BOTH, expand=True)
-        
+
         # Título
-        ttk.Label(content_frame, 
-                text="Sistema de Gestión Charcutería HYE",
-                font=("Arial", 20, "bold")).pack(pady=(0, 20))
-        
-        # Botones principales
-        button_style = {
-            "width": 20,
-            "padding": 15,
-            "font": ('Arial', 11, 'bold')
-        }
-        
+        ttk.Label(content_frame,
+                text="Menú principal",
+                font=FONT_TITLE).pack(pady=(0, 20))
+
+        # Botones principales, cada módulo con un color semántico propio
         buttons = [
-            ("💰 VENTAS", self.open_sales),
-            ("👥 CLIENTES", self.open_clients),
-            ("📦 INVENTARIO", self.open_inventory),
-            ("💵 CAJA DEL DÍA", self.open_cash_register)
+            ("💰 VENTAS", self.open_sales, "primary"),
+            ("👥 CLIENTES", self.open_clients, "info"),
+            ("📦 INVENTARIO", self.open_inventory, "secondary"),
+            ("💵 CAJA DEL DÍA", self.open_cash_register, "success"),
         ]
-        
+
         if self.user.role == 'admin':
             buttons.extend([
-                ("🛒 COMPRAS", self.open_purchases),
-                ("📉 PÉRDIDAS", self.open_losses),
-                ("⚙️ USUARIOS", self.open_users),
-                ("💸 GASTOS OPERATIVOS", self.open_expenses)
+                ("🛒 COMPRAS", self.open_purchases, "warning"),
+                ("📉 PÉRDIDAS", self.open_losses, "danger"),
+                ("⚙️ USUARIOS", self.open_users, "dark"),
+                ("💸 GASTOS OPERATIVOS", self.open_expenses, "success-outline"),
+                ("📊 INFORMES", self.open_conciliacion, "info-outline"),
+                ("📈 PANEL DE ANÁLISIS", self.open_panel, "primary-outline"),
             ])
-        
-        for text, command in buttons:
-            btn = tk.Button(content_frame, text=text, command=command,
-                        bg='#4a6baf', fg='white', bd=0,
-                        font=('Arial', 11, 'bold'),
-                        padx=20, pady=10)
-            btn.pack(pady=10, fill=tk.X)
-        
+
+        for text, command, bootstyle in buttons:
+            btn = ttk.Button(content_frame, text=text, command=command,
+                              bootstyle=bootstyle)
+            btn.pack(pady=6, fill=tk.X, ipady=8)
+
         # Footer
-        footer = tk.Frame(main_frame, bg='#343a40', height=40)
+        footer = ttk.Frame(main_frame, bootstyle="dark")
         footer.pack(fill=tk.X, side=tk.BOTTOM)
-        ttk.Label(footer, text="© 2023 Charcutería HYE - Versión 1.0", 
-                foreground="white", background="#343a40").pack(pady=10)
+        ttk.Label(footer, text="© 2023 Charcutería HYE - Versión 1.0",
+                bootstyle="inverse-dark").pack(pady=10)
     
     def create_menu(self):
         """Crea el menú de la aplicación"""
@@ -136,6 +125,9 @@ class MainWindow:
             operations_menu.add_command(label="Gestión de Usuarios", command=self.open_users)
             operations_menu.add_command(label="Gastos Operativos", command=self.open_expenses)
             operations_menu.add_command(label="Reportes", command=self.open_reports)
+            operations_menu.add_command(label="Informes (Conciliación / Pendientes)",
+                                        command=self.open_conciliacion)
+            operations_menu.add_command(label="Panel de Análisis", command=self.open_panel)
         
         # Menú Ayuda
         help_menu = tk.Menu(menubar, tearoff=0)
@@ -166,18 +158,65 @@ class MainWindow:
             self.parent.quit()
 
     def subir_a_google_drive(self):
-        try:
-            info = backup_y_sync_drive()
+        """Lanza el backup en un hilo aparte. La subida a Drive tarda cerca de
+        un minuto, y hacerla en el hilo de Tk dejaba la ventana congelada."""
+        espera = self._ventana_de_espera()
+        resultado = queue.Queue()
 
-            messagebox.showinfo(
-                "Google Drive actualizado",
-                f"✔ Backup creado:\n{info['backup']}\n\n"
-                f"✔ Base sincronizada:\n{info['sync']}\n\n"
-                f"Fecha: {info['fecha']}"
-            )
+        def trabajo():
+            try:
+                resultado.put(("ok", backup_y_sync_drive()))
+            except Exception as e:
+                resultado.put(("error", e))
 
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
+        threading.Thread(target=trabajo, daemon=True).start()
+
+        def revisar():
+            try:
+                estado, dato = resultado.get_nowait()
+            except queue.Empty:
+                self.parent.after(200, revisar)
+                return
+
+            espera.destroy()
+            if estado == "ok":
+                messagebox.showinfo(
+                    "Google Drive actualizado",
+                    f"✔ Backup local:\n{dato['backup']}\n\n"
+                    f"✔ Copia de trabajo:\n{dato['sync']}\n\n"
+                    f"✔ Subido a Drive:\n{dato['drive']}\n\n"
+                    f"✔ Libro para Excel:\n{dato['excel']}\n\n"
+                    f"✔ Libro listo para abrir:\n{dato['libro']}\n\n"
+                    f"Fecha: {dato['fecha']}"
+                )
+            else:
+                messagebox.showerror("Error", str(dato))
+
+        self.parent.after(200, revisar)
+
+    def _ventana_de_espera(self):
+        """Diálogo modal con barra de progreso mientras se sube a Drive."""
+        ventana = tk.Toplevel(self.parent)
+        ventana.title("Google Drive")
+        ventana.geometry("400x140")
+        ventana.resizable(False, False)
+        ventana.transient(self.parent)
+        hacer_modal(ventana)
+        x = (ventana.winfo_screenwidth() - 400) // 2
+        y = (ventana.winfo_screenheight() - 140) // 2
+        ventana.geometry(f"400x140+{x}+{y}")
+        # Que no se pueda cerrar a mitad de la subida
+        ventana.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        ttk.Label(
+            ventana,
+            text="Subiendo a Google Drive…\nSuele tardar alrededor de un minuto.",
+            justify="center",
+        ).pack(pady=(25, 15))
+        barra = ttk.Progressbar(ventana, mode="indeterminate", length=320)
+        barra.pack()
+        barra.start(12)
+        return ventana
     
     def show_about(self):
         """Muestra información sobre el sistema"""
@@ -300,6 +339,16 @@ class MainWindow:
             messagebox.showwarning("Acceso Denegado", 
                                  "Solo los administradores pueden acceder a este módulo.")
     
+    def open_conciliacion(self):
+        """Conciliación de caja y pendientes: lo que antes se miraba en el Excel."""
+        from views.conciliacion_window import ConciliacionWindow
+        ConciliacionWindow(self.parent)
+
+    def open_panel(self):
+        """Gráficas equivalentes a las del informe de Power BI."""
+        from views.panel_window import PanelWindow
+        PanelWindow(self.parent)
+
     def open_reports(self):
         """Abre la ventana de reportes"""
         if self.user.role == 'admin':

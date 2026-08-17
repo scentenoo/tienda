@@ -1,8 +1,11 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
+import ttkbootstrap as ttk
 from config.database import get_connection
 from utils.ExcelImportWindow import ExcelImportWindow
 from views.users_window import UsersWindow
+from utils.theme import FONT_TITLE, FONT_BOLD, FONT_NORMAL, FONT_SMALL, ROW_COLORS
+from utils.ventanas import hacer_modal
 
 class InventoryWindow:
     def __init__(self, parent, user):
@@ -28,8 +31,8 @@ class InventoryWindow:
     def center_window(self):
         """Centra la ventana en la pantalla"""
         self.window.update_idletasks()
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
+        width = 1100
+        height = 750
         x = (self.window.winfo_screenwidth() - width) // 2
         y = (self.window.winfo_screenheight() - height) // 2
         self.window.geometry(f"{width}x{height}+{x}+{y}")
@@ -40,21 +43,10 @@ class InventoryWindow:
         main_frame = ttk.Frame(self.window)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=25, pady=15)  # Reducido pady superior
         
-        # Configuración de estilos (sin cambios)
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        bg_color = '#f8f9fa'
-        dark_blue = '#2c3e50'
-        accent_color = '#2980b9'
-        
-        self.style.configure('TFrame', background=bg_color)
-        self.style.configure('Header.TLabel', font=('Helvetica', 16, 'bold'), foreground=dark_blue)
-        self.style.configure('Accent.TButton', foreground='white', background=accent_color, padding=8)
-        
         # Título
         title_frame = ttk.Frame(main_frame)
         title_frame.pack(fill=tk.X, pady=(0, 15))  # Reducido espacio bajo título
-        ttk.Label(title_frame, text="📦 GESTIÓN DE INVENTARIO", style='Header.TLabel').pack()
+        ttk.Label(title_frame, text="📦 GESTIÓN DE INVENTARIO", font=FONT_TITLE).pack()
 
         # Controles superiores
         controls_frame = ttk.Frame(main_frame)
@@ -64,32 +56,33 @@ class InventoryWindow:
         if self.user.role == 'admin':
             # Botones de acción solo para administradores
             actions = [
-                ("➕ NUEVO", self.add_product, 'Accent.TButton'),
-                ("✏️ EDITAR", self.edit_product),
-                ("🗑️ ELIMINAR", self.delete_product)
+                ("➕ NUEVO", self.add_product, 'primary'),
+                ("✏️ EDITAR", self.edit_product, 'info'),
+                ("🗑️ ELIMINAR", self.delete_product, 'danger')
             ]
-            
-            for text, cmd, *style in actions:
+
+            for text, cmd, bootstyle in actions:
                 ttk.Button(
                     controls_frame,
                     text=text,
                     command=cmd,
-                    style=style[0] if style else 'TButton'
+                    bootstyle=bootstyle
                 ).pack(side=tk.LEFT, padx=5)
-            
+
             # Botón de importación Excel solo para administradores
             ttk.Button(
                 controls_frame,
                 text="📊 IMPORTAR EXCEL",
                 command=self.import_from_excel,
-                style='Accent.TButton'
+                bootstyle='success'
             ).pack(side=tk.LEFT, padx=5)
-        
+
         # Botón de actualizar disponible para todos los usuarios
         ttk.Button(
             controls_frame,
             text="🔄 ACTUALIZAR",
-            command=self.refresh_products
+            command=self.refresh_products,
+            bootstyle='secondary-outline'
         ).pack(side=tk.LEFT, padx=5)
 
         # Búsqueda (disponible para todos)
@@ -148,8 +141,8 @@ class InventoryWindow:
         self.stats_label = ttk.Label(
             stats_frame,
             text="Productos: 0 | Valor total: $0.00 | Stock bajo: 0",
-            font=('Helvetica', 10, 'bold'),
-            foreground=dark_blue
+            font=FONT_BOLD,
+            bootstyle='primary'
         )
         self.stats_label.pack()
 
@@ -208,8 +201,8 @@ class InventoryWindow:
                            tags=tags)
         
         # Configurar colores
-        self.tree.tag_configure("low_stock", background="#fff3cd")
-        self.tree.tag_configure("no_stock", background="#f8d7da")
+        self.tree.tag_configure("low_stock", **ROW_COLORS['warning'])
+        self.tree.tag_configure("no_stock", **ROW_COLORS['danger'])
     
     def on_search(self, *args):
         """Filtra productos por búsqueda"""
@@ -331,7 +324,7 @@ class ProductFormWindow:
         self.window.title(title)
         self.window.geometry("500x400")
         self.window.transient(parent)
-        self.window.grab_set()
+        hacer_modal(self.window)
         
         # Centrar ventana
         self.center_window()
@@ -358,50 +351,50 @@ class ProductFormWindow:
         
         # Título
         title_text = "➕ Agregar Nuevo Producto" if self.mode == "add" else "✏️ Editar Producto"
-        title_label = ttk.Label(main_frame, text=title_text, font=("Arial", 14, "bold"))
+        title_label = ttk.Label(main_frame, text=title_text, font=FONT_BOLD)
         title_label.pack(pady=(0, 30))
-        
+
         # Formulario
         form_frame = ttk.Frame(main_frame)
         form_frame.pack(fill=tk.X, pady=(0, 30))
-        
+
         # Nombre del producto
-        ttk.Label(form_frame, text="Nombre del Producto:*", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(0, 5))
-        self.name_entry = ttk.Entry(form_frame, width=50, font=("Arial", 10))
+        ttk.Label(form_frame, text="Nombre del Producto:*", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
+        self.name_entry = ttk.Entry(form_frame, width=50, font=FONT_NORMAL)
         self.name_entry.pack(fill=tk.X, pady=(0, 15))
-        
+
         # Precio
-        ttk.Label(form_frame, text="Precio Unitario:*", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(0, 5))
-        
+        ttk.Label(form_frame, text="Precio Unitario:*", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
+
         price_frame = ttk.Frame(form_frame)
         price_frame.pack(fill=tk.X, pady=(0, 15))
-        
+
         ttk.Label(price_frame, text="$").pack(side=tk.LEFT)
-        self.price_entry = ttk.Entry(price_frame, width=20, font=("Arial", 10))
+        self.price_entry = ttk.Entry(price_frame, width=20, font=FONT_NORMAL)
         self.price_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
-        
+
         # Stock inicial
-        ttk.Label(form_frame, text="Stock Inicial:", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(0, 5))
-        self.stock_entry = ttk.Entry(form_frame, width=20, font=("Arial", 10))
+        ttk.Label(form_frame, text="Stock Inicial:", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
+        self.stock_entry = ttk.Entry(form_frame, width=20, font=FONT_NORMAL)
         self.stock_entry.pack(anchor=tk.W, pady=(0, 15))
-        
+
         # Nota
         note_text = "* Campos obligatorios"
         if self.mode == "edit":
             note_text += "\nDeje el stock en blanco para mantener el actual"
-        
-        ttk.Label(form_frame, text=note_text, font=("Arial", 9), foreground="gray").pack(anchor=tk.W)
-        
+
+        ttk.Label(form_frame, text=note_text, font=FONT_SMALL, bootstyle="secondary").pack(anchor=tk.W)
+
         # Botones
         buttons_frame = ttk.Frame(main_frame)
         buttons_frame.pack(side=tk.BOTTOM, fill=tk.X)
-        
-        ttk.Button(buttons_frame, text="Cancelar", 
-                  command=self.cancel).pack(side=tk.RIGHT, padx=(10, 0))
-        
+
+        ttk.Button(buttons_frame, text="Cancelar",
+                  command=self.cancel, bootstyle="secondary").pack(side=tk.RIGHT, padx=(10, 0))
+
         save_text = "Guardar" if self.mode == "add" else "Actualizar"
-        ttk.Button(buttons_frame, text=save_text, 
-                  command=self.save).pack(side=tk.RIGHT)
+        ttk.Button(buttons_frame, text=save_text,
+                  command=self.save, bootstyle="primary").pack(side=tk.RIGHT)
         
         # Enfocar en el primer campo
         self.name_entry.focus()

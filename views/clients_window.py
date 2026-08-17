@@ -1,10 +1,13 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
+import ttkbootstrap as ttk
 from models.client import Client
 from config.database import get_connection
 import sqlite3
 from config.database import sync_client_sales_status_on_payment
 from views.sale_detail_window import SaleDetailWindow
+from utils.theme import FONT_TITLE, FONT_HEADER, FONT_BOLD, FONT_NORMAL, FONT_SMALL, ROW_COLORS, role_color
+from utils.ventanas import hacer_modal
 
 class ClientsWindow:
     def __init__(self, parent, user, main_window=None):
@@ -54,10 +57,9 @@ class ClientsWindow:
 
         # 2. Título
         ttk.Label(
-            main_frame, 
-            text="👥 GESTIÓN DE CLIENTES", 
-            font=("Helvetica", 16, "bold"),
-            foreground="#333"
+            main_frame,
+            text="👥 GESTIÓN DE CLIENTES",
+            font=FONT_TITLE
         ).pack(pady=(0, 20))
 
         # 3. Frame de controles (búsqueda/botones)
@@ -66,18 +68,19 @@ class ClientsWindow:
 
         # Botones
         actions = [
-            ("➕ Nuevo", self.add_client),
-            ("✏️ Editar", self.edit_client),
-            ("💰 Crédito", self.manage_credit),
-            ("📋 Historial", self.view_history),
-            ("🗑️ Eliminar", self.delete_client)
+            ("➕ Nuevo", self.add_client, "primary"),
+            ("✏️ Editar", self.edit_client, "info"),
+            ("💰 Crédito", self.manage_credit, "warning"),
+            ("📋 Historial", self.view_history, "secondary"),
+            ("🗑️ Eliminar", self.delete_client, "danger")
         ]
-        
-        for text, cmd in actions:
+
+        for text, cmd, bootstyle in actions:
             ttk.Button(
                 controls_frame,
                 text=text,
-                command=cmd
+                command=cmd,
+                bootstyle=bootstyle
             ).pack(side=tk.LEFT, padx=5)
 
         # Búsqueda
@@ -178,10 +181,10 @@ class ClientsWindow:
             ), tags=tags)
         
         # Configurar colores
-        self.tree.tag_configure("good", background="#d4edda")
-        self.tree.tag_configure("credit", background="#fff3cd")  # Amarillo para pendientes
-        self.tree.tag_configure("warning", background="#fff3cd")
-        self.tree.tag_configure("limit", background="#f8d7da")
+        self.tree.tag_configure("good", **ROW_COLORS["success"])
+        self.tree.tag_configure("credit", **ROW_COLORS["warning"])  # Amarillo para pendientes
+        self.tree.tag_configure("warning", **ROW_COLORS["warning"])
+        self.tree.tag_configure("limit", **ROW_COLORS["danger"])
     
     def on_search(self, *args):
         """Filtra clientes por búsqueda"""
@@ -307,9 +310,9 @@ class ClientFormWindow:
         self.window = tk.Toplevel(parent)
         title = "Nuevo Cliente" if mode == "add" else "Editar Cliente"
         self.window.title(title)
-        self.window.geometry("550x500")
+        self.window.geometry("550x600")
         self.window.transient(parent)
-        self.window.grab_set()
+        hacer_modal(self.window)
         
         # Centrar ventana
         self.center_window()
@@ -325,7 +328,7 @@ class ClientFormWindow:
         """Centra la ventana en la pantalla"""
         self.window.update_idletasks()
         x = (self.window.winfo_screenwidth() - 550) // 2
-        y = (self.window.winfo_screenheight() - 500) // 2
+        y = (self.window.winfo_screenheight() - 600) // 2
         self.window.geometry(f"550x600+{x}+{y}")
     
     def setup_ui(self):
@@ -336,7 +339,7 @@ class ClientFormWindow:
         
         # Título
         title_text = "➕ Agregar Nuevo Cliente" if self.mode == "add" else "✏️ Editar Cliente"
-        title_label = ttk.Label(main_frame, text=title_text, font=("Arial", 14, "bold"))
+        title_label = ttk.Label(main_frame, text=title_text, font=FONT_HEADER)
         title_label.pack(pady=(0, 30))
         
         # Formulario
@@ -344,38 +347,38 @@ class ClientFormWindow:
         form_frame.pack(fill=tk.X, pady=(0, 30))
         
         # Nombre del cliente
-        ttk.Label(form_frame, text="Nombre Completo:*", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(0, 5))
-        self.name_entry = ttk.Entry(form_frame, width=50, font=("Arial", 10))
+        ttk.Label(form_frame, text="Nombre Completo:*", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
+        self.name_entry = ttk.Entry(form_frame, width=50, font=FONT_NORMAL)
         self.name_entry.pack(fill=tk.X, pady=(0, 15))
         
         # Teléfono
-        ttk.Label(form_frame, text="Teléfono:", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(0, 5))
-        self.phone_entry = ttk.Entry(form_frame, width=30, font=("Arial", 10))
+        ttk.Label(form_frame, text="Teléfono:", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
+        self.phone_entry = ttk.Entry(form_frame, width=30, font=FONT_NORMAL)
         self.phone_entry.pack(anchor=tk.W, pady=(0, 15))
         
         # Dirección
-        ttk.Label(form_frame, text="Dirección:", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(0, 5))
-        self.address_entry = ttk.Entry(form_frame, width=50, font=("Arial", 10))
+        ttk.Label(form_frame, text="Dirección:", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
+        self.address_entry = ttk.Entry(form_frame, width=50, font=FONT_NORMAL)
         self.address_entry.pack(fill=tk.X, pady=(0, 15))
         
         # Límite de crédito
-        ttk.Label(form_frame, text="Límite de Crédito:", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(0, 5))
+        ttk.Label(form_frame, text="Límite de Crédito:", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
         
         credit_frame = ttk.Frame(form_frame)
         credit_frame.pack(fill=tk.X, pady=(0, 15))
         
         ttk.Label(credit_frame, text="$").pack(side=tk.LEFT)
-        self.credit_limit_entry = ttk.Entry(credit_frame, width=20, font=("Arial", 10))
+        self.credit_limit_entry = ttk.Entry(credit_frame, width=20, font=FONT_NORMAL)
         self.credit_limit_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
         self.credit_limit_entry.insert(0, "0.00")
         
         # Notas
-        ttk.Label(form_frame, text="Notas:", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(0, 5))
+        ttk.Label(form_frame, text="Notas:", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
         
         notes_frame = ttk.Frame(form_frame)
         notes_frame.pack(fill=tk.X, pady=(0, 15))
         
-        self.notes_text = tk.Text(notes_frame, height=4, font=("Arial", 10), wrap=tk.WORD)
+        self.notes_text = tk.Text(notes_frame, height=4, font=FONT_NORMAL, wrap=tk.WORD)
         notes_scroll = ttk.Scrollbar(notes_frame, orient="vertical", command=self.notes_text.yview)
         self.notes_text.configure(yscrollcommand=notes_scroll.set)
         
@@ -384,18 +387,18 @@ class ClientFormWindow:
         
         # Nota obligatoria
         ttk.Label(form_frame, text="* Campos obligatorios", 
-                 font=("Arial", 9), foreground="gray").pack(anchor=tk.W, pady=(5, 0))
+                 font=FONT_SMALL, bootstyle="secondary").pack(anchor=tk.W, pady=(5, 0))
         
         # Botones
         buttons_frame = ttk.Frame(main_frame)
         buttons_frame.pack(fill=tk.X, pady=(20, 0))
         
-        ttk.Button(buttons_frame, text="Cancelar", 
-                  command=self.cancel).pack(side=tk.RIGHT, padx=(10, 0))
-        
+        ttk.Button(buttons_frame, text="Cancelar",
+                  command=self.cancel, bootstyle="secondary").pack(side=tk.RIGHT, padx=(10, 0))
+
         save_text = "Guardar Cliente" if self.mode == "add" else "Actualizar Cliente"
-        ttk.Button(buttons_frame, text=save_text, 
-                  command=self.save).pack(side=tk.RIGHT)
+        ttk.Button(buttons_frame, text=save_text,
+                  command=self.save, bootstyle="primary").pack(side=tk.RIGHT)
         
         # Enfocar en el primer campo
         self.name_entry.focus()
@@ -493,7 +496,7 @@ class CreditManagementWindow:
         self.window.geometry("700x650")  # Más ancho y más alto
         self.window.minsize(700, 550)   # Tamaño mínimo
         self.window.transient(parent)
-        self.window.grab_set()
+        hacer_modal(self.window)
         
         # Centrar ventana
         self.center_window()
@@ -516,9 +519,9 @@ class CreditManagementWindow:
     def center_window(self):
         """Centra la ventana en la pantalla"""
         self.window.update_idletasks()
-        x = (self.window.winfo_screenwidth() - 600) // 2
-        y = (self.window.winfo_screenheight() - 450) // 2
-        self.window.geometry(f"600x450+{x}+{y}")
+        x = (self.window.winfo_screenwidth() - 700) // 2
+        y = (self.window.winfo_screenheight() - 650) // 2
+        self.window.geometry(f"700x650+{x}+{y}")
     
     def setup_ui(self):
         """Configura la interfaz de usuario"""
@@ -529,12 +532,12 @@ class CreditManagementWindow:
         # Título
         title_label = ttk.Label(main_frame, 
                                text=f"💰 GESTIÓN DE CRÉDITO", 
-                               font=("Arial", 14, "bold"))
+                               font=FONT_HEADER)
         title_label.pack(pady=(0, 10))
         
         client_label = ttk.Label(main_frame, 
                                 text=f"Cliente: {self.client.name}", 
-                                font=("Arial", 12, "bold"))
+                                font=FONT_HEADER)
         client_label.pack(pady=(0, 20))
         
         # Frame de información del cliente
@@ -543,20 +546,20 @@ class CreditManagementWindow:
         
         # Información en grid
         ttk.Label(info_frame, text="Límite de Crédito:", 
-                 font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=2)
+                 font=FONT_BOLD).grid(row=0, column=0, sticky=tk.W, pady=2)
         ttk.Label(info_frame, text=f"${self.client.credit_limit:,.2f}", 
-                 font=("Arial", 10)).grid(row=0, column=1, sticky=tk.W, padx=(20, 0), pady=2)
+                 font=FONT_NORMAL).grid(row=0, column=1, sticky=tk.W, padx=(20, 0), pady=2)
         
         ttk.Label(info_frame, text="Deuda Actual:", 
-                 font=("Arial", 10, "bold")).grid(row=1, column=0, sticky=tk.W, pady=2)
-        ttk.Label(info_frame, text=f"${self.client.total_debt:,.2f}", 
-                 font=("Arial", 10), foreground="red" if self.client.total_debt > 0 else "black").grid(row=1, column=1, sticky=tk.W, padx=(20, 0), pady=2)
-        
+                 font=FONT_BOLD).grid(row=1, column=0, sticky=tk.W, pady=2)
+        ttk.Label(info_frame, text=f"${self.client.total_debt:,.2f}",
+                 font=FONT_NORMAL, bootstyle="danger" if self.client.total_debt > 0 else "default").grid(row=1, column=1, sticky=tk.W, padx=(20, 0), pady=2)
+
         available = self.client.available_credit()
-        ttk.Label(info_frame, text="Crédito Disponible:", 
-                 font=("Arial", 10, "bold")).grid(row=2, column=0, sticky=tk.W, pady=2)
-        ttk.Label(info_frame, text=f"${available:,.2f}", 
-                 font=("Arial", 10), foreground="green" if available > 0 else "red").grid(row=2, column=1, sticky=tk.W, padx=(20, 0), pady=2)
+        ttk.Label(info_frame, text="Crédito Disponible:",
+                 font=FONT_BOLD).grid(row=2, column=0, sticky=tk.W, pady=2)
+        ttk.Label(info_frame, text=f"${available:,.2f}",
+                 font=FONT_NORMAL, bootstyle="success" if available > 0 else "danger").grid(row=2, column=1, sticky=tk.W, padx=(20, 0), pady=2)
         
         # Frame para operaciones
         operations_frame = ttk.LabelFrame(main_frame, text="Operaciones", padding="15")
@@ -568,7 +571,7 @@ class CreditManagementWindow:
             debt_frame.pack(fill=tk.X, pady=(0, 15))
             
             ttk.Label(debt_frame, text="Agregar Deuda:", 
-                     font=("Arial", 10, "bold")).pack(anchor=tk.W)
+                     font=FONT_BOLD).pack(anchor=tk.W)
             
             debt_input_frame = ttk.Frame(debt_frame)
             debt_input_frame.pack(fill=tk.X, pady=(5, 0))
@@ -581,8 +584,8 @@ class CreditManagementWindow:
             self.debt_desc_entry = ttk.Entry(debt_input_frame, width=25)
             self.debt_desc_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
             
-            ttk.Button(debt_input_frame, text="Agregar Deuda", 
-                      command=self.add_debt).pack(side=tk.RIGHT)
+            ttk.Button(debt_input_frame, text="Agregar Deuda",
+                      command=self.add_debt, bootstyle="warning").pack(side=tk.RIGHT)
         
         # Frame para registrar pago
        # Frame para registrar pago (MODIFICADO)
@@ -591,7 +594,7 @@ class CreditManagementWindow:
             payment_frame.pack(fill=tk.X, pady=(0, 10))
             
             ttk.Label(payment_frame, text="Registrar Pago/Abono:", 
-                    font=("Arial", 10, "bold")).pack(anchor=tk.W)
+                    font=FONT_BOLD).pack(anchor=tk.W)
             
             payment_input_frame = ttk.Frame(payment_frame)
             payment_input_frame.pack(fill=tk.X, pady=(5, 0))
@@ -604,13 +607,13 @@ class CreditManagementWindow:
             self.payment_desc_entry = ttk.Entry(payment_input_frame, width=25)
             self.payment_desc_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
             
-            ttk.Button(payment_input_frame, text="Registrar Pago", 
-                    command=self.register_payment).pack(side=tk.RIGHT)
+            ttk.Button(payment_input_frame, text="Registrar Pago",
+                    command=self.register_payment, bootstyle="success").pack(side=tk.RIGHT)
             
             # Agregar etiqueta informativa
             info_label = ttk.Label(payment_frame, 
                                 text="💡 Puede registrar cualquier monto. Si excede la deuda, se creará crédito a favor.",
-                                font=("Arial", 8), foreground="gray")
+                                font=FONT_SMALL, bootstyle="secondary")
             info_label.pack(anchor=tk.W, pady=(5, 0))
 
         
@@ -618,11 +621,11 @@ class CreditManagementWindow:
         buttons_frame = ttk.Frame(main_frame)
         buttons_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(20, 0))
         
-        ttk.Button(buttons_frame, text="Ver Historial", 
-                  command=self.view_history).pack(side=tk.LEFT)
-        
-        ttk.Button(buttons_frame, text="Cerrar", 
-                  command=self.close_window).pack(side=tk.RIGHT)
+        ttk.Button(buttons_frame, text="Ver Historial",
+                  command=self.view_history, bootstyle="info").pack(side=tk.LEFT)
+
+        ttk.Button(buttons_frame, text="Cerrar",
+                  command=self.close_window, bootstyle="secondary").pack(side=tk.RIGHT)
         
     def handle_excess_credit(self, client_id, excess_amount):
         """Maneja el crédito a favor cuando el pago excede la deuda"""
@@ -994,13 +997,16 @@ class CreditManagementWindow:
                     updated_notes = f"{sale_notes} [Abono ${paid_amount:,.2f} el {timestamp} - Saldo: ${new_debt:,.2f}]".strip()
                     
                     # *** CORRECCIÓN: Sin updated_at ***
+                    # El total de la venta NO se toca: es lo que se vendió.
+                    # El abono se registra en paid_amount y remaining_debt.
                     update_query = f'''
                         UPDATE sales 
-                        SET total = ?,
+                        SET paid_amount = COALESCE(paid_amount, 0) + ?,
+                            remaining_debt = ?,
                             notes = ?
                         WHERE id = ?
                     '''
-                    cursor.execute(update_query, (new_debt, updated_notes, sale_id))
+                    cursor.execute(update_query, (paid_amount, new_debt, updated_notes, sale_id))
                     
                     total_debt_reduced += paid_amount
                     sales_paid_partial += 1
@@ -1236,14 +1242,17 @@ class CreditManagementWindow:
                     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
                     updated_notes = f"{sale_notes} [Abono ${paid_amount:,.2f} el {timestamp} - Saldo: ${new_debt:,.2f}]".strip()
                     
+                    # El total de la venta NO se toca: es lo que se vendió.
+                    # El abono se registra en paid_amount y remaining_debt.
                     update_query = f'''
                         UPDATE sales 
-                        SET total = ?,
+                        SET paid_amount = COALESCE(paid_amount, 0) + ?,
+                            remaining_debt = ?,
                             notes = ?,
                             updated_at = datetime('now', 'localtime')
                         WHERE id = ?
                     '''
-                    cursor.execute(update_query, (new_debt, updated_notes, sale_id))
+                    cursor.execute(update_query, (paid_amount, new_debt, updated_notes, sale_id))
                     
                     sales_paid_partial += 1
                     
@@ -1402,27 +1411,22 @@ class CreditManagementWindow:
                     print(f"✅ Venta #{sale_id} marcada como 'paid' - Monto: ${sale_total:,.2f}")
                     
                 else:
-                    # Pago parcial - dividir la venta
+                    # Pago parcial
                     paid_amount = remaining_payment
                     remaining_amount = sale_total - paid_amount
                     
-                    # Actualizar la venta original con el monto pagado
+                    # Antes esto partía la venta en dos: dejaba la original con
+                    # el monto abonado marcada como pagada y creaba otra venta
+                    # por el resto. Esa venta nueva nacía sin líneas de detalle,
+                    # falseando el conteo de ventas y el costo de lo vendido.
+                    # Ahora la venta se queda como está y el abono se anota.
                     cursor.execute('''
                         UPDATE sales 
-                        SET total = ?, status = 'paid', updated_at = datetime('now', 'localtime')
+                        SET paid_amount = COALESCE(paid_amount, 0) + ?,
+                            remaining_debt = ?,
+                            updated_at = datetime('now', 'localtime')
                         WHERE id = ?
-                    ''', (paid_amount, sale_id))
-                    
-                    # Crear nueva venta con el monto restante
-                    cursor.execute('''
-                        INSERT INTO sales (client_id, total, status, notes, created_at, updated_at)
-                        VALUES (?, ?, 'pending', ?, ?, datetime('now', 'localtime'))
-                    ''', (
-                        self.client.id, 
-                        remaining_amount, 
-                        f"Saldo pendiente de venta #{sale_id}", 
-                        sale[2]  # Mantener la fecha original
-                    ))
+                    ''', (paid_amount, remaining_amount, sale_id))
                     
                     updated_sales.append({
                         'id': sale_id,
@@ -1561,19 +1565,15 @@ class CreditManagementWindow:
                     paid_amount = remaining_payment
                     remaining_amount = sale_total - paid_amount
                     
+                    # La venta conserva su total y su estado pendiente; el
+                    # abono queda anotado. Antes se partía en dos y la mitad
+                    # nueva nacía sin líneas de detalle.
                     cursor.execute('''
                         UPDATE sales 
-                        SET status = 'paid',
-                            total = ?
+                        SET paid_amount = COALESCE(paid_amount, 0) + ?,
+                            remaining_debt = ?
                         WHERE id = ?
-                    ''', (paid_amount, sale['id']))
-                    
-                    cursor.execute('''
-                        INSERT INTO sales (client_id, total, status, notes, created_at)
-                        VALUES (?, ?, 'pending', ?, ?)
-                    ''', (self.client.id, remaining_amount, 
-                        f"Pago parcial - Restante de venta #{sale['id']}", 
-                        sale['created_at']))
+                    ''', (paid_amount, remaining_amount, sale['id']))
                     
                     updated_sales.append({
                         'id': sale['id'],
@@ -1774,14 +1774,17 @@ class CreditManagementWindow:
                     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
                     updated_notes = f"{sale_notes} [Abono ${paid_amount:,.2f} el {timestamp} - Saldo: ${new_debt:,.2f}]".strip()
                     
+                    # El total de la venta NO se toca: es lo que se vendió.
+                    # El abono se registra en paid_amount y remaining_debt.
                     update_query = f'''
                         UPDATE sales 
-                        SET total = ?,
+                        SET paid_amount = COALESCE(paid_amount, 0) + ?,
+                            remaining_debt = ?,
                             notes = ?,
                             updated_at = datetime('now', 'localtime')
                         WHERE id = ?
                     '''
-                    cursor.execute(update_query, (new_debt, updated_notes, sale_id))
+                    cursor.execute(update_query, (paid_amount, new_debt, updated_notes, sale_id))
                     
                     sales_paid_partial += 1
                     
@@ -1866,7 +1869,7 @@ class ClientHistoryWindow:
         self.window.title(f"Historial - {client.name}")
         self.window.geometry("800x600")
         self.window.transient(parent)
-        self.window.grab_set()
+        hacer_modal(self.window)
         
         # Configurar el evento de cerrar ventana
         self.window.protocol("WM_DELETE_WINDOW", self.close_window)
@@ -1910,9 +1913,9 @@ class ClientHistoryWindow:
     def center_window(self):
         """Centra la ventana en la pantalla"""
         self.window.update_idletasks()
-        x = (self.window.winfo_screenwidth() - 700) // 2
-        y = (self.window.winfo_screenheight() - 500) // 2
-        self.window.geometry(f"700x500+{x}+{y}")
+        x = (self.window.winfo_screenwidth() - 800) // 2
+        y = (self.window.winfo_screenheight() - 600) // 2
+        self.window.geometry(f"800x600+{x}+{y}")
     
     def setup_ui(self):
         """Configura la interfaz de usuario"""
@@ -1923,13 +1926,13 @@ class ClientHistoryWindow:
         # Título
         title_label = ttk.Label(main_frame, 
                                text=f"📋 HISTORIAL DE TRANSACCIONES", 
-                               font=("Arial", 14, "bold"))
+                               font=FONT_HEADER)
         title_label.pack(pady=(0, 10))
         
         # CORRECCIÓN: Usar self.selected_client.name en lugar de diccionario
         client_label = ttk.Label(main_frame, 
                                 text=f"Cliente: {self.selected_client.name}", 
-                                font=("Arial", 12, "bold"))
+                                font=FONT_HEADER)
         client_label.pack(pady=(0, 20))
         
         # Frame para la tabla
@@ -1960,10 +1963,10 @@ class ClientHistoryWindow:
         v_scrollbar.pack(side="right", fill="y")
         
         # Configurar colores para diferentes tipos
-        self.tree.tag_configure("debit", background="#ffebee")  # Rojo claro para débitos
-        self.tree.tag_configure("credit", background="#e8f5e8")  # Verde claro para créditos
-        self.tree.tag_configure('deuda', background='#ffdddd', foreground='black')  # Rojo claro
-        self.tree.tag_configure('pago', background='#ddffdd', foreground='black')   # Verde claro
+        self.tree.tag_configure("debit", **ROW_COLORS["danger"])
+        self.tree.tag_configure("credit", **ROW_COLORS["success"])
+        self.tree.tag_configure('deuda', **ROW_COLORS["danger"])
+        self.tree.tag_configure('pago', **ROW_COLORS["success"])
 
         # Mapa fila -> sale_id, para poder abrir el detalle de la venta
         # directamente desde el historial (sin tener que ir a buscarla
@@ -1981,14 +1984,16 @@ class ClientHistoryWindow:
         ttk.Button(
             button_frame,
             text="🧾 Ver Detalle de Venta",
-            command=self.view_selected_sale_detail
+            command=self.view_selected_sale_detail,
+            bootstyle="info"
         ).pack(side=tk.LEFT)
 
         # Botón de cerrar
         ttk.Button(
-            button_frame, 
-            text="Cerrar", 
-            command=self.close_window
+            button_frame,
+            text="Cerrar",
+            command=self.close_window,
+            bootstyle="secondary"
         ).pack(side=tk.RIGHT)
         
     def load_history(self):
@@ -2038,9 +2043,10 @@ class ClientHistoryWindow:
         style.configure('Credit.Treeview', foreground='green')
         style.configure('Reversal.Treeview', foreground='orange')
         
-        self.tree.tag_configure('deuda', background='#ffeeee')
-        self.tree.tag_configure('pago', background='#eeffee')
-        self.tree.tag_configure('reversion', background='#fff8e8')
+        self.tree.tag_configure('deuda', **ROW_COLORS["danger"])
+        self.tree.tag_configure('pago', **ROW_COLORS["success"])
+        self.tree.tag_configure('reversion', **ROW_COLORS["warning"])
+        self.tree.tag_configure('ajuste', **ROW_COLORS["info"])
 
     def process_transaction_row(self, row):
         """Procesa y muestra una fila individual del historial"""
@@ -2098,11 +2104,11 @@ class ClientHistoryWindow:
             
     def configure_tree_tags(self):
         """Configura los estilos para diferentes tipos de transacciones"""
-        self.tree.tag_configure('deuda', background='#ffdddd', foreground='black')
-        self.tree.tag_configure('pago', background='#ddffdd', foreground='black')
-        self.tree.tag_configure('reversion', background='#fff3e0', foreground='black')
-        self.tree.tag_configure('ajuste', background='#e3f2fd', foreground='black')
-        self.tree.tag_configure('info', background='#f5f5f5', foreground='gray')
+        self.tree.tag_configure('deuda', **ROW_COLORS["danger"])
+        self.tree.tag_configure('pago', **ROW_COLORS["success"])
+        self.tree.tag_configure('reversion', **ROW_COLORS["warning"])
+        self.tree.tag_configure('ajuste', **ROW_COLORS["info"])
+        self.tree.tag_configure('info', background=role_color('light'))
 
     def add_transaction_to_tree(self, row):
         """Añade transacciones manteniendo el orden cronológico"""
