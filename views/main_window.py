@@ -1,3 +1,4 @@
+import os
 import queue
 import threading
 import tkinter as tk
@@ -14,6 +15,7 @@ class MainWindow:
         self.user = user
         self.sales_window = None  # Referencia a la ventana de ventas
         self.clients_window = None  # Referencia a la ventana de clientes
+        self.huella_bd = self._huella_bd()  # Para saber al salir si hubo cambios
         
         # Limpiar la ventana principal
         for widget in self.parent.winfo_children():
@@ -152,10 +154,75 @@ class MainWindow:
                 from views.login_window import LoginWindow
                 LoginWindow(self.parent)
     
+    def _huella_bd(self):
+        """Tamaño y fecha de la base, para detectar si se tocó algo."""
+        try:
+            from utils.paths import get_db_path
+            ruta = get_db_path()
+            return (os.path.getsize(ruta), os.path.getmtime(ruta))
+        except Exception:
+            return None
+
+    def hubo_cambios(self):
+        actual = self._huella_bd()
+        return actual is not None and self.huella_bd is not None and actual != self.huella_bd
+
     def on_closing(self):
-        """Maneja el cierre de la ventana"""
-        if messagebox.askyesno("Salir", "¿Está seguro que desea salir del sistema?"):
+        """Al salir, si se tocó la base, se respalda en Google Drive."""
+        if not self.hubo_cambios():
+            if messagebox.askyesno("Salir", "¿Está seguro que desea salir del sistema?"):
+                self.parent.quit()
+            return
+
+        respuesta = messagebox.askyesnocancel(
+            "Salir",
+            "Hubo cambios en la base de datos durante esta sesión.\n\n"
+            "¿Respaldar en Google Drive antes de salir?\n\n"
+            "Sí — respaldar y salir (tarda menos de un minuto)\n"
+            "No — salir sin respaldar")
+
+        if respuesta is None:      # Canceló: no se sale
+            return
+        if not respuesta:
             self.parent.quit()
+            return
+
+        self._respaldar_y_salir()
+
+    def _respaldar_y_salir(self):
+        """Respalda en segundo plano y cierra al terminar, sin congelar nada."""
+        espera = self._ventana_de_espera()
+        resultado = queue.Queue()
+
+        def trabajo():
+            try:
+                resultado.put(("ok", backup_y_sync_drive()))
+            except Exception as e:
+                resultado.put(("error", e))
+
+        threading.Thread(target=trabajo, daemon=True).start()
+
+        def revisar():
+            try:
+                estado, dato = resultado.get_nowait()
+            except queue.Empty:
+                self.parent.after(200, revisar)
+                return
+
+            espera.destroy()
+            if estado == "ok":
+                messagebox.showinfo(
+                    "Respaldo completado",
+                    f"La base quedó respaldada en Google Drive.\n\n{dato['drive']}")
+            else:
+                # Un fallo de red no puede dejar al usuario atrapado en la app
+                messagebox.showwarning(
+                    "No se pudo respaldar",
+                    f"{dato}\n\nSe cierra igualmente. El respaldo local sí se hizo "
+                    f"si el fallo fue solo de subida.")
+            self.parent.quit()
+
+        self.parent.after(200, revisar)
 
     def subir_a_google_drive(self):
         """Lanza el backup en un hilo aparte. La subida a Drive tarda cerca de
