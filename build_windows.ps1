@@ -33,6 +33,8 @@ Write-Host ">> Copiando el programa a $destino (sin tocar data\ ni la base)"
 robocopy "build\salida\CharcuteriaHYE" $destino /MIR /NFL /NDL /NJH /NP `
     /XD data /XF tienda.db tienda.db-shm tienda.db-wal error_log.txt respaldo.log | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "Falló la copia (robocopy $LASTEXITCODE)" }
+# robocopy devuelve 1-7 cuando todo salió bien; que no parezca un error
+$global:LASTEXITCODE = 0
 
 Write-Host ""
 Write-Host "Listo: $destino\CharcuteriaHYE.exe"
