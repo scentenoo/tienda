@@ -79,12 +79,13 @@ def _conn():
 
 # ── Recibir ──────────────────────────────────────────────────────────────────
 _FECHA = re.compile(r"(20\d\d)[-_.]?(\d\d)[-_.]?(\d\d)")
-_HORA = re.compile(r"(\d{1,2})[.:](\d\d)[.:](\d\d)")
+_HORA = re.compile(r"(\d{1,2})[-.:_](\d\d)[-.:_](\d\d)")
 
 
 def fecha_del_nombre(nombre):
-    """WhatsApp pone la fecha en el nombre: 'PTT-20260926-WA0003.opus' o
-    'WhatsApp Audio 2026-09-26 at 17.03.12.opus'. Devuelve '2026-09-26' o
+    """WhatsApp pone la fecha en el nombre: 'PTT-20260926-WA0003.opus',
+    'AUDIO-2026-09-21-18-54-27.m4a' o 'WhatsApp Audio 2026-09-26 at
+    17.03.12.opus'. Devuelve '2026-09-26' o
     '2026-09-26 17:03:12', o None si no la trae (o no tiene sentido)."""
     m = _FECHA.search(nombre or "")
     if not m:
@@ -617,8 +618,19 @@ def resumen(conn, resultado):
             "motor": resultado.get("motor")}
 
 
+def _grabado(fila):
+    # Se vuelve a leer del nombre: los audios que llegaron antes de que se
+    # entendiera la hora con guiones quedaron guardados solo con el día
+    return fecha_del_nombre(fila["nombre"]) or fila["grabado_en"]
+
+
 def fecha_sugerida(fila):
-    return (fila["grabado_en"] or fila["recibido_en"] or date.today().isoformat())[:10]
+    return (_grabado(fila) or fila["recibido_en"] or date.today().isoformat())[:10]
+
+
+def hora_sugerida(fila):
+    """'18:54' si el audio trae la hora; si no, vacío (la escribe quien revisa)."""
+    return (_grabado(fila) or "")[11:16]
 
 
 def contexto_para_venta(audio_id):
@@ -636,23 +648,12 @@ def contexto_para_venta(audio_id):
                    for l in r["lineas"] if not l["problema"]],
         "fiada": r["fiada"], "cliente": r["cliente"]["id"] if r["cliente"] else None,
         "ajuste": "", "signo": "+", "motivo": "",
-        "audio": audio_id, "fecha": fecha_sugerida(fila),
+        "audio": audio_id, "fecha": fecha_sugerida(fila), "hora": hora_sugerida(fila),
     }
     return {"id": audio_id, "resumen": r, "borrador": borrador,
             "fuera": [l for l in r["lineas"] if l["problema"]],
-            "fecha_en_nombre": bool(fila["grabado_en"]), "hoy": date.today().isoformat()}
-
-
-def fecha_de_venta(conn, audio_id, dia):
-    """El momento con que se guarda la venta: hoy → ahora; otro día → la hora
-    del audio si la trae y es de ese día, si no el mediodía."""
-    if dia == date.today():
-        return None
-    fila = conn.execute("SELECT grabado_en FROM audios_venta WHERE id = ?", (audio_id,)).fetchone()
-    grabado = fila["grabado_en"] if fila else None
-    if grabado and len(grabado) > 10 and grabado[:10] == dia.isoformat():
-        return grabado
-    return f"{dia.isoformat()} 12:00:00"
+            "fecha_en_nombre": bool(_grabado(fila)), "hora_en_nombre": bool(hora_sugerida(fila)),
+            "hoy": date.today().isoformat()}
 
 
 def marcar_registrado(conn, audio_id, sale_id):
@@ -678,8 +679,8 @@ def audios():
     for f in filas:
         pendientes.append({"id": f["id"], "nombre": f["nombre"], "estado": f["estado"],
                            "error": f["error"], "fecha": fecha_sugerida(f),
-                           "hora": (f["grabado_en"] or "")[11:16],
-                           "fecha_en_nombre": bool(f["grabado_en"]),
+                           "hora": hora_sugerida(f),
+                           "fecha_en_nombre": bool(_grabado(f)),
                            "escuchando": f["id"] in _escuchando,
                            "r": resumen(conn, json.loads(f["resultado"])) if f["resultado"] else None})
     registrados = conn.execute("""

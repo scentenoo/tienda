@@ -18,10 +18,16 @@
     {% for d in audio.resumen.dudas %}<li>{{ d }}</li>{% endfor %}
   </ul>
   {% endif %}
-  <label class="campo" style="margin-top:10px">Día de la venta
-    <input type="date" id="fecha" max="{{ audio.hoy }}" required>
-  </label>
-  {% if not audio.fecha_en_nombre %}<p class="sub" style="margin:4px 0 0">El audio no traía la fecha: revise el día.</p>{% endif %}
+  <div class="dos" style="margin-top:10px">
+    <label class="campo" style="margin-top:0">Día de la venta
+      <input type="date" id="fecha" max="{{ audio.hoy }}" required>
+    </label>
+    <label class="campo" style="margin-top:0">Hora
+      <input type="time" id="hora" required>
+    </label>
+  </div>
+  {% if not audio.fecha_en_nombre %}<p class="sub" style="margin:4px 0 0">El audio no traía la fecha ni la hora: escríbalas.</p>
+  {% elif not audio.hora_en_nombre %}<p class="sub" style="margin:4px 0 0">El audio no traía la hora: escríbala.</p>{% endif %}
 </div>
 {% endif %}
 
@@ -101,7 +107,7 @@
 .desde-audio .dicho { font-style: italic; margin: 10px 0 0; }
 .dudas { background: var(--aviso-fondo); color: var(--aviso); border-radius: 8px; margin: 10px 0 0;
   padding: 8px 10px 8px 26px; font-size: .88rem; }
-input[type=date] { width: 100%; font-size: 16px; padding: 10px 14px; border-radius: 10px;
+input[type=date], input[type=time] { width: 100%; font-size: 16px; padding: 10px 14px; border-radius: 10px;
   border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); }
 .pie-venta b { display: block; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
 </style>
@@ -218,7 +224,9 @@ $("ajuste").addEventListener("input", function () { formatearDinero(this); venta
 $("motivo").addEventListener("input", function () { venta.motivo = this.value; });
 if ($("fecha")) {
   $("fecha").value = venta.fecha || "";
+  $("hora").value = venta.hora || "";
   $("fecha").addEventListener("change", function () { venta.fecha = this.value; pintar(); });
+  $("hora").addEventListener("change", function () { venta.hora = this.value; pintar(); });
 }
 
 function total() {
@@ -250,7 +258,7 @@ function pintar() {
   $("motivo").value = venta.motivo || "";
   $("total").textContent = pesos(total());
   $("continuar").disabled = !venta.lineas.length || (venta.fiada && !c) || total() <= 0 ||
-                            (venta.audio && !venta.fecha);
+                            (venta.audio && (!venta.fecha || !venta.hora));
   try { sessionStorage.setItem("ventaBorrador", JSON.stringify(venta)); } catch (e) {}
 }
 

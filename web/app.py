@@ -560,24 +560,28 @@ def venta_nueva():
     subtotal = sum(i["subtotal"] for i in items)
     if subtotal + ajuste <= 0:
         return de_nuevo("El total de la venta debe ser mayor a cero.")
-    dia = None
+    momento = None
     if audio_id:
-        # Las ventas por audio se guardan con el día en que se hicieron
+        # Las ventas por audio se guardan con el día y la hora en que se
+        # hicieron (los del audio, o los que escriba quien revisa); nunca se
+        # inventan
         try:
-            dia = date.fromisoformat(str(venta.get("fecha") or ""))
+            momento = datetime.strptime(f"{venta.get('fecha') or ''} {venta.get('hora') or ''}",
+                                        "%Y-%m-%d %H:%M")
         except ValueError:
-            return de_nuevo("Elija el día de la venta.")
-        if dia > date.today():
-            return de_nuevo("El día de la venta no puede ser después de hoy.")
+            return de_nuevo("Escriba el día y la hora de la venta.")
+        if momento > datetime.now():
+            return de_nuevo("La venta no puede ser de después de este momento.")
     codigo = secrets.token_urlsafe(16)
     session["venta_pendiente"] = {
         "codigo": codigo, "pedidos": pedidos, "fiada": fiada,
         "cliente": cliente["id"] if cliente else None, "ajuste": ajuste, "motivo": motivo,
-        "audio": audio_id, "dia": dia.isoformat() if dia else None}
+        "audio": audio_id,
+        "fecha": momento.strftime("%Y-%m-%d %H:%M:%S") if momento else None}
     return render_template("venta_confirmar.html", items=items, fiada=fiada, cliente=cliente,
                            ajuste=ajuste, motivo=motivo, subtotal=subtotal,
                            total=subtotal + ajuste, codigo=codigo, borrador=borrador,
-                           dia=_dia_largo(dia) if dia and dia != date.today() else None)
+                           momento=fecha(momento.strftime("%Y-%m-%d %H:%M:%S")) if momento else None)
 
 
 @app.post("/venta/confirmar")
@@ -592,12 +596,8 @@ def venta_confirmar():
     try:
         # Se vuelve a validar: el stock pudo cambiar desde la confirmación
         items = preparar_items(conn, p["pedidos"])
-        fecha = None
-        if audio_id:
-            from web.audios import fecha_de_venta
-            fecha = fecha_de_venta(conn, audio_id, date.fromisoformat(p["dia"]))
         sale_id, total = registrar_venta(conn, items, _usuario_admin(conn), p["cliente"],
-                                         p["fiada"], p["ajuste"], p["motivo"], fecha)
+                                         p["fiada"], p["ajuste"], p["motivo"], p.get("fecha"))
         if audio_id:
             from web.audios import marcar_registrado
             if not marcar_registrado(conn, audio_id, sale_id):
