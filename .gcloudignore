@@ -1,0 +1,9 @@
+# Lo que NO se sube a Google Cloud al publicar la página del celular.
+# Solo hace falta lo que copia el Dockerfile.
+*
+!Dockerfile
+!config/
+!utils/
+!servicios/
+!web/
+**/__pycache__/

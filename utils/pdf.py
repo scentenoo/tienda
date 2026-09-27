@@ -1,4 +1,5 @@
 """Exportación de informes a PDF."""
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -11,7 +12,33 @@ from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
 
 from utils.conciliacion import MANUAL_AJUSTE, MANUAL_INICIO
 
-CARPETA = Path.home() / "Documentos" / "Informes"
+
+def _carpeta_documentos() -> Path:
+    """Carpeta "Documentos" real del usuario.
+
+    Path.home() / "Documentos" asume que está en la ubicación por defecto,
+    pero si el usuario tiene OneDrive sincronizando esa carpeta (algo muy
+    común en Windows), la carpeta que se abre desde "Documentos" en el
+    Explorador vive en otro lado, y guardar ahí crea una carpeta distinta
+    que el usuario nunca ve. En Windows se resuelve con la API de carpetas
+    del shell, que sí conoce la ubicación real aunque esté redirigida.
+    """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            CSIDL_PERSONAL = 5       # "Mis documentos"
+            SHGFP_TYPE_CURRENT = 0   # ruta actual, no la de por defecto
+            buf = ctypes.create_unicode_buffer(260)
+            ctypes.windll.shell32.SHGetFolderPathW(
+                0, CSIDL_PERSONAL, 0, SHGFP_TYPE_CURRENT, buf)
+            if buf.value:
+                return Path(buf.value)
+        except Exception:
+            pass
+    return Path.home() / "Documentos"
+
+
+CARPETA = _carpeta_documentos() / "Informes"
 
 
 def _ruta(nombre: str) -> Path:

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Inventario · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
+<h1>Inventario</h1>
+<p class="sub">Primero los agotados</p>
+
+<form class="buscar" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="Buscar producto…" autocomplete="off">
+</form>
+
+{% if productos %}
+<ul class="lista">
+  {% for p in productos %}
+  <li><div class="fila">
+    <div class="izq"><b>{{ p['name'] }}</b><span>{{ p['price']|pesos }}</span></div>
+    <div class="der">
+      {% if p['stock'] <= 0 %}<span class="etiqueta debe">Agotado</span>
+      {% else %}{{ p['stock']|cantidad }} <span class="sub" style="font-size:.8rem">en stock</span>{% endif %}
+    </div>
+  </div></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">No hay productos con ese nombre.</p>
+{% endif %}
+{% endblock %}

@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from models.cash_register import CashRegister
 from utils.formatters import format_currency
 from utils.theme import FONT_NORMAL, FONT_BOLD, kpi_card, role_color
+from utils.ventanas import centrar_ventana
 
 
 class CashRegisterWindow:
@@ -13,8 +14,9 @@ class CashRegisterWindow:
 
         self.window = tk.Toplevel(parent)
         self.window.title("💵 Caja del Día")
-        self.window.geometry("860x620")
         self.window.resizable(True, True)
+        centrar_ventana(self.window, 860, 620)
+        self.window.minsize(760, 550)
 
         self._selected_date = date.today().isoformat()
 
@@ -91,6 +93,8 @@ class CashRegisterWindow:
         # ── Listado de movimientos ─────────────────────────────
         list_frame = ttk.LabelFrame(frame, text=' Movimientos del día ', padding=6)
         list_frame.pack(fill=tk.BOTH, expand=True)
+        list_frame.rowconfigure(0, weight=1)
+        list_frame.columnconfigure(0, weight=1)
 
         cols = ('Hora', 'Tipo', 'Descripción', 'Monto')
         self.mov_tree = ttk.Treeview(list_frame, columns=cols, show='headings')
@@ -100,20 +104,22 @@ class CashRegisterWindow:
         self.mov_tree.heading('Descripción', text='Descripción')
         self.mov_tree.heading('Monto', text='Monto')
 
-        self.mov_tree.column('Hora', width=140, anchor=tk.CENTER)
-        self.mov_tree.column('Tipo', width=130, anchor=tk.CENTER)
-        self.mov_tree.column('Descripción', width=380, anchor=tk.W)
-        self.mov_tree.column('Monto', width=110, anchor=tk.E)
+        self.mov_tree.column('Hora', width=140, minwidth=100, anchor=tk.CENTER)
+        self.mov_tree.column('Tipo', width=130, minwidth=100, anchor=tk.CENTER)
+        self.mov_tree.column('Descripción', width=380, minwidth=200, anchor=tk.W)
+        self.mov_tree.column('Monto', width=130, minwidth=100, anchor=tk.E)
 
         # Tags de color por tipo
         self.mov_tree.tag_configure('contado', foreground=role_color('success'))
         self.mov_tree.tag_configure('abono', foreground=role_color('info'))
 
-        sb = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.mov_tree.yview)
-        self.mov_tree.configure(yscrollcommand=sb.set)
+        vsb = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.mov_tree.yview)
+        hsb = ttk.Scrollbar(list_frame, orient=tk.HORIZONTAL, command=self.mov_tree.xview)
+        self.mov_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
-        self.mov_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.mov_tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
 
         # Etiqueta de "sin movimientos"
         self.lbl_empty = ttk.Label(frame,
@@ -144,24 +150,31 @@ class CashRegisterWindow:
                    bootstyle='primary').pack(side=tk.LEFT)
 
         # Treeview historial
+        hist_table_frame = ttk.Frame(frame)
+        hist_table_frame.pack(fill=tk.BOTH, expand=True)
+        hist_table_frame.rowconfigure(0, weight=1)
+        hist_table_frame.columnconfigure(0, weight=1)
+
         cols = ('Fecha', 'Ventas contado', 'Abonos', 'Total en caja')
-        self.hist_tree = ttk.Treeview(frame, columns=cols, show='headings')
+        self.hist_tree = ttk.Treeview(hist_table_frame, columns=cols, show='headings')
 
         for col in cols:
             self.hist_tree.heading(col, text=col)
 
-        self.hist_tree.column('Fecha', width=120, anchor=tk.CENTER)
-        self.hist_tree.column('Ventas contado', width=160, anchor=tk.E)
-        self.hist_tree.column('Abonos', width=160, anchor=tk.E)
-        self.hist_tree.column('Total en caja', width=160, anchor=tk.E)
+        self.hist_tree.column('Fecha', width=120, minwidth=100, anchor=tk.CENTER)
+        self.hist_tree.column('Ventas contado', width=160, minwidth=120, anchor=tk.E)
+        self.hist_tree.column('Abonos', width=160, minwidth=120, anchor=tk.E)
+        self.hist_tree.column('Total en caja', width=160, minwidth=120, anchor=tk.E)
 
         self.hist_tree.tag_configure('alt', background=role_color('light'))
 
-        sb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.hist_tree.yview)
-        self.hist_tree.configure(yscrollcommand=sb.set)
+        vsb = ttk.Scrollbar(hist_table_frame, orient=tk.VERTICAL, command=self.hist_tree.yview)
+        hsb = ttk.Scrollbar(hist_table_frame, orient=tk.HORIZONTAL, command=self.hist_tree.xview)
+        self.hist_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
-        self.hist_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.hist_tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
 
         # Doble clic en historial → ir al día
         self.hist_tree.bind('<Double-1>', self._on_history_click)

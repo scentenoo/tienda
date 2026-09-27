@@ -7,7 +7,9 @@ import sqlite3
 from config.database import sync_client_sales_status_on_payment
 from views.sale_detail_window import SaleDetailWindow
 from utils.theme import FONT_TITLE, FONT_HEADER, FONT_BOLD, FONT_NORMAL, FONT_SMALL, ROW_COLORS, role_color
-from utils.ventanas import hacer_modal
+from utils.ventanas import hacer_modal, centrar_ventana
+from utils.estado_cuenta import generar_y_abrir
+from servicios.abonos import registrar_abono
 
 class ClientsWindow:
     def __init__(self, parent, user, main_window=None):
@@ -20,9 +22,9 @@ class ClientsWindow:
         # Ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Clientes")
-        self.window.geometry("1000x650")
         self.window.resizable(True, True)
-        self.center_window()
+        centrar_ventana(self.window, 1000, 650)
+        self.window.minsize(850, 550)
 
         # UI
         self.setup_ui()
@@ -30,24 +32,17 @@ class ClientsWindow:
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
 
 
-    
+
     def manage_credit(self):
         """Abre ventana para gestionar crédito del cliente"""
         if not self.selected_client:
-            messagebox.showwarning("Selección requerida", 
+            messagebox.showwarning("Selección requerida",
                                  "Por favor seleccione un cliente")
             return
-        
+
         # Pasar referencia del main_window
         CreditManagementWindow(self.window, self, self.selected_client, self.main_window)
-    
-    def center_window(self):
-        """Centra la ventana en la pantalla"""
-        self.window.update_idletasks()
-        x = (self.window.winfo_screenwidth() - 1000) // 2
-        y = (self.window.winfo_screenheight() - 650) // 2
-        self.window.geometry(f"1000x650+{x}+{y}")
-    
+
     def setup_ui(self):
         """Configura la interfaz de usuario"""
         # 1. Frame principal (base para todo)
@@ -87,44 +82,49 @@ class ClientsWindow:
         ttk.Label(controls_frame, text="🔍 Buscar:").pack(side=tk.LEFT, padx=(20, 5))
         self.search_var = tk.StringVar()
         ttk.Entry(controls_frame, textvariable=self.search_var, width=25).pack(side=tk.LEFT)
-        self.search_var.trace('w', self.on_search)
+        self.search_var.trace_add('write', self.on_search)
 
-        # 4. Tabla de clientes
+        # 4. Frame de estadísticas (empaquetado ANTES que la tabla, con
+        # side=BOTTOM, para que reserve su espacio fijo abajo: si se
+        # empaqueta después, la tabla con expand=True se come todo el
+        # espacio disponible y lo deja en cero, igual que el footer en
+        # main_window.py)
+        stats_frame = ttk.LabelFrame(main_frame, text="📊 Estadísticas", padding=10)
+        stats_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(15, 0))
+        self.stats_label = ttk.Label(stats_frame, text="Cargando datos...")
+        self.stats_label.pack()
+
+        # 5. Tabla de clientes
         table_frame = ttk.Frame(main_frame)
         table_frame.pack(fill=tk.BOTH, expand=True)
 
         columns = ("ID", "Nombre", "Teléfono", "Límite", "Deuda", "Disponible", "Estado")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=15)
 
+        col_config = {
+            "ID": (50, 40, "center"),
+            "Nombre": (150, 100, "w"),
+            "Teléfono": (100, 80, "center"),
+            "Límite": (125, 90, "e"),
+            "Deuda": (125, 90, "e"),
+            "Disponible": (125, 90, "e"),
+            "Estado": (100, 80, "center"),
+        }
         for col in columns:
             self.tree.heading(col, text=col)
-            if col == "ID":
-                self.tree.column(col, width=50, anchor="center")
-            elif col == "Nombre":
-                self.tree.column(col, width=150, anchor="w")
-            elif col == "Teléfono":
-                self.tree.column(col, width=100, anchor="center")
-            elif col in ["Límite", "Deuda", "Disponible"]:
-                self.tree.column(col, width=100, anchor="e")
-            elif col == "Estado":
-                self.tree.column(col, width=100, anchor="center")
-            else:
-                self.tree.column(col, width=100, anchor="center")
+            width, minwidth, anchor = col_config[col]
+            self.tree.column(col, width=width, minwidth=minwidth, anchor=anchor)
 
         # Scrollbars
+        table_frame.rowconfigure(0, weight=1)
+        table_frame.columnconfigure(0, weight=1)
         vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        
-        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        hsb.pack(side=tk.BOTTOM, fill=tk.X)
 
-        # 5. Frame de estadísticas (¡Ahora con main_frame definido!)
-        stats_frame = ttk.LabelFrame(main_frame, text="📊 Estadísticas", padding=10)
-        stats_frame.pack(fill=tk.X, pady=(15, 0))
-        self.stats_label = ttk.Label(stats_frame, text="Cargando datos...")
-        self.stats_label.pack()
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
 
         # Configurar eventos
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
@@ -310,27 +310,18 @@ class ClientFormWindow:
         self.window = tk.Toplevel(parent)
         title = "Nuevo Cliente" if mode == "add" else "Editar Cliente"
         self.window.title(title)
-        self.window.geometry("550x600")
+        self.window.resizable(True, True)
+        centrar_ventana(self.window, 550, 600)
         self.window.transient(parent)
         hacer_modal(self.window)
-        
-        # Centrar ventana
-        self.center_window()
-        
+
         # Configurar UI
         self.setup_ui()
-        
+
         # Si es modo edición, cargar datos
         if mode == "edit" and client:
             self.load_client_data()
-    
-    def center_window(self):
-        """Centra la ventana en la pantalla"""
-        self.window.update_idletasks()
-        x = (self.window.winfo_screenwidth() - 550) // 2
-        y = (self.window.winfo_screenheight() - 600) // 2
-        self.window.geometry(f"550x600+{x}+{y}")
-    
+
     def setup_ui(self):
         """Configura la interfaz de usuario"""
         # Frame principal
@@ -493,14 +484,11 @@ class CreditManagementWindow:
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title(f"Gestión de Crédito - {client.name}")
-        self.window.geometry("700x650")  # Más ancho y más alto
+        centrar_ventana(self.window, 700, 650)
         self.window.minsize(700, 550)   # Tamaño mínimo
         self.window.transient(parent)
         hacer_modal(self.window)
-        
-        # Centrar ventana
-        self.center_window()
-        
+
         # Configurar UI
         self.setup_ui()
 
@@ -508,21 +496,14 @@ class CreditManagementWindow:
         """Actualiza todas las ventanas y cierra esta ventana"""
         # Actualizar ventana de clientes
         self.clients_window.refresh_clients()
-        
+
         # Actualizar todas las ventanas desde main_window
         if self.main_window:
             self.main_window.refresh_all_windows()
-        
+
         # Cerrar ventana actual
         self.window.destroy()
-    
-    def center_window(self):
-        """Centra la ventana en la pantalla"""
-        self.window.update_idletasks()
-        x = (self.window.winfo_screenwidth() - 700) // 2
-        y = (self.window.winfo_screenheight() - 650) // 2
-        self.window.geometry(f"700x650+{x}+{y}")
-    
+
     def setup_ui(self):
         """Configura la interfaz de usuario"""
         # Frame principal
@@ -623,6 +604,9 @@ class CreditManagementWindow:
         
         ttk.Button(buttons_frame, text="Ver Historial",
                   command=self.view_history, bootstyle="info").pack(side=tk.LEFT)
+        ttk.Button(buttons_frame, text="📄 Estado de cuenta",
+                  command=lambda: generar_y_abrir(self.client.id),
+                  bootstyle="success").pack(side=tk.LEFT, padx=(8, 0))
 
         ttk.Button(buttons_frame, text="Cerrar",
                   command=self.close_window, bootstyle="secondary").pack(side=tk.RIGHT)
@@ -843,33 +827,25 @@ class CreditManagementWindow:
             result = messagebox.askyesno("Confirmar Pago", mensaje_confirmacion)
             
             if result:
-                # CORRECCIÓN 2: Usar el método pay_debt del cliente para casos simples
-                if deuda_actual == 0:
-                    # No hay deuda, registrar como crédito a favor
-                    self.handle_excess_credit(self.client.id, amount)
+                # Pago, crédito a favor y estado de las ventas en un solo
+                # guardado (ver servicios/abonos.py)
+                success = False
+                conn = get_connection()
+                try:
+                    self.window.config(cursor="watch")
+                    self.window.update_idletasks()
+                    resumen = registrar_abono(conn, self.client.id, amount, description)
+                    conn.commit()
                     success = True
-                    excess_amount = amount
-                    debt_reduced = 0
-                elif amount <= deuda_actual:
-                    # Pago normal - usar el método pay_debt que ya funciona bien
-                    success = self.client.pay_debt(amount, description)
-                    excess_amount = 0
-                    debt_reduced = amount
-                else:
-                    # Pago excede la deuda - pagar toda la deuda y registrar exceso
-                    success = self.client.pay_debt(deuda_actual, description)
-                    if success:
-                        excess_amount = amount - deuda_actual
-                        self.handle_excess_credit(self.client.id, excess_amount)
-                        debt_reduced = deuda_actual
-                    else:
-                        excess_amount = 0
-                        debt_reduced = 0
-                
+                    debt_reduced, excess_amount = resumen["aplicado"], resumen["exceso"]
+                except Exception as e:
+                    conn.rollback()
+                    print(f"Error al registrar el pago: {e}")
+                finally:
+                    self.window.config(cursor="")
+                    conn.close()
+
                 if success:
-                    # CORRECCIÓN 3: Actualizar estado de ventas después del pago
-                    self.update_sales_status_after_payment(amount)
-                    
                     # Limpiar campos
                     self.payment_amount_entry.delete(0, tk.END)
                     self.payment_desc_entry.delete(0, tk.END)
@@ -1867,7 +1843,8 @@ class ClientHistoryWindow:
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title(f"Historial - {client.name}")
-        self.window.geometry("800x600")
+        centrar_ventana(self.window, 800, 600)
+        self.window.minsize(650, 480)
         self.window.transient(parent)
         hacer_modal(self.window)
         
@@ -1910,13 +1887,6 @@ class ClientHistoryWindow:
         """Maneja el evento de cerrar la ventana"""
         self.window.destroy()
     
-    def center_window(self):
-        """Centra la ventana en la pantalla"""
-        self.window.update_idletasks()
-        x = (self.window.winfo_screenwidth() - 800) // 2
-        y = (self.window.winfo_screenheight() - 600) // 2
-        self.window.geometry(f"800x600+{x}+{y}")
-    
     def setup_ui(self):
         """Configura la interfaz de usuario"""
         # Frame principal
@@ -1934,11 +1904,41 @@ class ClientHistoryWindow:
                                 text=f"Cliente: {self.selected_client.name}", 
                                 font=FONT_HEADER)
         client_label.pack(pady=(0, 20))
-        
+
+        # Frame para botones (empaquetado ANTES que la tabla, con
+        # side=BOTTOM, para que "Cerrar" no se lo coma el expand=True
+        # de la tabla)
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(15, 0))
+
+        # Botón para ver el detalle de la venta seleccionada
+        ttk.Button(
+            button_frame,
+            text="🧾 Ver Detalle de Venta",
+            command=self.view_selected_sale_detail,
+            bootstyle="info"
+        ).pack(side=tk.LEFT)
+
+        # PDF para mandarle al cliente cuando pregunta de qué debe
+        ttk.Button(
+            button_frame,
+            text="📄 Estado de cuenta",
+            command=lambda: generar_y_abrir(self.selected_client.id),
+            bootstyle="success"
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+        # Botón de cerrar
+        ttk.Button(
+            button_frame,
+            text="Cerrar",
+            command=self.close_window,
+            bootstyle="secondary"
+        ).pack(side=tk.RIGHT)
+
         # Frame para la tabla
         table_frame = ttk.Frame(main_frame)
         table_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
-        
+
         # Crear Treeview
         columns = ("Fecha", "Tipo", "Monto", "Descripción")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=15)
@@ -1949,18 +1949,22 @@ class ClientHistoryWindow:
         self.tree.heading("Monto", text="Monto")
         self.tree.heading("Descripción", text="Descripción")
         
-        self.tree.column("Fecha", width=150, anchor="center")
-        self.tree.column("Tipo", width=100, anchor="center")
-        self.tree.column("Monto", width=120, anchor="e")
-        self.tree.column("Descripción", width=250, anchor="w")
-        
+        self.tree.column("Fecha", width=150, minwidth=110, anchor="center")
+        self.tree.column("Tipo", width=100, minwidth=80, anchor="center")
+        self.tree.column("Monto", width=140, minwidth=100, anchor="e")
+        self.tree.column("Descripción", width=250, minwidth=150, anchor="w")
+
         # Scrollbars
+        table_frame.rowconfigure(0, weight=1)
+        table_frame.columnconfigure(0, weight=1)
         v_scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=v_scrollbar.set)
-        
+        h_scrollbar = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+
         # Empaquetar tabla y scrollbars
-        self.tree.pack(side="left", fill="both", expand=True)
-        v_scrollbar.pack(side="right", fill="y")
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        v_scrollbar.grid(row=0, column=1, sticky="ns")
+        h_scrollbar.grid(row=1, column=0, sticky="ew")
         
         # Configurar colores para diferentes tipos
         self.tree.tag_configure("debit", **ROW_COLORS["danger"])
@@ -1976,26 +1980,6 @@ class ClientHistoryWindow:
         # Doble clic sobre una fila con venta asociada = ver detalle
         self.tree.bind('<Double-1>', self._on_history_row_double_click)
 
-        # Frame para botones
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=(15, 0))
-        
-        # Botón para ver el detalle de la venta seleccionada
-        ttk.Button(
-            button_frame,
-            text="🧾 Ver Detalle de Venta",
-            command=self.view_selected_sale_detail,
-            bootstyle="info"
-        ).pack(side=tk.LEFT)
-
-        # Botón de cerrar
-        ttk.Button(
-            button_frame,
-            text="Cerrar",
-            command=self.close_window,
-            bootstyle="secondary"
-        ).pack(side=tk.RIGHT)
-        
     def load_history(self):
         """Carga el historial de transacciones con orden cronológico preciso"""
         if not hasattr(self.selected_client, 'id'):
@@ -2038,11 +2022,6 @@ class ClientHistoryWindow:
 
     def configure_tree_styles(self):
         """Configura los estilos visuales para diferentes tipos de transacciones"""
-        style = ttk.Style()
-        style.configure('Debit.Treeview', foreground='red')
-        style.configure('Credit.Treeview', foreground='green')
-        style.configure('Reversal.Treeview', foreground='orange')
-        
         self.tree.tag_configure('deuda', **ROW_COLORS["danger"])
         self.tree.tag_configure('pago', **ROW_COLORS["success"])
         self.tree.tag_configure('reversion', **ROW_COLORS["warning"])

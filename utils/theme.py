@@ -59,3 +59,15 @@ def role_color(role):
     Útil para tag_configure() de Treeview, que no entiende bootstyle.
     """
     return ttk.Style().colors.get(role)
+
+
+def configure_treeview_style():
+    """Unifica altura de fila y fuentes de todos los Treeview de la app.
+
+    Se llama una sola vez desde main.py tras crear la ventana raíz, igual
+    que el resto del tema: ninguna ventana individual debe tocar
+    ttk.Style() por su cuenta.
+    """
+    style = ttk.Style()
+    style.configure("Treeview", font=FONT_NORMAL, rowheight=26)
+    style.configure("Treeview.Heading", font=FONT_BOLD)

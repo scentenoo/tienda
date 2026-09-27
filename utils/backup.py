@@ -56,15 +56,6 @@ MAX_REINTENTOS  = 6
 ESPERA_BASE     = 3
 RCLONE_TIMEOUT  = 600
 
-# Destino en OneDrive del libro que lee Excel Online. Si el remoto no está
-# configurado, el backup sigue funcionando igual y solo lo salta.
-# La UNAL bloquea las aplicaciones de terceros contra su OneDrive, así que el
-# libro se deja listo en disco y se sube a mano desde el navegador. Si algún
-# día hay un remoto configurado, se sube solo.
-ONEDRIVE_REMOTE = os.environ.get("CHARCUTERIA_ONEDRIVE_REMOTE", "onedrive:CharcuteriaHYE")
-DATOS_XLSX      = Path(os.environ.get("CHARCUTERIA_DATOS_XLSX")
-                       or Path.home() / "Documentos" / "datos.xlsx")
-
 # Forzar IPv4. Con IPv6 activo cada operación tarda ~55s esperando a que
 # venza el intento de conexión; por IPv4 baja a ~13s. Se puede desactivar
 # poniendo CHARCUTERIA_RCLONE_IPV4=0.
@@ -234,52 +225,6 @@ def _remoto_configurado(remoto: str) -> bool:
         return False
 
 
-def publicar_para_excel(ruta_bd: Path) -> str:
-    """Deja listo el libro que lee Excel Online. Siempre lo escribe en disco;
-    si además hay un remoto configurado, lo sube."""
-    from utils.datos_excel import generar
-
-    DATOS_XLSX.parent.mkdir(parents=True, exist_ok=True)
-    tablas = generar(DATOS_XLSX, ruta_bd)
-    log.info("Libro para Excel generado con %d tablas → %s", tablas, DATOS_XLSX)
-
-    # A Drive va siempre, para que un flujo de Power Automate pueda recogerlo
-    # y llevarlo a OneDrive. Las subidas son opcionales: si fallan, el libro ya
-    # está en disco y el backup de la base no se puede ver afectado.
-    if not DENTRO_DE_DRIVE:
-        try:
-            destino_drive = f"{RCLONE_REMOTE}/{DATOS_XLSX.name}"
-            subir_a_drive(DATOS_XLSX, destino_drive)
-        except Exception as e:
-            log.warning("No se pudo subir el libro a Drive (%s)", e)
-
-    if _remoto_configurado(ONEDRIVE_REMOTE):
-        destino = f"{ONEDRIVE_REMOTE}/{DATOS_XLSX.name}"
-        try:
-            log.info("Subiendo a OneDrive → %s", destino)
-            _ejecutar_rclone(["copyto", str(DATOS_XLSX), destino, "--retries", "3"])
-            return destino
-        except Exception as e:
-            log.warning("No se pudo subir a OneDrive (%s); queda en disco", e)
-
-    return f"{DATOS_XLSX}  (súbelo a OneDrive)"
-
-
-def actualizar_libro_local(ruta_bd: Path) -> str:
-    """Deja el libro de trabajo listo para abrir aquí mismo. Es el camino
-    rápido: ~7 segundos, sin pasar por Drive ni OneDrive."""
-    from utils.libro_excel import actualizar, LIBRO_POR_DEFECTO
-
-    if not LIBRO_POR_DEFECTO.exists():
-        return f"{LIBRO_POR_DEFECTO} (no existe todavía)"
-    try:
-        actualizar(LIBRO_POR_DEFECTO, ruta_bd)
-        return str(LIBRO_POR_DEFECTO)
-    except Exception as e:
-        log.warning("No se pudo actualizar el libro local (%s)", e)
-        return f"no se pudo actualizar ({e})"
-
-
 # ── Función principal ─────────────────────────────────────────────────────────
 def backup_y_sync_drive() -> dict:
     _configurar_log()
@@ -326,19 +271,11 @@ def backup_y_sync_drive() -> dict:
         copiar_en_drive(remoto_backup, destino_drive)
         limpiar_backups_remotos(RCLONE_REMOTE, MAX_BACKUPS)
 
-    # ── 4. Libro de datos para Excel Online ──────────────────────────────
-    destino_excel = publicar_para_excel(ORIGEN_DB)
-
-    # ── 5. Libro local, listo para abrir sin esperar a la nube ───────────
-    libro_local = actualizar_libro_local(ORIGEN_DB)
-
     log.info("Sync completado ✓")
     return {
         "backup": str(ruta_backup),
         "sync":   str(SYNC_DB),
         "drive":  destino_drive,
-        "excel":  destino_excel,
-        "libro":  libro_local,
         "fecha":  fecha,
     }
 

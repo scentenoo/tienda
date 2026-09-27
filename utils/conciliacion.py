@@ -178,6 +178,15 @@ def deudores(conn) -> list:
     return resultado
 
 
+def telefonos_clientes(conn) -> dict:
+    """{nombre: teléfono} de los clientes con deuda que tienen teléfono."""
+    filas = conn.execute("""
+        SELECT name, phone FROM clients
+         WHERE total_debt > 0 AND COALESCE(TRIM(phone), '') <> ''
+    """).fetchall()
+    return {nombre: telefono for nombre, telefono in filas}
+
+
 # ── Giros a socios ───────────────────────────────────────────────────────────
 def listar_giros(conn) -> list:
     """Todos los movimientos hacia socios, del más reciente al más antiguo."""

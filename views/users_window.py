@@ -4,6 +4,7 @@ import ttkbootstrap as ttk
 from models.user import User
 from utils.security import hash_password
 from utils.theme import FONT_TITLE
+from utils.ventanas import centrar_ventana
 
 class UsersWindow:
     def __init__(self, parent, user):
@@ -18,17 +19,10 @@ class UsersWindow:
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Gestión de Usuarios")
-        self.window.geometry("1200x500")
         self.window.resizable(True, True)
-        
-        # Centrar ventana
-        self.window.update_idletasks()
-        width = 1200
-        height = 500
-        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.window.winfo_screenheight() // 2) - (height // 2)
-        self.window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
-        
+        centrar_ventana(self.window, 1200, 560)
+        self.window.minsize(960, 480)
+
         # Configurar UI
         self.setup_ui()
         
@@ -89,29 +83,36 @@ class UsersWindow:
         list_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
         # Treeview para mostrar usuarios
+        tree_frame = ttk.Frame(list_frame)
+        tree_frame.pack(fill=tk.BOTH, expand=True)
+        tree_frame.rowconfigure(0, weight=1)
+        tree_frame.columnconfigure(0, weight=1)
+
         columns = ('ID', 'Nombre', 'Usuario', 'Rol', 'Puesto')
-        self.users_tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=15)
-        
+        self.users_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
+
         # Configurar columnas
         self.users_tree.heading('ID', text='ID')
         self.users_tree.heading('Nombre', text='Nombre')
         self.users_tree.heading('Usuario', text='Usuario')
         self.users_tree.heading('Rol', text='Rol')
         self.users_tree.heading('Puesto', text='Puesto')
-        
-        self.users_tree.column('ID', width=50, anchor=tk.CENTER)
-        self.users_tree.column('Nombre', width=150)
-        self.users_tree.column('Usuario', width=100)
-        self.users_tree.column('Rol', width=100, anchor=tk.CENTER)
-        self.users_tree.column('Puesto', width=150)
-        
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.users_tree.yview)
-        self.users_tree.configure(yscroll=scrollbar.set)
-        
-        # Empaquetar treeview y scrollbar
-        self.users_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.users_tree.column('ID', width=50, minwidth=40, anchor=tk.CENTER)
+        self.users_tree.column('Nombre', width=150, minwidth=110, anchor=tk.W)
+        self.users_tree.column('Usuario', width=100, minwidth=80, anchor=tk.W)
+        self.users_tree.column('Rol', width=100, minwidth=80, anchor=tk.CENTER)
+        self.users_tree.column('Puesto', width=150, minwidth=110, anchor=tk.W)
+
+        # Scrollbars
+        vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.users_tree.yview)
+        hsb = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.users_tree.xview)
+        self.users_tree.configure(yscroll=vsb.set, xscrollcommand=hsb.set)
+
+        # Empaquetar treeview y scrollbars
+        self.users_tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
         
         # Botones para editar y eliminar
         action_frame = ttk.Frame(list_frame)
@@ -137,7 +138,7 @@ class UsersWindow:
                 user.name,
                 user.username,
                 user.role,
-                user.position if hasattr(user, 'position') else "N/A"
+                getattr(user, 'position', None) or ""
             ))
     
     def save_user(self):
@@ -202,17 +203,10 @@ class UsersWindow:
         # Abrir ventana de edición
         edit_window = tk.Toplevel(self.window)
         edit_window.title("Editar Usuario")
-        edit_window.geometry("400x300")
         edit_window.resizable(False, False)
-        
-        # Centrar ventana
-        edit_window.update_idletasks()
-        width = 400
-        height = 300
-        x = (edit_window.winfo_screenwidth() // 2) - (width // 2)
-        y = (edit_window.winfo_screenheight() // 2) - (height // 2)
-        edit_window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
-        
+        edit_window.transient(self.window)
+        centrar_ventana(edit_window, 400, 300)
+
         # Obtener usuario
         user = User.get_by_id(user_id)
         if not user:
@@ -244,7 +238,7 @@ class UsersWindow:
         role_combo.grid(row=3, column=1, pady=5, padx=5, sticky=tk.W)
         
         ttk.Label(main_frame, text="Puesto:").grid(row=4, column=0, sticky=tk.W, pady=5)
-        position_var = tk.StringVar(value=user.position if hasattr(user, 'position') else "")
+        position_var = tk.StringVar(value=getattr(user, 'position', None) or "")
         ttk.Entry(main_frame, textvariable=position_var, width=25).grid(row=4, column=1, pady=5, padx=5)
         
         # Botones

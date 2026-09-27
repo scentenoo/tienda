@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Clientes · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
+<h1>Clientes</h1>
+<p class="sub">Primero los que deben</p>
+
+<form class="buscar" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="Buscar cliente…" autocomplete="off">
+</form>
+
+{% if clientes %}
+<ul class="lista">
+  {% for c in clientes %}
+  <li><a class="fila" href="{{ url_for('cliente', client_id=c['id']) }}">
+    <div class="izq"><b>{{ c['name'] }}</b>{% if c['phone'] %}<span>{{ c['phone'] }}</span>{% endif %}</div>
+    <div class="der">
+      {% if c['total_debt'] > 0 %}<span class="etiqueta debe">{{ c['total_debt']|pesos }}</span>
+      {% else %}<span class="etiqueta pagado">Al día</span>{% endif %}
+    </div>
+  </a></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">No hay clientes con ese nombre.</p>
+{% endif %}
+{% endblock %}

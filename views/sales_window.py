@@ -11,8 +11,9 @@ from utils.validators import safe_float_conversion
 from utils.theme import FONT_TITLE, FONT_HEADER, FONT_BOLD, FONT_NORMAL, FONT_SMALL, ROW_COLORS
 
 from config.database import get_connection
+from servicios.ventas import registrar_venta
 from views.sale_detail_window import SaleDetailWindow
-from utils.ventanas import hacer_modal
+from utils.ventanas import hacer_modal, centrar_ventana
 
 class SalesWindow:
     def __init__(self, parent, user):
@@ -20,9 +21,10 @@ class SalesWindow:
         self.user = user
         self.window = tk.Toplevel(parent)
         self.window.title("Gestión de Ventas")
-        self.window.geometry("1100x800")
         self.window.resizable(True, True)
-        
+        centrar_ventana(self.window, 1100, 800)
+        self.window.minsize(950, 650)
+
         # Variables
         self.products = []
         self.clients = []
@@ -57,8 +59,6 @@ class SalesWindow:
 
     def setup_ui(self):
         """Configura la interfaz optimizada - TODO EN UNA PANTALLA"""
-        
-        self.style = ttk.Style()
 
         # ═══════════════════════════════════════════════════════════
         # DISEÑO EN 2 COLUMNAS: IZQUIERDA (productos) | DERECHA (info)
@@ -81,14 +81,17 @@ class SalesWindow:
         # ─────────────────────────────────────────────────────────────
         content_frame = ttk.Frame(main_frame)
         content_frame.pack(fill=tk.BOTH, expand=True)
-        
+        content_frame.rowconfigure(0, weight=1)
+        content_frame.columnconfigure(0, weight=3)
+        content_frame.columnconfigure(1, weight=2)
+
         # COLUMNA IZQUIERDA (60%) - Productos
         left_column = ttk.Frame(content_frame)
-        left_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
-        
+        left_column.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+
         # COLUMNA DERECHA (40%) - Información de venta
         right_column = ttk.Frame(content_frame)
-        right_column.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(5, 0))
+        right_column.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
         
         # ═══════════════════════════════════════════════════════════
         # COLUMNA IZQUIERDA - AGREGAR PRODUCTOS
@@ -174,37 +177,11 @@ class SalesWindow:
         items_frame = ttk.LabelFrame(left_column, text=" 🛒 Productos en la Venta ", padding="8")
         items_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
         
-        # Treeview
-        columns = ('Producto', 'Cant.', 'P.Unit', 'Subtotal')
-        self.items_tree = ttk.Treeview(
-            items_frame, 
-            columns=columns, 
-            show='headings',
-            height=8
-        )
-        
-        # Configurar columnas más compactas
-        self.items_tree.heading('Producto', text='Producto')
-        self.items_tree.heading('Cant.', text='Cant.')
-        self.items_tree.heading('P.Unit', text='P.Unit')
-        self.items_tree.heading('Subtotal', text='Subtotal')
-        
-        self.items_tree.column('Producto', width=180, anchor=tk.W)
-        self.items_tree.column('Cant.', width=60, anchor=tk.E)
-        self.items_tree.column('P.Unit', width=80, anchor=tk.E)
-        self.items_tree.column('Subtotal', width=80, anchor=tk.E)
-        
-        # Scrollbar
-        items_scrollbar = ttk.Scrollbar(items_frame, orient=tk.VERTICAL, command=self.items_tree.yview)
-        self.items_tree.configure(yscrollcommand=items_scrollbar.set)
-        
-        self.items_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        items_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Botones de acciones
+        # Botones de acciones (empaquetados ANTES que la tabla, con
+        # side=BOTTOM, para que no se los coma el expand=True del árbol)
         items_buttons = ttk.Frame(items_frame)
-        items_buttons.pack(fill=tk.X, pady=(5, 0))
-        
+        items_buttons.pack(side=tk.BOTTOM, fill=tk.X, pady=(5, 0))
+
         ttk.Button(items_buttons, text="🗑️ Quitar",
                 command=self.remove_product_from_sale,
                 bootstyle='danger').pack(side=tk.LEFT, padx=2)
@@ -212,7 +189,41 @@ class SalesWindow:
         ttk.Button(items_buttons, text="🧹 Limpiar Todo",
                 command=self.clear_sale_items,
                 bootstyle='danger-outline').pack(side=tk.LEFT, padx=2)
-        
+
+        # Treeview
+        items_table_frame = ttk.Frame(items_frame)
+        items_table_frame.pack(fill=tk.BOTH, expand=True)
+        items_table_frame.rowconfigure(0, weight=1)
+        items_table_frame.columnconfigure(0, weight=1)
+
+        columns = ('Producto', 'Cant.', 'P.Unit', 'Subtotal')
+        self.items_tree = ttk.Treeview(
+            items_table_frame,
+            columns=columns,
+            show='headings',
+            height=8
+        )
+
+        # Configurar columnas más compactas
+        self.items_tree.heading('Producto', text='Producto')
+        self.items_tree.heading('Cant.', text='Cant.')
+        self.items_tree.heading('P.Unit', text='P.Unit')
+        self.items_tree.heading('Subtotal', text='Subtotal')
+
+        self.items_tree.column('Producto', width=180, minwidth=120, anchor=tk.W)
+        self.items_tree.column('Cant.', width=60, minwidth=50, anchor=tk.E)
+        self.items_tree.column('P.Unit', width=100, minwidth=80, anchor=tk.E)
+        self.items_tree.column('Subtotal', width=100, minwidth=80, anchor=tk.E)
+
+        # Scrollbars
+        items_vsb = ttk.Scrollbar(items_table_frame, orient=tk.VERTICAL, command=self.items_tree.yview)
+        items_hsb = ttk.Scrollbar(items_table_frame, orient=tk.HORIZONTAL, command=self.items_tree.xview)
+        self.items_tree.configure(yscrollcommand=items_vsb.set, xscrollcommand=items_hsb.set)
+
+        self.items_tree.grid(row=0, column=0, sticky="nsew")
+        items_vsb.grid(row=0, column=1, sticky="ns")
+        items_hsb.grid(row=1, column=0, sticky="ew")
+
         # ═══════════════════════════════════════════════════════════
         # COLUMNA DERECHA - INFORMACIÓN DE VENTA
         # ═══════════════════════════════════════════════════════════
@@ -389,9 +400,6 @@ class SalesWindow:
                                font=FONT_TITLE)
         title_label.pack(pady=(0, 10))
         
-        # Configurar estilos para el treeview
-        self.style.configure('Treeview', rowheight=25)
-
         # Frame para botones
         controls_frame = ttk.Frame(main_frame)
         controls_frame.pack(fill=tk.X, pady=(0, 10))
@@ -406,34 +414,45 @@ class SalesWindow:
                   command=self.delete_sale, bootstyle="danger").pack(side=tk.LEFT, padx=5)
 
         # Treeview para mostrar ventas
-        columns = ('ID', 'Cliente', 'Subtotal', 'Ajuste', 'Total', 'Estado', 'Tipo Pago', 'Fecha')
-        self.sales_tree = ttk.Treeview(main_frame, columns=columns, show='headings')
-        self.sales_tree.tag_configure('credit', **ROW_COLORS['warning'])
-        self.sales_tree.tag_configure('paid', **ROW_COLORS['success'])
-
-        # Configurar columnas
-        for col in columns:
-            self.sales_tree.heading(col, text=col)
-            if col == 'ID':
-                self.sales_tree.column(col, width=50)
-            elif col in ['Subtotal', 'Ajuste', 'Total']:
-                self.sales_tree.column(col, width=100)
-            elif col in ['Estado', 'Tipo Pago']:
-                self.sales_tree.column(col, width=100)
-            else:
-                self.sales_tree.column(col, width=150)
-        
-        # Scrollbar
-        v_scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.sales_tree.yview)
-        self.sales_tree.configure(yscrollcommand=v_scrollbar.set)
-
         # NOTA: antes existía aquí un Frame vacío ("tree_frame") empaquetado con
         # fill=BOTH, expand=True por encima de la tabla. Al no contener nada,
         # ese frame igual reclamaba espacio vertical disponible y empujaba la
         # tabla hacia abajo, dejando el hueco entre los botones y la lista.
-        # Se elimina y la tabla/scrollbar se empacan directamente en main_frame.
-        self.sales_tree.pack(fill=tk.BOTH, expand=True)
-        v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # Se eliminó y la tabla se monta directamente en un contenedor grid.
+        sales_table_frame = ttk.Frame(main_frame)
+        sales_table_frame.pack(fill=tk.BOTH, expand=True)
+        sales_table_frame.rowconfigure(0, weight=1)
+        sales_table_frame.columnconfigure(0, weight=1)
+
+        columns = ('ID', 'Cliente', 'Subtotal', 'Ajuste', 'Total', 'Estado', 'Tipo Pago', 'Fecha')
+        self.sales_tree = ttk.Treeview(sales_table_frame, columns=columns, show='headings')
+        self.sales_tree.tag_configure('credit', **ROW_COLORS['warning'])
+        self.sales_tree.tag_configure('paid', **ROW_COLORS['success'])
+
+        # Configurar columnas
+        col_config = {
+            'ID': (50, 40, 'center'),
+            'Cliente': (150, 100, 'w'),
+            'Subtotal': (125, 90, 'e'),
+            'Ajuste': (125, 90, 'e'),
+            'Total': (125, 90, 'e'),
+            'Estado': (100, 80, 'center'),
+            'Tipo Pago': (100, 80, 'center'),
+            'Fecha': (150, 120, 'center'),
+        }
+        for col in columns:
+            self.sales_tree.heading(col, text=col)
+            width, minwidth, anchor = col_config[col]
+            self.sales_tree.column(col, width=width, minwidth=minwidth, anchor=anchor)
+
+        # Scrollbars
+        v_scrollbar = ttk.Scrollbar(sales_table_frame, orient=tk.VERTICAL, command=self.sales_tree.yview)
+        h_scrollbar = ttk.Scrollbar(sales_table_frame, orient=tk.HORIZONTAL, command=self.sales_tree.xview)
+        self.sales_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+
+        self.sales_tree.grid(row=0, column=0, sticky="nsew")
+        v_scrollbar.grid(row=0, column=1, sticky="ns")
+        h_scrollbar.grid(row=1, column=0, sticky="ew")
 
         # Doble clic sobre una venta = ver el detalle directamente
         self.sales_tree.bind('<Double-1>', lambda e: self.view_sale_details())
@@ -998,19 +1017,11 @@ class SalesWindow:
         """Abre diálogo para agregar nuevo cliente"""
         dialog = tk.Toplevel(self.window)
         dialog.title("Nuevo Cliente")
-        dialog.geometry("300x500")
         dialog.resizable(False, False)
         dialog.transient(self.window)
         hacer_modal(dialog)
-        
-        # Centrar diálogo
-        dialog.update_idletasks()
-        x = max(300, dialog.winfo_reqwidth())
-        y = max(500, dialog.winfo_reqheight())
-        pos_x = (dialog.winfo_screenwidth() // 2) - (x // 2)
-        pos_y = (dialog.winfo_screenheight() // 2) - (y // 2)
-        dialog.geometry(f"{x}x{y}+{pos_x}+{pos_y}")
-        
+        centrar_ventana(dialog, 300, 500)
+
         # Contenido del diálogo
         main_frame = ttk.Frame(dialog, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -1067,106 +1078,42 @@ class SalesWindow:
 
         conn = None
         try:
-            conn = get_connection()
-            cursor = conn.cursor()
+            fiada = self.status_var.get() == 'pending'
 
             # Obtener cliente para ventas fiadas
             client_id = None
-            client_name = "Venta al contado"
-            if self.status_var.get() == 'pending':
+            if fiada:
                 client = next((c for c in self.clients if c.name == self.client_var.get()), None)
                 if not client:
                     raise ValueError("Cliente seleccionado no existe")
                 client_id = client.id
-                client_name = client.name
 
-            # Calcular subtotal de productos
-            subtotal = sum(item['subtotal'] for item in self.sale_items)
-            
             # Obtener ajuste
             adjustment = 0.0
             adjustment_reason = None
-            if self.status_var.get() == 'pending':
+            if fiada:
                 try:
                     adjustment = safe_float_conversion(self.adjustment_var.get() or 0)
                     adjustment_reason = self.adjustment_reason_var.get().strip() or None
                 except:
                     adjustment = 0.0
-            
-            # Calcular total final
-            total = subtotal + adjustment
-            
-            status = self.status_var.get()
-            payment_method = 'credit' if status == 'pending' else 'cash'
 
-            # 1. Insertar la venta CON AJUSTE
-            cursor.execute('''
-                INSERT INTO sales (client_id, total, status, payment_method, adjustment, 
-                                adjustment_reason, created_at, user_id)
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), ?)
-            ''', (client_id, total, status, payment_method, adjustment, 
-                adjustment_reason, self.user.id))
-            
-            sale_id = cursor.lastrowid
-
-            # 2. Insertar detalles de venta (sin cambios)
+            items = []
             for item in self.sale_items:
                 product = next((p for p in self.products if p.id == item['product_id']), None)
                 if not product:
                     raise ValueError(f"Producto ID {item['product_id']} no encontrado")
+                items.append({**item, 'cost_price': product.cost_price})
 
-                cursor.execute('''
-                    INSERT INTO sale_details 
-                    (sale_id, product_id, quantity, unit_price, sale_price, subtotal, cost_price)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    sale_id,
-                    item['product_id'],
-                    item['quantity'],
-                    item['unit_price'],
-                    item['unit_price'],
-                    item['subtotal'],
-                    product.cost_price
-                ))
+            # Con la base en la nube guardar tarda ~1 s: que se note que está trabajando
+            self.window.config(cursor="watch")
+            self.window.update_idletasks()
 
-                # Actualizar stock
-                cursor.execute('''
-                    UPDATE products SET stock = stock - ? WHERE id = ?
-                ''', (item['quantity'], item['product_id']))
-
-            # 3. ACTUALIZAR DEUDA DEL CLIENTE SI ES VENTA FIADA
-            if status == 'pending' and client_id:
-                # Actualizar deuda total del cliente (con el total que incluye ajuste)
-                cursor.execute('''
-                    UPDATE clients 
-                    SET total_debt = total_debt + ?
-                    WHERE id = ?
-                ''', (total, client_id))
-
-                # Registrar transacción de deuda
-                description = f"Venta fiada #{sale_id}"
-                if adjustment != 0:
-                    if adjustment > 0:
-                        description += f" (+ cargo: ${adjustment:,.2f})"
-                    else:
-                        description += f" (descuento: ${abs(adjustment):,.2f})"
-                
-                if adjustment_reason:
-                    description += f" - {adjustment_reason}"
-                
-                cursor.execute('''
-                    INSERT INTO client_transactions 
-                    (client_id, transaction_type, amount, description, sale_id, created_at)
-                    VALUES (?, 'debit', ?, ?, ?, datetime('now', 'localtime'))
-                ''', (
-                    client_id,
-                    total,
-                    description,
-                    sale_id
-                ))
-
+            conn = get_connection()
+            sale_id, _total = registrar_venta(conn, items, self.user.id, client_id, fiada,
+                                              adjustment, adjustment_reason)
             conn.commit()
-            
+
             # Mensaje de éxito con información del ajuste
             success_msg = f"Venta #{sale_id} guardada correctamente"
             if adjustment != 0:
@@ -1184,6 +1131,7 @@ class SalesWindow:
                 conn.rollback()
             messagebox.showerror("Error", f"No se pudo completar la venta: {str(e)}")
         finally:
+            self.window.config(cursor="")
             if conn:
                 conn.close()
     
@@ -1240,8 +1188,8 @@ class SalesWindow:
             # Crear ventana de edición
             edit_window = tk.Toplevel(self.window)
             edit_window.title(f"Editar Venta #{sale.id}")
-            edit_window.geometry("400x300")
             edit_window.resizable(False, False)
+            centrar_ventana(edit_window, 400, 300)
             
             # Frame principal
             main_frame = ttk.Frame(edit_window, padding=20)

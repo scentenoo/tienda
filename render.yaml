@@ -1,0 +1,21 @@
+# Página del celular en Render (plan gratis). Se crea desde el panel de Render
+# con New → Blueprint, eligiendo este repositorio.
+# Las claves NO van aquí (el repositorio es público): Render las pide al crear
+# el servicio y las guarda aparte.
+services:
+  - type: web
+    name: charcuteria-hye
+    runtime: docker
+    plan: free
+    region: virginia            # junto a la base de Turso (aws-us-east-1)
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /ingresar
+    envVars:
+      - key: TURSO_URL
+        sync: false             # se escribe a mano en Render
+      - key: TURSO_TOKEN
+        sync: false
+      - key: CLAVE_HUELLA
+        sync: false             # el contenido de data\clave_web.txt
+      - key: SECRETO
+        generateValue: true     # Render inventa uno al azar

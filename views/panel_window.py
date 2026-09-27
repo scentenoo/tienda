@@ -13,7 +13,7 @@ from utils.conciliacion import nombre_mes
 from utils.formatters import format_currency
 from utils.graficos import Interactivo, escala_legible, formato_corto, formato_pesos
 from utils.theme import FONT_HEADER, FONT_SMALL, kpi_card
-from utils.ventanas import hacer_modal
+from utils.ventanas import hacer_modal, centrar_ventana
 
 # Paleta coherente con el tema Flatly
 COLORES = ["#2c3e50", "#18bc9c", "#3498db", "#f39c12", "#e74c3c",
@@ -34,7 +34,7 @@ class PanelWindow:
         self.parent = parent
         self.window = tk.Toplevel(parent)
         self.window.title("Panel de Análisis")
-        self.window.geometry("1250x780")
+        centrar_ventana(self.window, 1250, 780)
         self.window.minsize(1000, 620)
         hacer_modal(self.window, parent)
 

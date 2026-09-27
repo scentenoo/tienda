@@ -4,6 +4,7 @@ import ttkbootstrap as ttk
 from models.user import User
 from views.main_window import MainWindow
 from utils.theme import FONT_TITLE, FONT_NORMAL, FONT_BOLD, FONT_SMALL
+from utils.ventanas import centrar_ventana
 
 class LoginWindow:
     def __init__(self, parent):
@@ -13,7 +14,6 @@ class LoginWindow:
         # Crear ventana de login
         self.window = tk.Toplevel(parent)
         self.window.title("Sistema de Gestión - Login")
-        self.window.geometry("460x420")
         self.window.resizable(False, False)
 
         # Hacer la ventana visible y traerla al frente
@@ -22,7 +22,7 @@ class LoginWindow:
         self.window.after_idle(self.window.attributes, '-topmost', False)
 
         # Centrar ventana
-        self.center_window()
+        centrar_ventana(self.window, 460, 420)
 
         # Configurar UI
         self.setup_ui()
@@ -33,15 +33,6 @@ class LoginWindow:
 
         # Enfocar en el campo de usuario después de un momento
         self.window.after(100, lambda: self.username_entry.focus())
-
-    def center_window(self):
-        """Centra la ventana en la pantalla"""
-        self.window.update_idletasks()
-        screen_width = self.window.winfo_screenwidth()
-        screen_height = self.window.winfo_screenheight()
-        x = (screen_width - 460) // 2
-        y = (screen_height - 420) // 2
-        self.window.geometry(f"460x420+{x}+{y}")
 
     def setup_ui(self):
         """Configura la interfaz de usuario"""

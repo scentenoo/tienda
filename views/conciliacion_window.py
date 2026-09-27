@@ -7,11 +7,12 @@ import ttkbootstrap as ttk
 from config.database import get_connection
 from utils.conciliacion import (MANUAL_AJUSTE, MANUAL_INICIO, borrar_giro,
                                 calcular, deudores, guardar_giro,
+                                telefonos_clientes,
                                 informacion_adicional, listar_giros,
                                 nombre_mes, resumen_socios, socios_conocidos)
 from utils.formatters import format_currency
 from utils.theme import FONT_BOLD, FONT_HEADER, FONT_SMALL, ROW_COLORS, kpi_card
-from utils.ventanas import hacer_modal
+from utils.ventanas import hacer_modal, centrar_ventana
 
 
 # Tres niveles de mora, usados igual en pantalla y en el PDF
@@ -42,7 +43,7 @@ class ConciliacionWindow:
         self.parent = parent
         self.window = tk.Toplevel(parent)
         self.window.title("Informes")
-        self.window.geometry("1200x700")
+        centrar_ventana(self.window, 1200, 700)
         self.window.minsize(900, 500)
         hacer_modal(self.window, parent)
 
@@ -153,10 +154,10 @@ class ConciliacionWindow:
         self.tree.heading("concepto", text="CONCEPTO")
         self.tree.column("concepto", width=270, anchor=tk.W, stretch=False)
         self.tree.heading("total", text="ACUMULADO")
-        self.tree.column("total", width=125, anchor=tk.E, stretch=False)
+        self.tree.column("total", width=160, anchor=tk.E, stretch=False)
         for mes, titulo in zip(d["meses"], d["encabezados"]):
             self.tree.heading(mes, text=titulo)
-            self.tree.column(mes, width=110, anchor=tk.E, stretch=False)
+            self.tree.column(mes, width=135, anchor=tk.E, stretch=False)
 
         self.tree.delete(*self.tree.get_children())
         for tipo, concepto in d["filas"]:
@@ -254,6 +255,10 @@ class ConciliacionWindow:
                    bootstyle="secondary-outline").pack(side=tk.RIGHT, padx=4)
         ttk.Button(cabecera, text="Exportar PDF", command=self.exportar_pendientes_pdf,
                    bootstyle="info").pack(side=tk.RIGHT, padx=4)
+        ttk.Button(cabecera, text="📱 Enviar al celular", command=self.exportar_pendientes_movil,
+                   bootstyle="success").pack(side=tk.RIGHT, padx=4)
+        ttk.Button(cabecera, text="📄 Estado de cuenta", command=self.estado_cuenta_sel,
+                   bootstyle="primary").pack(side=tk.RIGHT, padx=4)
 
         columnas = ("cliente", "deuda", "desde", "dias")
         self.tree_pend = ttk.Treeview(marco, columns=columnas, show="headings",
@@ -275,6 +280,7 @@ class ConciliacionWindow:
 
         for col in columnas:
             self.tree_pend.heading(col, command=lambda c=col: self.ordenar_pendientes(c))
+        self.tree_pend.bind("<Double-1>", lambda e: self.estado_cuenta_sel())
 
         pie = ttk.Frame(contenedor)
         pie.pack(fill=tk.X, padx=25, pady=(0, 10))
@@ -336,6 +342,44 @@ class ConciliacionWindow:
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo generar el PDF:\n{e}")
 
+    def estado_cuenta_sel(self):
+        """PDF con las compras y abonos del cliente seleccionado."""
+        from utils.estado_cuenta import generar_y_abrir
+        sel = self.tree_pend.selection()
+        if not sel:
+            messagebox.showinfo("Estado de cuenta", "Seleccione un cliente de la lista.")
+            return
+        nombre = self.tree_pend.item(sel[0], "values")[0]
+        conn = get_connection()
+        try:
+            fila = conn.execute("SELECT id FROM clients WHERE name = ?", (nombre,)).fetchone()
+        finally:
+            conn.close()
+        if fila:
+            generar_y_abrir(fila[0])
+
+    def exportar_pendientes_movil(self):
+        """HTML interactivo para mandar por WhatsApp: se ordena y filtra en el
+        teléfono, así no hay que mandar un PDF por cada orden."""
+        import os
+        from utils.informe_movil import exportar_pendientes_html
+        try:
+            conn = get_connection()
+            try:
+                telefonos = telefonos_clientes(conn)
+            finally:
+                conn.close()
+            ruta = exportar_pendientes_html(self.filas_pend, telefonos)
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo generar el informe:\n{e}")
+            return
+        messagebox.showinfo(
+            "Informe para el celular",
+            f"Guardado en:\n{ruta}\n\nMándalo por WhatsApp como documento. "
+            "En el teléfono se abre con Chrome y se puede ordenar tocando las columnas.")
+        if hasattr(os, "startfile"):
+            os.startfile(ruta.parent)
+
     # ── Giros a socios ───────────────────────────────────────────────────
     def setup_giros(self, contenedor):
         marco = ttk.Frame(contenedor, padding=15)
@@ -359,7 +403,7 @@ class ConciliacionWindow:
                                        bootstyle="primary")
         for col, titulo, ancho, anclaje in [
                 ("fecha", "Fecha", 100, tk.W), ("socio", "Socio", 130, tk.W),
-                ("monto", "Monto", 120, tk.E), ("tipo", "Tipo", 100, tk.W),
+                ("monto", "Monto", 140, tk.E), ("tipo", "Tipo", 100, tk.W),
                 ("concepto", "Concepto", 300, tk.W)]:
             self.tree_giros.heading(col, text=titulo)
             self.tree_giros.column(col, width=ancho, anchor=anclaje)
@@ -473,10 +517,10 @@ class ConciliacionWindow:
         cols = ("mes", "utilidad", "cartera", "girable", "girado", "exceso")
         self.tree_cap = ttk.Treeview(izq, columns=cols, show="headings", height=9,
                                      bootstyle="primary")
-        for col, titulo, ancho in [("mes", "Mes", 90), ("utilidad", "Utilidad", 115),
-                                   ("cartera", "Se fue a fiado", 115),
-                                   ("girable", "Girable", 115), ("girado", "Girado", 115),
-                                   ("exceso", "Exceso", 115)]:
+        for col, titulo, ancho in [("mes", "Mes", 90), ("utilidad", "Utilidad", 135),
+                                   ("cartera", "Se fue a fiado", 135),
+                                   ("girable", "Girable", 135), ("girado", "Girado", 135),
+                                   ("exceso", "Exceso", 135)]:
             self.tree_cap.heading(col, text=titulo)
             self.tree_cap.column(col, width=ancho, anchor=tk.E if col != "mes" else tk.W)
         self.tree_cap.tag_configure("exceso", **ROW_COLORS["danger"])

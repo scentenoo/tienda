@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block contenido %}
+<h1>Charcutería HYE</h1>
+<p class="sub">Hoy, {{ hoy }}</p>
+
+<div class="kpis">
+  <div class="tarjeta kpi">
+    <b>{{ vendido_hoy|pesos }}</b><span>Vendido hoy</span>
+    <small>{{ ventas_hoy }} venta{{ '' if ventas_hoy == 1 else 's' }}{% if fiado_hoy %} · {{ fiado_hoy|pesos }} fiado{% endif %}</small>
+  </div>
+  <div class="tarjeta kpi">
+    <b>{{ abonos_hoy|pesos }}</b><span>Abonos recibidos hoy</span>
+  </div>
+  <div class="tarjeta kpi">
+    <b>{{ por_cobrar|pesos }}</b><span>Por cobrar</span>
+    <small>{{ clientes_deben }} cliente{{ '' if clientes_deben == 1 else 's' }}</small>
+  </div>
+  <div class="tarjeta kpi">
+    <b>{{ vendido_mes|pesos }}</b><span>Vendido en {{ mes }}</span>
+  </div>
+</div>
+
+<nav class="menu">
+  <a href="{{ url_for('pendientes') }}"><b>Pendientes</b><span>Quién debe y desde cuándo</span></a>
+  <a href="{{ url_for('clientes') }}"><b>Clientes</b><span>Buscar y estado de cuenta</span></a>
+  <a href="{{ url_for('ventas') }}"><b>Ventas</b><span>Las de hoy y días anteriores</span></a>
+  <a href="{{ url_for('inventario') }}"><b>Inventario</b><span>{% if agotados %}{{ agotados }} agotado{{ '' if agotados == 1 else 's' }}{% else %}Stock y precios{% endif %}</span></a>
+</nav>
+
+<div class="pie">
+  <span>Datos en vivo desde la nube</span>
+  <form method="post" action="{{ url_for('salir') }}">
+    <input type="hidden" name="csrf" value="{{ csrf() }}"><button>Salir</button>
+  </form>
+</div>
+{% endblock %}

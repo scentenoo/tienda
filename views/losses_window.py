@@ -6,6 +6,7 @@ from models.loss import Loss
 from models.product import Product
 from utils.validators import validate_number, validate_positive
 from utils.theme import FONT_TITLE, FONT_BOLD, FONT_HEADER
+from utils.ventanas import centrar_ventana
 
 class LossesWindow:
     def __init__(self, parent, user):
@@ -26,17 +27,10 @@ class LossesWindow:
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Gestión de Pérdidas y Mermas")
-        self.window.geometry("1280x650")
         self.window.resizable(True, True)
-        
-        # Centrar ventana
-        self.window.update_idletasks()
-        width = 1280
-        height = 650
-        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.window.winfo_screenheight() // 2) - (height // 2)
-        self.window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
-        
+        centrar_ventana(self.window, 1280, 650)
+        self.window.minsize(1050, 550)
+
         # Configurar UI
         self.setup_ui()
         
@@ -106,10 +100,12 @@ class LossesWindow:
         ttk.Button(filter_frame, text="Filtrar", command=self.apply_filters, bootstyle="primary").grid(row=0, column=6, padx=5)
         ttk.Button(filter_frame, text="Limpiar", command=self.clear_filters, bootstyle="secondary").grid(row=0, column=7, padx=5)
         
-        # Frame para lista y formulario
+        # Frame para lista y formulario. Se empaqueta al final (ver más abajo)
+        # para reservar primero el espacio del resumen, igual que el footer
+        # en main_window.py: si se empaqueta antes, se come todo el alto
+        # disponible y no deja lugar para "Resumen de Pérdidas".
         content_frame = ttk.Frame(main_frame)
-        content_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-        
+
         # Frame para formulario
         form_frame = ttk.LabelFrame(content_frame, text="Registrar Pérdida", padding="10")
         form_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
@@ -177,11 +173,26 @@ class LossesWindow:
         # Frame para lista de pérdidas
         list_frame = ttk.LabelFrame(content_frame, text="Pérdidas Registradas", padding="10")
         list_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-        
+
+        # Botones para ver detalles y eliminar (empaquetados ANTES que la
+        # tabla, con side=BOTTOM, para que no se los coma el expand=True
+        # del árbol)
+        action_frame = ttk.Frame(list_frame)
+        action_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
+
+        ttk.Button(action_frame, text="Ver Detalles", command=self.view_loss_details, bootstyle="info").pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_frame, text="Eliminar", command=self.delete_loss, bootstyle="danger").pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_frame, text="Actualizar", command=self.load_data, bootstyle="secondary-outline").pack(side=tk.RIGHT, padx=5)
+
         # Treeview para mostrar pérdidas
+        tree_frame = ttk.Frame(list_frame)
+        tree_frame.pack(fill=tk.BOTH, expand=True)
+        tree_frame.rowconfigure(0, weight=1)
+        tree_frame.columnconfigure(0, weight=1)
+
         columns = ('ID', 'Fecha', 'Producto', 'Cantidad', 'Costo Total', 'Tipo', 'Motivo')
-        self.losses_tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=15)
-        
+        self.losses_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
+
         # Configurar columnas
         self.losses_tree.heading('ID', text='ID')
         self.losses_tree.heading('Fecha', text='Fecha')
@@ -190,35 +201,30 @@ class LossesWindow:
         self.losses_tree.heading('Costo Total', text='Costo Total')
         self.losses_tree.heading('Tipo', text='Tipo')
         self.losses_tree.heading('Motivo', text='Motivo')
-        
-        self.losses_tree.column('ID', width=50, anchor=tk.CENTER)
-        self.losses_tree.column('Fecha', width=100)
-        self.losses_tree.column('Producto', width=150)
-        self.losses_tree.column('Cantidad', width=80, anchor=tk.CENTER)
-        self.losses_tree.column('Costo Total', width=100, anchor=tk.E)
-        self.losses_tree.column('Tipo', width=100)
-        self.losses_tree.column('Motivo', width=150)
-        
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.losses_tree.yview)
-        self.losses_tree.configure(yscroll=scrollbar.set)
-        
-        # Empaquetar treeview y scrollbar
-        self.losses_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Botones para ver detalles y eliminar
-        action_frame = ttk.Frame(list_frame)
-        action_frame.pack(fill=tk.X, pady=10)
-        
-        ttk.Button(action_frame, text="Ver Detalles", command=self.view_loss_details, bootstyle="info").pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Eliminar", command=self.delete_loss, bootstyle="danger").pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Actualizar", command=self.load_data, bootstyle="secondary-outline").pack(side=tk.RIGHT, padx=5)
-        
-        # Frame para resumen
+
+        self.losses_tree.column('ID', width=50, minwidth=40, anchor=tk.CENTER)
+        self.losses_tree.column('Fecha', width=100, minwidth=90, anchor=tk.CENTER)
+        self.losses_tree.column('Producto', width=150, minwidth=110, anchor=tk.W)
+        self.losses_tree.column('Cantidad', width=80, minwidth=70, anchor=tk.CENTER)
+        self.losses_tree.column('Costo Total', width=125, minwidth=100, anchor=tk.E)
+        self.losses_tree.column('Tipo', width=100, minwidth=90, anchor=tk.CENTER)
+        self.losses_tree.column('Motivo', width=150, minwidth=110, anchor=tk.W)
+
+        # Scrollbars
+        vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.losses_tree.yview)
+        hsb = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.losses_tree.xview)
+        self.losses_tree.configure(yscroll=vsb.set, xscrollcommand=hsb.set)
+
+        # Empaquetar treeview y scrollbars
+        self.losses_tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+
+        # Frame para resumen (empaquetado antes que content_frame para
+        # reservar su espacio fijo abajo)
         summary_frame = ttk.LabelFrame(main_frame, text="Resumen de Pérdidas", padding="10")
-        summary_frame.pack(fill=tk.X, pady=10)
-        
+        summary_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
+
         # Etiquetas de resumen
         self.total_losses_label = ttk.Label(summary_frame, text="Total de Pérdidas: $0",
                                              font=FONT_BOLD, bootstyle="danger")
@@ -235,7 +241,11 @@ class LossesWindow:
         self.other_losses_label = ttk.Label(summary_frame, text="Otros: $0",
                                              bootstyle="secondary")
         self.other_losses_label.pack(side=tk.LEFT, padx=20)
-    
+
+        # Con el resumen ya reservado abajo, ahora sí se empaqueta el
+        # contenido expandible (formulario + lista) para que ocupe el resto.
+        content_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+
     def load_products(self):
         """Carga los productos en el combobox"""
         try:
@@ -458,17 +468,10 @@ class LossesWindow:
         # Mostrar detalles en una ventana
         details_window = tk.Toplevel(self.window)
         details_window.title(f"Detalles de Pérdida #{loss.id}")
-        details_window.geometry("500x400")
         details_window.resizable(False, False)
-        
-        # Centrar ventana
-        details_window.update_idletasks()
-        width = 500
-        height = 400
-        x = (details_window.winfo_screenwidth() // 2) - (width // 2)
-        y = (details_window.winfo_screenheight() // 2) - (height // 2)
-        details_window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
-        
+        details_window.transient(self.window)
+        centrar_ventana(details_window, 500, 400)
+
         # Frame principal
         main_frame = ttk.Frame(details_window, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)

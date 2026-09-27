@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titulo %}Ventas · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
+<h1>Ventas</h1>
+
+<div class="navdia">
+  <a href="{{ url_for('ventas', dia=anterior) }}">‹ Anterior</a>
+  <b>{{ 'Hoy, ' if es_hoy }}{{ dia }}</b>
+  {% if siguiente %}<a href="{{ url_for('ventas', dia=siguiente) }}">Siguiente ›</a>{% else %}<span></span>{% endif %}
+</div>
+
+<div class="kpis" style="margin-bottom: 14px">
+  <div class="tarjeta kpi"><b>{{ total|pesos }}</b><span>{{ ventas|length }} venta{{ '' if ventas|length == 1 else 's' }}</span></div>
+  <div class="tarjeta kpi"><b>{{ fiado|pesos }}</b><span>De eso, fiado</span></div>
+</div>
+
+{% if ventas %}
+<ul class="lista">
+  {% for v in ventas %}
+  <li><details>
+    <summary class="fila">
+      <div class="izq">
+        <b>{{ v['cliente'] or 'Contado' }}</b>
+        <span>#{{ v['id'] }} · {{ v['created_at']|fecha }}</span>
+      </div>
+      <div class="der">
+        {{ v['total']|pesos }}<br>
+        {% if v['payment_method'] == 'credit' %}
+          <span class="etiqueta {{ 'pagado' if v['status'] == 'paid' else 'fiado' }}">{{ 'Fiado · pagado' if v['status'] == 'paid' else 'Fiado' }}</span>
+        {% endif %}
+      </div>
+    </summary>
+    <div class="detalle">
+      {% for q, nombre, subtotal in productos.get(v['id'], []) %}
+      <div><span>{{ q|cantidad }} × {{ nombre }}</span><span>{{ subtotal|pesos }}</span></div>
+      {% else %}
+      <div>Sin detalle de productos</div>
+      {% endfor %}
+    </div>
+  </details></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">No hubo ventas este día.</p>
+{% endif %}
+{% endblock %}

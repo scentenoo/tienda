@@ -5,37 +5,28 @@ from config.database import get_connection
 from utils.ExcelImportWindow import ExcelImportWindow
 from views.users_window import UsersWindow
 from utils.theme import FONT_TITLE, FONT_BOLD, FONT_NORMAL, FONT_SMALL, ROW_COLORS
-from utils.ventanas import hacer_modal
+from utils.ventanas import hacer_modal, centrar_ventana
 
 class InventoryWindow:
     def __init__(self, parent, user):
         self.parent = parent
         self.user = user
-        
+
         # Configuración de ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Gestión de Inventario")
-        self.window.geometry("1100x750")  # Tamaño aumentado
         self.window.resizable(True, True)
-        self.center_window()
-        
+        centrar_ventana(self.window, 1100, 750)
+        self.window.minsize(900, 600)
+
         # Variables
         self.products = []
         self.selected_product = None
-        
+
         # UI
         self.setup_ui()
         self.refresh_products()
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
-
-    def center_window(self):
-        """Centra la ventana en la pantalla"""
-        self.window.update_idletasks()
-        width = 1100
-        height = 750
-        x = (self.window.winfo_screenwidth() - width) // 2
-        y = (self.window.winfo_screenheight() - height) // 2
-        self.window.geometry(f"{width}x{height}+{x}+{y}")
 
     def setup_ui(self):
         """Configuración completa de la UI con los problemas corregidos"""
@@ -91,27 +82,45 @@ class InventoryWindow:
         ttk.Label(search_frame, text="🔍").pack(side=tk.LEFT)
         self.search_var = tk.StringVar()
         ttk.Entry(search_frame, textvariable=self.search_var, width=30).pack(side=tk.LEFT, padx=5)
-        self.search_var.trace('w', self.on_search)
+        self.search_var.trace_add('write', self.on_search)
+
+        # SECCIÓN ESTADÍSTICAS (empaquetada ANTES que la tabla, con
+        # side=BOTTOM, para que reserve su espacio fijo abajo y no se lo
+        # coma el expand=True de la tabla)
+        stats_frame = ttk.LabelFrame(
+            main_frame,
+            text="📊 RESUMEN",
+            padding=(15, 10)
+        )
+        stats_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(15, 5))
+
+        self.stats_label = ttk.Label(
+            stats_frame,
+            text="Productos: 0 | Valor total: $0.00 | Stock bajo: 0",
+            font=FONT_BOLD,
+            bootstyle='primary'
+        )
+        self.stats_label.pack()
 
         # Tabla de productos
         table_frame = ttk.Frame(main_frame)
         table_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         columns = ("ID", "Producto", "Precio", "Stock", "Valor Total")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=16)
         
         # Config columnas
         col_config = [
-            ("ID", 70, "center"),
-            ("Producto", 350, "w"),
-            ("Precio", 120, "e"),
-            ("Stock", 100, "center"),
-            ("Valor Total", 150, "e")
+            ("ID", 70, 50, "center"),
+            ("Producto", 350, 180, "w"),
+            ("Precio", 120, 90, "e"),
+            ("Stock", 100, 70, "center"),
+            ("Valor Total", 150, 100, "e")
         ]
-        
-        for col, width, anchor in col_config:
+
+        for col, width, minwidth, anchor in col_config:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=width, anchor=anchor)
+            self.tree.column(col, width=width, minwidth=minwidth, anchor=anchor)
 
         # Scrollbars
         vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
@@ -129,22 +138,6 @@ class InventoryWindow:
         # Solo permitir doble click para editar si es administrador
         if self.user.role == 'admin':
             self.tree.bind("<Double-1>", lambda e: self.edit_product())
-
-        # SECCIÓN ESTADÍSTICAS (reposicionada más arriba)
-        stats_frame = ttk.LabelFrame(
-            main_frame,
-            text="📊 RESUMEN",
-            padding=(15, 10)
-        )
-        stats_frame.pack(fill=tk.X, pady=(15, 5))  # Menos espacio inferior
-        
-        self.stats_label = ttk.Label(
-            stats_frame,
-            text="Productos: 0 | Valor total: $0.00 | Stock bajo: 0",
-            font=FONT_BOLD,
-            bootstyle='primary'
-        )
-        self.stats_label.pack()
 
     def import_from_excel(self):
         """Abre ventana para importar productos desde Excel - Solo administradores"""
@@ -322,26 +315,19 @@ class ProductFormWindow:
         self.window = tk.Toplevel(parent)
         title = "Nuevo Producto" if mode == "add" else "Editar Producto"
         self.window.title(title)
-        self.window.geometry("500x400")
+        self.window.resizable(True, True)
         self.window.transient(parent)
         hacer_modal(self.window)
-        
+
         # Centrar ventana
-        self.center_window()
-        
+        centrar_ventana(self.window, 500, 400)
+
         # Configurar UI
         self.setup_ui()
         
         # Si es modo edición, cargar datos
         if mode == "edit" and product:
             self.load_product_data()
-    
-    def center_window(self):
-        """Centra la ventana en la pantalla"""
-        self.window.update_idletasks()
-        x = (self.window.winfo_screenwidth() - 500) // 2
-        y = (self.window.winfo_screenheight() - 400) // 2
-        self.window.geometry(f"500x400+{x}+{y}")
     
     def setup_ui(self):
         """Configura la interfaz de usuario"""

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block titulo %}{{ c['name'] }} · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('clientes') }}">‹ Clientes</a>
+<h1>{{ c['name'] }}</h1>
+<p class="sub">
+  {% if c['phone'] %}<a href="tel:{{ c['phone'] }}">📞 {{ c['phone'] }}</a>{% else %}Sin teléfono registrado{% endif %}
+</p>
+
+<div class="tarjeta kpi">
+  {% if c['total_debt'] > 0 %}
+  <b class="negativo">{{ c['total_debt']|pesos }}</b><span>Saldo pendiente</span>
+  {% else %}
+  <b class="positivo">Al día</b><span>No tiene saldo pendiente</span>
+  {% endif %}
+</div>
+
+{% if c['total_debt'] > 0 %}
+<div class="botones">
+  <a class="boton" id="compartir" href="{{ url_for('estado_de_cuenta', client_id=c['id']) }}">Compartir estado de cuenta</a>
+  <a class="boton secundario" href="{{ url_for('estado_de_cuenta', client_id=c['id']) }}" target="_blank">Ver PDF</a>
+</div>
+{% endif %}
+
+<h2>Últimos movimientos</h2>
+{% if movimientos %}
+<ul class="lista">
+  {% for m in movimientos %}
+  {% set es_cargo = m['transaction_type'] == 'debit' %}
+  <li><div class="fila">
+    <div class="izq">
+      <b>{% if es_cargo %}Compra{% elif m['transaction_type'] == 'debit_reversal' %}Venta anulada{% elif m['transaction_type'] == 'credit_balance' %}Saldo a favor{% else %}Abono{% endif %}</b>
+      <span>{{ m['created_at']|fecha }}{% if m['description'] and not es_cargo %} · {{ m['description'] }}{% endif %}</span>
+    </div>
+    <div class="der {{ 'negativo' if es_cargo else 'positivo' }}">{{ '+' if es_cargo else '−' }}{{ m['amount']|pesos }}</div>
+  </div></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">Todavía no tiene movimientos.</p>
+{% endif %}
+
+<script>
+// En Android, "Compartir" abre el menú del teléfono con el PDF listo para
+// WhatsApp. Si el navegador no puede compartir archivos, abre el PDF.
+document.getElementById("compartir")?.addEventListener("click", async function (e) {
+  if (!navigator.canShare) return;
+  e.preventDefault();
+  var boton = this, texto = boton.textContent;
+  boton.textContent = "Preparando…";
+  try {
+    var resp = await fetch(boton.href);
+    if (!resp.ok) { window.location = boton.href; return; }
+    var nombre = (resp.headers.get("Content-Disposition") || "").match(/filename="?([^";]+)/);
+    var archivo = new File([await resp.blob()], nombre ? nombre[1] : "estado_de_cuenta.pdf",
+                           { type: "application/pdf" });
+    if (navigator.canShare({ files: [archivo] })) {
+      await navigator.share({ files: [archivo], title: "Estado de cuenta" });
+    } else {
+      window.location = boton.href;
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") window.location = boton.href;
+  } finally {
+    boton.textContent = texto;
+  }
+});
+</script>
+{% endblock %}

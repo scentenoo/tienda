@@ -10,7 +10,7 @@ from views.users_window import UsersWindow
 from views.losses_window import LossesWindow
 from utils.backup import backup_y_sync_drive
 from utils.theme import FONT_TITLE, header_bar
-from utils.ventanas import hacer_modal
+from utils.ventanas import hacer_modal, centrar_ventana
 class MainWindow:
     def __init__(self, parent, user):
         self.parent = parent
@@ -25,25 +25,14 @@ class MainWindow:
         
         # Configurar ventana principal
         self.parent.title(f"Sistema de Gestión - {user.username} ({user.role})")
-        x = (self.parent.winfo_screenwidth() - 900) // 2
-        y = (self.parent.winfo_screenheight() - 820) // 2
-        self.parent.geometry(f"900x820+{x}+{y}")
+        self.parent.resizable(True, True)
+        centrar_ventana(self.parent, 900, 820)
+        self.parent.minsize(800, 650)
 
-        
-        # Centrar ventana
-        self.center_window()
-        
         # Configurar el protocolo de cierre
         self.parent.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         self.setup_ui()
-    
-    def center_window(self):
-        """Centra la ventana en la pantalla"""
-        self.parent.update_idletasks()
-        x = (self.parent.winfo_screenwidth() - 900) // 2
-        y = (self.parent.winfo_screenheight() - 820) // 2
-        self.parent.geometry(f"900x820+{x}+{y}")
     
     def setup_ui(self):
         """Configura la interfaz de usuario"""
@@ -57,12 +46,44 @@ class MainWindow:
         header_bar(main_frame, "Sistema de Gestión Charcutería HYE", on_logout=self.logout,
                    logout_text="Cerrar Sesión")
 
-        # Contenido principal
-        content_frame = ttk.Frame(main_frame)
-        content_frame.pack(pady=40, padx=30, fill=tk.BOTH, expand=True)
+        # Footer (se empaqueta antes que el contenido para que quede fijo
+        # abajo y nunca se lo coma el área con scroll)
+        footer = ttk.Frame(main_frame, bootstyle="dark")
+        footer.pack(fill=tk.X, side=tk.BOTTOM)
+        ttk.Label(footer, text="© 2023 Charcutería HYE - Versión 1.0",
+                bootstyle="inverse-dark").pack(pady=10)
+
+        # Contenido principal, con scroll: en pantallas chicas o con
+        # escalado de Windows el menú de administrador (10 botones) no
+        # entra completo, y sin esto los últimos botones quedaban fuera
+        # de la vista sin ninguna forma de llegar a ellos.
+        canvas = tk.Canvas(main_frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        content_frame = ttk.Frame(canvas)
+        content_window = canvas.create_window((0, 0), window=content_frame, anchor="nw")
+        content_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda e: canvas.itemconfigure(content_window, width=e.width)
+        )
+
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-event.delta / 120), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        inner = ttk.Frame(content_frame, padding=(30, 40))
+        inner.pack(fill=tk.X)
 
         # Título
-        ttk.Label(content_frame,
+        ttk.Label(inner,
                 text="Menú principal",
                 font=FONT_TITLE).pack(pady=(0, 20))
 
@@ -85,15 +106,9 @@ class MainWindow:
             ])
 
         for text, command, bootstyle in buttons:
-            btn = ttk.Button(content_frame, text=text, command=command,
+            btn = ttk.Button(inner, text=text, command=command,
                               bootstyle=bootstyle)
             btn.pack(pady=6, fill=tk.X, ipady=8)
-
-        # Footer
-        footer = ttk.Frame(main_frame, bootstyle="dark")
-        footer.pack(fill=tk.X, side=tk.BOTTOM)
-        ttk.Label(footer, text="© 2023 Charcutería HYE - Versión 1.0",
-                bootstyle="inverse-dark").pack(pady=10)
     
     def create_menu(self):
         """Crea el menú de la aplicación"""
@@ -276,11 +291,7 @@ class MainWindow:
             if estado == "ok":
                 messagebox.showinfo(
                     "Google Drive actualizado",
-                    f"✔ Backup local:\n{dato['backup']}\n\n"
-                    f"✔ Copia de trabajo:\n{dato['sync']}\n\n"
-                    f"✔ Subido a Drive:\n{dato['drive']}\n\n"
-                    f"✔ Libro para Excel:\n{dato['excel']}\n\n"
-                    f"✔ Libro listo para abrir:\n{dato['libro']}\n\n"
+                    f"✔ Base respaldada y sincronizada en Google Drive:\n{dato['drive']}\n\n"
                     f"Fecha: {dato['fecha']}"
                 )
             else:
@@ -292,13 +303,10 @@ class MainWindow:
         """Diálogo modal con barra de progreso mientras se sube a Drive."""
         ventana = tk.Toplevel(self.parent)
         ventana.title("Google Drive")
-        ventana.geometry("400x140")
         ventana.resizable(False, False)
         ventana.transient(self.parent)
         hacer_modal(ventana)
-        x = (ventana.winfo_screenwidth() - 400) // 2
-        y = (ventana.winfo_screenheight() - 140) // 2
-        ventana.geometry(f"400x140+{x}+{y}")
+        centrar_ventana(ventana, 400, 140)
         # Que no se pueda cerrar a mitad de la subida
         ventana.protocol("WM_DELETE_WINDOW", lambda: None)
 

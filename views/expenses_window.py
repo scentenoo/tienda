@@ -6,7 +6,7 @@ from utils.validators import validate_required, validate_positive, safe_float_co
 from utils.formatters import format_currency, format_number
 from utils.theme import FONT_TITLE, FONT_HEADER, FONT_BOLD, FONT_NORMAL, FONT_SMALL, role_color
 from datetime import datetime
-from utils.ventanas import hacer_modal
+from utils.ventanas import hacer_modal, centrar_ventana
 
 class ExpensesWindow:
     def __init__(self, parent, user):
@@ -16,9 +16,10 @@ class ExpensesWindow:
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Gastos Operativos")
-        self.window.geometry("900x700")  # Aumentado un poco para mejor visualización
         self.window.resizable(True, True)
-        
+        centrar_ventana(self.window, 900, 700)
+        self.window.minsize(800, 550)
+
         # Variables
         self.expenses = []
         self.selected_expense = None
@@ -85,7 +86,7 @@ class ExpensesWindow:
         self.formatted_amount_label.pack(side=tk.LEFT)
 
         # Bind para formato en tiempo real
-        self.amount_var.trace('w', self.on_amount_change)
+        self.amount_var.trace_add('write', self.on_amount_change)
 
         # Fecha (opcional, por defecto hoy)
         ttk.Label(main_frame, text="Fecha (YYYY-MM-DD):", font=FONT_BOLD).grid(
@@ -177,56 +178,55 @@ class ExpensesWindow:
                                    font=FONT_BOLD)
         self.count_label.pack(side=tk.LEFT)
         
-        # Treeview para mostrar gastos con mejor formato
-        columns = ('ID', 'Descripción', 'Monto', 'Fecha', 'Usuario')
-        self.expenses_tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=15)
-        
-        # Configurar columnas con mejor espaciado
-        self.expenses_tree.heading('ID', text='ID')
-        self.expenses_tree.column('ID', width=60, anchor='center')
-        
-        self.expenses_tree.heading('Descripción', text='📝 Descripción')
-        self.expenses_tree.column('Descripción', width=300, anchor='w')
-        
-        self.expenses_tree.heading('Monto', text='💰 Monto')
-        self.expenses_tree.column('Monto', width=150, anchor='e')
-        
-        self.expenses_tree.heading('Fecha', text='📅 Fecha')
-        self.expenses_tree.column('Fecha', width=140, anchor='center')
-        
-        self.expenses_tree.heading('Usuario', text='👤 Usuario')
-        self.expenses_tree.column('Usuario', width=120, anchor='center')
-        
-        # Configurar estilos para el treeview
-        style = ttk.Style()
-        style.configure("Treeview", rowheight=25)
-        style.configure("Treeview.Heading", font=FONT_BOLD)
-        
-        # Scrollbars
-        tree_frame = ttk.Frame(main_frame)
-        tree_frame.pack(fill=tk.BOTH, expand=True)
-        
-        v_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.expenses_tree.yview)
-        h_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.expenses_tree.xview)
-        self.expenses_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
-        
-        self.expenses_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Bind para selección
-        self.expenses_tree.bind('<<TreeviewSelect>>', self.on_expense_select)
-        
-        # Frame para botones de acción
+        # Frame para botones de acción (empaquetado ANTES que la tabla, con
+        # side=BOTTOM, para que no se lo coma el expand=True del árbol)
         action_frame = ttk.Frame(main_frame)
-        action_frame.pack(fill=tk.X, pady=(15, 0))
-        
+        action_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(15, 0))
+
         ttk.Button(action_frame, text="✏️ Editar",
                   command=self.edit_expense, bootstyle="info").pack(side=tk.LEFT, padx=5)
         ttk.Button(action_frame, text="🗑️ Eliminar",
                   command=self.delete_expense, bootstyle="danger").pack(side=tk.LEFT, padx=5)
         ttk.Button(action_frame, text="📊 Detalles",
                   command=self.view_expense_details, bootstyle="secondary-outline").pack(side=tk.LEFT, padx=5)
-    
+
+        # Treeview para mostrar gastos con mejor formato
+        tree_frame = ttk.Frame(main_frame)
+        tree_frame.pack(fill=tk.BOTH, expand=True)
+        tree_frame.rowconfigure(0, weight=1)
+        tree_frame.columnconfigure(0, weight=1)
+
+        columns = ('ID', 'Descripción', 'Monto', 'Fecha', 'Usuario')
+        self.expenses_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
+
+        # Configurar columnas con mejor espaciado
+        self.expenses_tree.heading('ID', text='ID')
+        self.expenses_tree.column('ID', width=60, minwidth=50, anchor='center')
+
+        self.expenses_tree.heading('Descripción', text='📝 Descripción')
+        self.expenses_tree.column('Descripción', width=300, minwidth=180, anchor='w')
+
+        self.expenses_tree.heading('Monto', text='💰 Monto')
+        self.expenses_tree.column('Monto', width=150, minwidth=110, anchor='e')
+
+        self.expenses_tree.heading('Fecha', text='📅 Fecha')
+        self.expenses_tree.column('Fecha', width=140, minwidth=110, anchor='center')
+
+        self.expenses_tree.heading('Usuario', text='👤 Usuario')
+        self.expenses_tree.column('Usuario', width=120, minwidth=90, anchor='center')
+
+        # Scrollbars
+        v_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.expenses_tree.yview)
+        h_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.expenses_tree.xview)
+        self.expenses_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+
+        self.expenses_tree.grid(row=0, column=0, sticky="nsew")
+        v_scrollbar.grid(row=0, column=1, sticky="ns")
+        h_scrollbar.grid(row=1, column=0, sticky="ew")
+
+        # Bind para selección
+        self.expenses_tree.bind('<<TreeviewSelect>>', self.on_expense_select)
+
     def load_data(self):
         """Carga los datos de gastos"""
         try:
@@ -370,19 +370,11 @@ class ExpensesWindow:
         """Diálogo para editar gasto con formato mejorado"""
         dialog = tk.Toplevel(self.window)
         dialog.title(f"✏️ Editar Gasto #{expense.id}")
-        dialog.geometry("500x350")
         dialog.resizable(False, False)
         dialog.transient(self.window)
         hacer_modal(dialog)
-        
-        # Centrar diálogo
-        dialog.update_idletasks()
-        x = max(500, dialog.winfo_reqwidth())
-        y = max(350, dialog.winfo_reqheight())
-        pos_x = (dialog.winfo_screenwidth() // 2) - (x // 2)
-        pos_y = (dialog.winfo_screenheight() // 2) - (y // 2)
-        dialog.geometry(f"{x}x{y}+{pos_x}+{pos_y}")
-        
+        centrar_ventana(dialog, 500, 350)
+
         # Contenido del diálogo
         main_frame = ttk.Frame(dialog, padding="25")
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -429,7 +421,7 @@ class ExpensesWindow:
             except:
                 amount_format_label.config(text="")
         
-        amount_var.trace('w', update_amount_format)
+        amount_var.trace_add('write', update_amount_format)
         update_amount_format()  # Inicial
         
         # Fecha
@@ -518,10 +510,10 @@ class ExpensesWindow:
         # Crear ventana de detalles
         details = tk.Toplevel(self.window)
         details.title(f"📊 Detalles del Gasto #{self.selected_expense.id}")
-        details.geometry("400x300")
         details.resizable(False, False)
         details.transient(self.window)
         hacer_modal(details)
+        centrar_ventana(details, 400, 300)
         
         # Contenido
         frame = ttk.Frame(details, padding="20")

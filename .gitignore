@@ -32,3 +32,9 @@ __pycache__/
 
 # Logs
 *.log
+# Credenciales de la base en la nube
+data/nube.json
+nube.json
+data/nube_prueba.json
+data/clave_web.txt
+error_log.txt

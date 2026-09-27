@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block titulo %}Ingresar · Charcutería HYE{% endblock %}
+{% block contenido %}
+<div style="text-align:center; margin: 32px 0 20px">
+  <img src="{{ url_for('static', filename='icono-192.png') }}" alt="" width="96" height="96" style="border-radius: 20px">
+  <h1 style="margin-top: 12px">Charcutería HYE</h1>
+  <p class="sub">Ingrese su contraseña</p>
+</div>
+<form method="post" class="tarjeta">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <input type="password" name="clave" placeholder="Contraseña" autocomplete="current-password" autofocus required>
+  <button class="boton" style="width:100%; margin-top: 12px">Ingresar</button>
+</form>
+{% endblock %}

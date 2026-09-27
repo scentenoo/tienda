@@ -1,10 +1,23 @@
 import sqlite3
 import os
-from utils.paths import get_db_path
+from functools import lru_cache
+from utils.paths import get_data_dir, get_db_path
+
+
+@lru_cache(maxsize=1)
+def _config_nube():
+    from config.nube import leer_configuracion
+    return leer_configuracion(get_data_dir())
 
 
 def get_connection():
     """Obtiene conexión a la base de datos con configuraciones mejoradas"""
+    nube = _config_nube()
+    if nube:
+        # Base en Turso: la misma cara que sqlite3 (ver config/nube.py)
+        from config.nube import conexion
+        return conexion(get_db_path(), nube["url"], nube["token"])
+
     if not os.path.exists('data'):
         os.makedirs('data')
     

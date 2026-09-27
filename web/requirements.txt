@@ -1,0 +1,4 @@
+flask
+gunicorn
+libsql
+reportlab

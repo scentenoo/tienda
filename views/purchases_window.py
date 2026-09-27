@@ -7,7 +7,7 @@ from utils.validators import validate_number, validate_positive
 from datetime import datetime
 from config.database import get_connection
 from utils.theme import FONT_TITLE, FONT_HEADER, FONT_BOLD, FONT_NORMAL, header_bar
-from utils.ventanas import hacer_modal
+from utils.ventanas import hacer_modal, centrar_ventana
 
 class PurchasesWindow:
     def __init__(self, parent, user):
@@ -33,8 +33,9 @@ class PurchasesWindow:
         # Crear ventana DESPUÉS de inicializar atributos
         self.window = tk.Toplevel(parent)
         self.window.title("Gestión de Compras")
-        self.window.geometry("1100x750")
         self.window.resizable(True, True)
+        centrar_ventana(self.window, 1100, 750)
+        self.window.minsize(950, 600)
 
         # Finalmente configurar la UI
         self.setup_ui()
@@ -282,17 +283,9 @@ class PurchasesWindow:
         # Crear ventana de edición
         edit_window = tk.Toplevel(self.window)
         edit_window.title("Editar Compra")
-        edit_window.geometry("400x300")
         edit_window.resizable(False, False)
-        
-        # Centrar ventana
-        edit_window.update_idletasks()
-        width = 400
-        height = 300
-        x = (edit_window.winfo_screenwidth() // 2) - (width // 2)
-        y = (edit_window.winfo_screenheight() // 2) - (height // 2)
-        edit_window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
-        
+        centrar_ventana(edit_window, 400, 300)
+
         # Crear formulario
         main_frame = ttk.Frame(edit_window, padding=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -364,33 +357,12 @@ class PurchasesWindow:
                 font=FONT_NORMAL,
                 width=15).grid(row=0, column=3, pady=5, padx=5, sticky=tk.W)
 
-        # Treeview para artículos del lote
-        tree_frame = ttk.Frame(main_frame)
-        tree_frame.pack(fill=tk.BOTH, expand=True)
-
-        columns = ('Producto', 'Cantidad', 'Precio Unit.', 'Subtotal')
-        self.batch_tree = ttk.Treeview(
-            tree_frame,
-            columns=columns,
-            show='headings')
-        
-        # Configurar columnas
-        col_widths = {'Producto': 250, 'Cantidad': 100, 'Precio Unit.': 120, 'Subtotal': 120}
-        for col in columns:
-            self.batch_tree.heading(col, text=col)
-            self.batch_tree.column(col, width=col_widths.get(col, 100))
-        
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.batch_tree.yview)
-        self.batch_tree.configure(yscrollcommand=scrollbar.set)
-        
-        self.batch_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Frame inferior con total y botones
+        # Frame inferior con total y botones (empaquetado ANTES que la
+        # tabla, con side=BOTTOM, para que no se lo coma el expand=True
+        # del árbol)
         bottom_frame = ttk.Frame(main_frame)
-        bottom_frame.pack(fill=tk.X, pady=(10, 0))
-        
+        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
+
         # Total del lote
         self.total_label = ttk.Label(
             bottom_frame,
@@ -415,7 +387,40 @@ class PurchasesWindow:
                     text=text,
                     command=cmd,
                     bootstyle=bootstyle).pack(side=tk.LEFT, padx=5)
-    
+
+        # Treeview para artículos del lote
+        tree_frame = ttk.Frame(main_frame)
+        tree_frame.pack(fill=tk.BOTH, expand=True)
+        tree_frame.rowconfigure(0, weight=1)
+        tree_frame.columnconfigure(0, weight=1)
+
+        columns = ('Producto', 'Cantidad', 'Precio Unit.', 'Subtotal')
+        self.batch_tree = ttk.Treeview(
+            tree_frame,
+            columns=columns,
+            show='headings')
+
+        # Configurar columnas
+        col_config = {
+            'Producto': (250, 150, 'w'),
+            'Cantidad': (100, 80, 'e'),
+            'Precio Unit.': (120, 90, 'e'),
+            'Subtotal': (120, 90, 'e'),
+        }
+        for col in columns:
+            self.batch_tree.heading(col, text=col)
+            width, minwidth, anchor = col_config[col]
+            self.batch_tree.column(col, width=width, minwidth=minwidth, anchor=anchor)
+
+        # Scrollbars
+        vsb = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.batch_tree.yview)
+        hsb = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.batch_tree.xview)
+        self.batch_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        self.batch_tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+
     def setup_purchases_list_ui(self):
         """Configura la UI para lista de compras"""
         main_frame = ttk.Frame(self.purchases_list_frame, padding="10")
@@ -440,30 +445,38 @@ class PurchasesWindow:
                 command=self.delete_purchase, bootstyle="danger").pack(side=tk.LEFT, padx=5)
         
         # Treeview para mostrar compras
+        purchases_table_frame = ttk.Frame(main_frame)
+        purchases_table_frame.pack(fill=tk.BOTH, expand=True)
+        purchases_table_frame.rowconfigure(0, weight=1)
+        purchases_table_frame.columnconfigure(0, weight=1)
+
         columns = ('ID', 'Producto', 'Cantidad', 'Precio Unit.', 'Flete', 'IVA', 'Total', 'Factura', 'Fecha')
-        self.purchases_tree = ttk.Treeview(main_frame, columns=columns, show='headings')
-        
+        self.purchases_tree = ttk.Treeview(purchases_table_frame, columns=columns, show='headings')
+
+        col_config = {
+            'ID': (50, 40, 'center'),
+            'Producto': (150, 120, 'w'),
+            'Cantidad': (80, 60, 'e'),
+            'Precio Unit.': (120, 90, 'e'),
+            'Flete': (100, 80, 'e'),
+            'IVA': (100, 80, 'e'),
+            'Total': (120, 90, 'e'),
+            'Factura': (100, 80, 'center'),
+            'Fecha': (120, 100, 'center'),
+        }
         for col in columns:
             self.purchases_tree.heading(col, text=col)
-            if col == 'ID':
-                self.purchases_tree.column(col, width=50)
-            elif col in ['Cantidad', 'Flete', 'IVA']:
-                self.purchases_tree.column(col, width=80)
-            elif col in ['Precio Unit.', 'Total']:
-                self.purchases_tree.column(col, width=100)
-            elif col == 'Factura':
-                self.purchases_tree.column(col, width=100)
-            else:
-                self.purchases_tree.column(col, width=120)
-        
+            width, minwidth, anchor = col_config[col]
+            self.purchases_tree.column(col, width=width, minwidth=minwidth, anchor=anchor)
+
         # Scrollbars
-        v_scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.purchases_tree.yview)
-        h_scrollbar = ttk.Scrollbar(main_frame, orient=tk.HORIZONTAL, command=self.purchases_tree.xview)
+        v_scrollbar = ttk.Scrollbar(purchases_table_frame, orient=tk.VERTICAL, command=self.purchases_tree.yview)
+        h_scrollbar = ttk.Scrollbar(purchases_table_frame, orient=tk.HORIZONTAL, command=self.purchases_tree.xview)
         self.purchases_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
-        
-        self.purchases_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        self.purchases_tree.grid(row=0, column=0, sticky="nsew")
+        v_scrollbar.grid(row=0, column=1, sticky="ns")
+        h_scrollbar.grid(row=1, column=0, sticky="ew")
 
     
     def show_all_products(self):
@@ -648,17 +661,11 @@ class PurchasesWindow:
         """Diálogo para crear un nuevo producto"""
         dialog = tk.Toplevel(self.window)
         dialog.title("🏭 Crear Nuevo Producto")
-        dialog.geometry("400x250")
         dialog.resizable(False, False)
         dialog.transient(self.window)
         hacer_modal(dialog)
-        
-        # Centrar
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - 200
-        y = (dialog.winfo_screenheight() // 2) - 125
-        dialog.geometry(f"400x250+{x}+{y}")
-        
+        centrar_ventana(dialog, 400, 250)
+
         result = {'created': False}
         
         # UI
@@ -810,17 +817,11 @@ class PurchasesWindow:
         # Crear ventana de selección
         dialog = tk.Toplevel(self.window)
         dialog.title("Seleccionar Producto")
-        dialog.geometry("400x300")
         dialog.resizable(False, False)
         dialog.transient(self.window)
         hacer_modal(dialog)
-        
-        # Centrar diálogo
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (200)
-        y = (dialog.winfo_screenheight() // 2) - (150)
-        dialog.geometry(f"400x300+{x}+{y}")
-        
+        centrar_ventana(dialog, 400, 300)
+
         selected_product = {'product': None}
         
         # Contenido del diálogo
@@ -882,19 +883,11 @@ class PurchasesWindow:
             # Ventana de confirmación con datos del producto
             dialog = tk.Toplevel(self.window)
             dialog.title("Crear Nuevo Producto")
-            dialog.geometry("400x300")
             dialog.resizable(False, False)
             dialog.transient(self.window)
             hacer_modal(dialog)
-            
-            # Centrar diálogo
-            dialog.update_idletasks()
-            x = max(400, dialog.winfo_reqwidth())
-            y = max(300, dialog.winfo_reqheight())
-            pos_x = (dialog.winfo_screenwidth() // 2) - (x // 2)
-            pos_y = (dialog.winfo_screenheight() // 2) - (y // 2)
-            dialog.geometry(f"{x}x{y}+{pos_x}+{pos_y}")
-            
+            centrar_ventana(dialog, 400, 300)
+
             # Variables para almacenar el resultado
             result = {'created': False}
             
@@ -1002,19 +995,11 @@ class PurchasesWindow:
         """Abre diálogo para agregar nuevo producto"""
         dialog = tk.Toplevel(self.window)
         dialog.title("Nuevo Producto")
-        dialog.geometry("500x700")
         dialog.resizable(True, True)
         dialog.transient(self.window)
         hacer_modal(dialog)
-        
-        # Centrar diálogo
-        dialog.update_idletasks()
-        x = max(500, dialog.winfo_reqwidth())
-        y = max(700, dialog.winfo_reqheight())
-        pos_x = (dialog.winfo_screenwidth() // 2) - (x // 2)
-        pos_y = (dialog.winfo_screenheight() // 2) - (y // 2)
-        dialog.geometry(f"{x}x{y}+{pos_x}+{pos_y}")
-        
+        centrar_ventana(dialog, 500, 700)
+
         # Contenido del diálogo
         main_frame = ttk.Frame(dialog, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -1202,9 +1187,10 @@ class PurchasesWindow:
             
             info_window = tk.Toplevel(self.window)
             info_window.title("Distribución de Costos")
-            info_window.geometry("400x200")
             info_window.resizable(False, False)
-            
+            info_window.transient(self.window)
+            centrar_ventana(info_window, 400, 200)
+
             main_frame = ttk.Frame(info_window, padding=20)
             main_frame.pack(fill=tk.BOTH, expand=True)
             

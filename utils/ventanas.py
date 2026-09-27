@@ -1,6 +1,28 @@
 """Utilidades para ventanas de Tk."""
 
 
+def centrar_ventana(ventana, ancho, alto, margen_alto=70):
+    """Centra la ventana con un tamaño que no se salga de la pantalla.
+
+    Los tamaños fijos de cada ventana se pensaron en un monitor grande;
+    en portátiles con menos resolución o con escalado de Windows, el alto
+    pedido no cabe entre el borde de arriba y la barra de tareas, y la
+    ventana queda con botones fuera de la vista sin que el usuario pueda
+    hacer nada (algunas ventanas no son redimensionables). margen_alto
+    reserva espacio para la barra de título y la barra de tareas.
+    """
+    ventana.update_idletasks()
+    pantalla_ancho = ventana.winfo_screenwidth()
+    pantalla_alto = ventana.winfo_screenheight()
+
+    ancho = min(ancho, pantalla_ancho - 40)
+    alto = min(alto, pantalla_alto - margen_alto)
+
+    x = max((pantalla_ancho - ancho) // 2, 0)
+    y = max((pantalla_alto - alto) // 2, 0)
+    ventana.geometry(f"{ancho}x{alto}+{x}+{y}")
+
+
 def hacer_modal(ventana, padre=None, intentos=20):
     """Hace modal una ventana recién creada, sin bloquear nunca.
 

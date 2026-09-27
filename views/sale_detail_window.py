@@ -8,7 +8,7 @@ from models.sale import Sale
 from utils.formatters import format_number, format_currency
 from utils.theme import FONT_HEADER
 from config.database import get_connection
-from utils.ventanas import hacer_modal
+from utils.ventanas import hacer_modal, centrar_ventana
 
 
 class SaleDetailWindow:
@@ -85,10 +85,11 @@ class SaleDetailWindow:
         if self.eliminada:
             titulo += "  (eliminada)"
         self.window.title(titulo)
-        self.window.geometry("600x500")
         self.window.resizable(True, True)
         self.window.transient(self.parent)
         hacer_modal(self.window)
+        centrar_ventana(self.window, 600, 500)
+        self.window.minsize(500, 420)
 
         main_frame = ttk.Frame(self.window, padding=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -130,23 +131,32 @@ class SaleDetailWindow:
         products_frame = ttk.LabelFrame(main_frame, text="Productos Vendidos", padding=10)
         products_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
 
-        columns = ('Producto', 'Cantidad', 'Precio Unit.', 'Subtotal')
-        details_tree = ttk.Treeview(products_frame, columns=columns, show='headings')
+        details_table_frame = ttk.Frame(products_frame)
+        details_table_frame.pack(fill=tk.BOTH, expand=True)
+        details_table_frame.rowconfigure(0, weight=1)
+        details_table_frame.columnconfigure(0, weight=1)
 
+        columns = ('Producto', 'Cantidad', 'Precio Unit.', 'Subtotal')
+        details_tree = ttk.Treeview(details_table_frame, columns=columns, show='headings')
+
+        col_config = {
+            'Producto': (150, 110, 'w'),
+            'Cantidad': (100, 80, 'e'),
+            'Precio Unit.': (120, 90, 'e'),
+            'Subtotal': (120, 90, 'e'),
+        }
         for col in columns:
             details_tree.heading(col, text=col)
-            if col == 'Cantidad':
-                details_tree.column(col, width=100)
-            elif col in ['Precio Unit.', 'Subtotal']:
-                details_tree.column(col, width=120)
-            else:
-                details_tree.column(col, width=150)
+            width, minwidth, anchor = col_config[col]
+            details_tree.column(col, width=width, minwidth=minwidth, anchor=anchor)
 
-        details_scrollbar = ttk.Scrollbar(products_frame, orient=tk.VERTICAL, command=details_tree.yview)
-        details_tree.configure(yscrollcommand=details_scrollbar.set)
+        details_vsb = ttk.Scrollbar(details_table_frame, orient=tk.VERTICAL, command=details_tree.yview)
+        details_hsb = ttk.Scrollbar(details_table_frame, orient=tk.HORIZONTAL, command=details_tree.xview)
+        details_tree.configure(yscrollcommand=details_vsb.set, xscrollcommand=details_hsb.set)
 
-        details_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        details_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        details_tree.grid(row=0, column=0, sticky="nsew")
+        details_vsb.grid(row=0, column=1, sticky="ns")
+        details_hsb.grid(row=1, column=0, sticky="ew")
 
         try:
             conn = get_connection()

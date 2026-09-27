@@ -10,6 +10,7 @@ import os
 from config.database import get_connection
 from utils.formatters import format_currency, format_number
 from utils.theme import FONT_TITLE, FONT_HEADER, FONT_BOLD, FONT_NORMAL, header_bar
+from utils.ventanas import centrar_ventana
 
 COLOR_TO_BOOTSTYLE = {
     "green": "success",
@@ -32,9 +33,10 @@ class ReportsWindow:
         # Crear ventana
         self.window = tk.Toplevel(parent)
         self.window.title("Reportes y Análisis")
-        self.window.geometry("900x700")
         self.window.resizable(True, True)
-        
+        centrar_ventana(self.window, 900, 700)
+        self.window.minsize(800, 600)
+
         # Inicializar el diccionario primero
         self.financial_labels = {}
         
@@ -205,7 +207,7 @@ class ReportsWindow:
         for col in columns:
             self.clients_tree.heading(col, text=col)
             if col == 'Deuda Total':
-                self.clients_tree.column(col, width=120)
+                self.clients_tree.column(col, width=140)
             elif col == 'Última Compra':
                 self.clients_tree.column(col, width=150)
             else:
@@ -233,7 +235,7 @@ class ReportsWindow:
             if col == 'Cantidad Perdida':
                 self.losses_tree.column(col, width=120)
             elif col == 'Costo Total':
-                self.losses_tree.column(col, width=100)
+                self.losses_tree.column(col, width=125)
             elif col == 'Tipo Principal':
                 self.losses_tree.column(col, width=120)
             else:
