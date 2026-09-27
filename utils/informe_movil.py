@@ -8,6 +8,7 @@ documento por cada orden.
 import json
 from datetime import datetime
 from html import escape
+import unicodedata
 from pathlib import Path
 
 from utils.pdf import CARPETA
@@ -28,9 +29,8 @@ def html_pendientes(filas, telefonos=None, enlaces=None, arriba="") -> str:
     generado = datetime.now().strftime("%d/%m/%Y %H:%M")
     total = sum(r["d"] for r in datos)
     return (PLANTILLA.replace("__ARRIBA__", arriba)
-            .replace("__FILAS__", _filas_html(datos))
+            .replace("__CSS_SIN_JS__", _css_sin_js()).replace("__SIN_JS__", _version_sin_js(datos))
             .replace("__KTOTAL__", _pesos(total)).replace("__KCLIENTES__", str(len(datos)))
-            .replace("__PIETXT__", f"Total ({len(datos)})").replace("__PIETOTAL__", _pesos(total))
             .replace("__DATOS__", json_datos).replace("__GENERADO__", generado))
 
 
@@ -43,21 +43,94 @@ def _nivel(dias):
     return "alta" if dias >= 60 else "media" if dias >= 30 else "baja" if dias >= 15 else ""
 
 
-def _filas_html(datos):
-    """La tabla ya escrita, de quien más debe a quien menos. El visor de
-    archivos de WhatsApp o de Android no ejecuta JavaScript: sin esto el
-    informe se veía vacío. Con JavaScript, pintar() la reemplaza igual."""
-    filas = []
-    for r in sorted(datos, key=lambda r: r["d"], reverse=True):
-        nombre = (f'<a class="nombre" href="{escape(r["u"])}">{escape(r["n"])}</a>' if r["u"]
-                  else f'<span class="nombre">{escape(r["n"])}</span>')
-        tel = (f'<a class="tel" href="tel:{escape(r["t"])}" aria-label="Llamar">📞</a>'
-               if r["t"] else "")
-        desde = f'<div class="desde">debe desde el {escape(r["f"])}</div>' if r["f"] else ""
-        filas.append(f'<tr class="{_nivel(r["x"])}"><td>{nombre}{tel}{desde}</td>'
-                     f'<td class="num">{_pesos(r["d"])}</td>'
-                     f'<td class="num dias">{"" if r["x"] is None else r["x"]}</td></tr>')
-    return "".join(filas) or '<tr><td colspan="3" class="vacio">No hay clientes con deuda</td></tr>'
+# ── Versión sin JavaScript ───────────────────────────────────────────────────
+# El visor de archivos de WhatsApp y de Android no ejecuta JavaScript. Para que
+# igual se pueda ordenar tocando las columnas y filtrar por días, el archivo
+# trae la tabla ya ordenada de las 6 formas posibles y unos botones de radio
+# ocultos: tocar un título marca otro botón y el CSS muestra la tabla que toca.
+# Buscar por nombre sí necesita JavaScript (en Chrome funciona todo).
+FILTROS = (0, 15, 30, 60)
+ORDENES = [("d", True), ("d", False), ("n", False), ("n", True), ("x", True), ("x", False)]
+TITULOS = (("n", "Cliente", ""), ("d", "Deuda", "num"), ("x", "Días", "num"))
+
+
+def _sin_tildes(texto):
+    return "".join(c for c in unicodedata.normalize("NFD", texto)
+                   if unicodedata.category(c) != "Mn").lower()
+
+
+def _fila_html(r, clases=""):
+    nombre = (f'<a class="nombre" href="{escape(r["u"])}">{escape(r["n"])}</a>' if r["u"]
+              else f'<span class="nombre">{escape(r["n"])}</span>')
+    tel = f'<a class="tel" href="tel:{escape(r["t"])}" aria-label="Llamar">📞</a>' if r["t"] else ""
+    desde = f'<div class="desde">debe desde el {escape(r["f"])}</div>' if r["f"] else ""
+    return (f'<tr class="{(_nivel(r["x"]) + " " + clases).strip()}"><td>{nombre}{tel}{desde}</td>'
+            f'<td class="num">{_pesos(r["d"])}</td>'
+            f'<td class="num dias">{"" if r["x"] is None else r["x"]}</td></tr>')
+
+
+def _version_sin_js(datos):
+    def clave(col):
+        if col == "n":
+            return lambda r: _sin_tildes(r["n"])
+        return lambda r: -1 if r[col] is None else r[col]
+
+    def marcas(r):
+        return " ".join(f"m{f}" for f in FILTROS[1:] if (r["x"] or 0) >= f)
+
+    html = []
+    for col, desc in ORDENES:
+        marcado = " checked" if (col, desc) == ("d", True) else ""
+        html.append(f'<input type="radio" name="orden" id="o-{col}-{"desc" if desc else "asc"}"{marcado}>')
+    for f in FILTROS:
+        html.append(f'<input type="radio" name="filtro" id="f{f}"{" checked" if f == 0 else ""}>')
+    html.append('<div class="chips">' + "".join(
+        f'<label for="f{f}">{"Todos" if f == 0 else f"{f}+ días"}</label>' for f in FILTROS) + "</div>")
+
+    pies = []
+    for f in FILTROS:
+        dentro = [r for r in datos if (r["x"] or 0) >= f]
+        pies.append(f'<tr class="psj f{f}"><td>Total ({len(dentro)})</td>'
+                    f'<td class="num">{_pesos(sum(r["d"] for r in dentro))}</td><td></td></tr>')
+        if not dentro:
+            pies.append(f'<tr class="vsj f{f}"><td colspan="3" class="vacio">'
+                        f'No hay clientes con ese filtro</td></tr>')
+
+    html.append('<div class="tablas">')
+    for col, desc in ORDENES:
+        filas = sorted(datos, key=clave(col), reverse=desc)
+        cabeza = []
+        for c, titulo, clase in TITULOS:
+            # Tocar la columna actual invierte el orden; otra columna empieza
+            # en su orden natural (nombres A→Z, números de mayor a menor)
+            siguiente = (not desc) if c == col else (c != "n")
+            flecha = (" ▼" if desc else " ▲") if c == col else ""
+            cabeza.append(f'<th class="{clase}"><label for="o-{c}-{"desc" if siguiente else "asc"}">'
+                          f'{titulo}{flecha}</label></th>')
+        html.append(f'<table class="tsj t-{col}-{"desc" if desc else "asc"}">'
+                    f'<thead><tr>{"".join(cabeza)}</tr></thead><tbody>'
+                    + "".join(_fila_html(r, "fsj " + marcas(r)) for r in filas)
+                    + f'</tbody><tfoot>{"".join(pies)}</tfoot></table>')
+    html.append("</div>")
+    return "".join(html)
+
+
+def _css_sin_js():
+    reglas = ["#sinjs > input { display: none; }", ".tsj, .psj, .vsj { display: none; }",
+              ".tsj th label { display: block; cursor: pointer; }",
+              ".chips label { flex: none; border-radius: 999px; padding: 8px 14px; font-size: .9rem;"
+              " background: var(--chip); color: var(--texto); cursor: pointer; }"]
+    for col, desc in ORDENES:
+        o = f'{col}-{"desc" if desc else "asc"}'
+        reglas.append(f"#o-{o}:checked ~ .tablas .t-{o} {{ display: table; }}")
+    for f in FILTROS:
+        reglas.append(f"#f{f}:checked ~ .tablas .psj.f{f}, #f{f}:checked ~ .tablas .vsj.f{f}"
+                      f" {{ display: table-row; }}")
+        reglas.append(f"#f{f}:checked ~ .chips label[for=f{f}] {{ background: var(--acento);"
+                      f" color: var(--tarjeta); font-weight: 600; }}")
+        if f:
+            reglas.append(f"#f{f}:checked ~ .tablas tr.fsj:not(.m{f}) {{ display: none; }}")
+    return "\n".join(reglas)
 
 
 def exportar_pendientes_html(filas, telefonos=None) -> Path:
@@ -124,6 +197,7 @@ tfoot td { font-weight: 700; background: var(--chip); }
 .vacio { text-align: center; color: var(--suave); padding: 24px; }
 .nota { color: var(--suave); font-size: .8rem; margin-top: 12px; }
 [hidden] { display: none !important; }
+__CSS_SIN_JS__
 </style>
 </head>
 <body>
@@ -137,9 +211,15 @@ tfoot td { font-weight: 700; background: var(--chip); }
     <div class="kpi"><b id="kClientes">__KCLIENTES__</b><span>Clientes</span></div>
   </div>
 
-  <input type="search" id="buscar" placeholder="Buscar cliente…" autocomplete="off" hidden>
+  <noscript><p class="nota" style="margin:0 0 10px">Toque los títulos para ordenar y los botones para
+  filtrar. Para <b>buscar por nombre</b>, abra este archivo con Chrome.</p></noscript>
 
-  <div class="chips" id="chips" hidden>
+  <div id="sinjs">__SIN_JS__</div>
+
+  <div id="conjs" hidden>
+  <input type="search" id="buscar" placeholder="Buscar cliente…" autocomplete="off">
+
+  <div class="chips" id="chips">
     <button data-min="0" class="on">Todos</button>
     <button data-min="15">15+ días</button>
     <button data-min="30">30+ días</button>
@@ -152,19 +232,21 @@ tfoot td { font-weight: 700; background: var(--chip); }
       <th data-col="d" class="num">Deuda</th>
       <th data-col="x" class="num">Días</th>
     </tr></thead>
-    <tbody id="filas">__FILAS__</tbody>
-    <tfoot><tr><td id="pieTxt">__PIETXT__</td><td class="num" id="pieTotal">__PIETOTAL__</td><td></td></tr></tfoot>
+    <tbody id="filas"></tbody>
+    <tfoot><tr><td id="pieTxt">Total</td><td class="num" id="pieTotal"></td><td></td></tr></tfoot>
   </table>
+  </div>
 
-  <p class="nota" id="notaOrden" hidden>Toca el título de una columna para ordenar; tócalo otra vez para invertir.
+  <p class="nota">Toca el título de una columna para ordenar; tócalo otra vez para invertir.
   Colores: amarillo 15+ días · naranja 30+ · rojo 60+. 📞 llama al cliente.</p>
 </main>
 
 <script>
 var DATOS = __DATOS__;
-// Buscar, filtrar y ordenar solo existen con JavaScript: sin él (visor de
-// WhatsApp o de Android) se ve la tabla ya escrita, sin controles que no sirven.
-["buscar", "chips", "notaOrden"].forEach(function (id) { document.getElementById(id).hidden = false; });
+// Con JavaScript (Chrome) se usa la versión con búsqueda; la otra queda
+// para los visores que no lo ejecutan (WhatsApp, visor de Android).
+document.getElementById("sinjs").hidden = true;
+document.getElementById("conjs").hidden = false;
 var orden = { col: "d", desc: true };
 var minDias = 0;
 
