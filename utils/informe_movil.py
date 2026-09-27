@@ -7,6 +7,7 @@ documento por cada orden.
 """
 import json
 from datetime import datetime
+from html import escape
 from pathlib import Path
 
 from utils.pdf import CARPETA
@@ -25,8 +26,38 @@ def html_pendientes(filas, telefonos=None, enlaces=None, arriba="") -> str:
     # "</" dentro del JSON cerraría la etiqueta <script> antes de tiempo
     json_datos = json.dumps(datos, ensure_ascii=False).replace("</", "<\\/")
     generado = datetime.now().strftime("%d/%m/%Y %H:%M")
+    total = sum(r["d"] for r in datos)
     return (PLANTILLA.replace("__ARRIBA__", arriba)
+            .replace("__FILAS__", _filas_html(datos))
+            .replace("__KTOTAL__", _pesos(total)).replace("__KCLIENTES__", str(len(datos)))
+            .replace("__PIETXT__", f"Total ({len(datos)})").replace("__PIETOTAL__", _pesos(total))
             .replace("__DATOS__", json_datos).replace("__GENERADO__", generado))
+
+
+def _pesos(v):
+    return "$" + f"{round(v):,.0f}".replace(",", ".")
+
+
+def _nivel(dias):
+    dias = dias or 0
+    return "alta" if dias >= 60 else "media" if dias >= 30 else "baja" if dias >= 15 else ""
+
+
+def _filas_html(datos):
+    """La tabla ya escrita, de quien más debe a quien menos. El visor de
+    archivos de WhatsApp o de Android no ejecuta JavaScript: sin esto el
+    informe se veía vacío. Con JavaScript, pintar() la reemplaza igual."""
+    filas = []
+    for r in sorted(datos, key=lambda r: r["d"], reverse=True):
+        nombre = (f'<a class="nombre" href="{escape(r["u"])}">{escape(r["n"])}</a>' if r["u"]
+                  else f'<span class="nombre">{escape(r["n"])}</span>')
+        tel = (f'<a class="tel" href="tel:{escape(r["t"])}" aria-label="Llamar">📞</a>'
+               if r["t"] else "")
+        desde = f'<div class="desde">debe desde el {escape(r["f"])}</div>' if r["f"] else ""
+        filas.append(f'<tr class="{_nivel(r["x"])}"><td>{nombre}{tel}{desde}</td>'
+                     f'<td class="num">{_pesos(r["d"])}</td>'
+                     f'<td class="num dias">{"" if r["x"] is None else r["x"]}</td></tr>')
+    return "".join(filas) or '<tr><td colspan="3" class="vacio">No hay clientes con deuda</td></tr>'
 
 
 def exportar_pendientes_html(filas, telefonos=None) -> Path:
@@ -92,6 +123,7 @@ tr.alta td { background: var(--alta); } tr.alta .dias { color: var(--alta-t); fo
 tfoot td { font-weight: 700; background: var(--chip); }
 .vacio { text-align: center; color: var(--suave); padding: 24px; }
 .nota { color: var(--suave); font-size: .8rem; margin-top: 12px; }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -101,13 +133,13 @@ tfoot td { font-weight: 700; background: var(--chip); }
   <div class="gen">Actualizado el __GENERADO__</div>
 
   <div class="resumen">
-    <div class="kpi"><b id="kTotal"></b><span>Total por cobrar</span></div>
-    <div class="kpi"><b id="kClientes"></b><span>Clientes</span></div>
+    <div class="kpi"><b id="kTotal">__KTOTAL__</b><span>Total por cobrar</span></div>
+    <div class="kpi"><b id="kClientes">__KCLIENTES__</b><span>Clientes</span></div>
   </div>
 
-  <input type="search" id="buscar" placeholder="Buscar cliente…" autocomplete="off">
+  <input type="search" id="buscar" placeholder="Buscar cliente…" autocomplete="off" hidden>
 
-  <div class="chips" id="chips">
+  <div class="chips" id="chips" hidden>
     <button data-min="0" class="on">Todos</button>
     <button data-min="15">15+ días</button>
     <button data-min="30">30+ días</button>
@@ -120,16 +152,19 @@ tfoot td { font-weight: 700; background: var(--chip); }
       <th data-col="d" class="num">Deuda</th>
       <th data-col="x" class="num">Días</th>
     </tr></thead>
-    <tbody id="filas"></tbody>
-    <tfoot><tr><td id="pieTxt">Total</td><td class="num" id="pieTotal"></td><td></td></tr></tfoot>
+    <tbody id="filas">__FILAS__</tbody>
+    <tfoot><tr><td id="pieTxt">__PIETXT__</td><td class="num" id="pieTotal">__PIETOTAL__</td><td></td></tr></tfoot>
   </table>
 
-  <p class="nota">Toca el título de una columna para ordenar; tócalo otra vez para invertir.
+  <p class="nota" id="notaOrden" hidden>Toca el título de una columna para ordenar; tócalo otra vez para invertir.
   Colores: amarillo 15+ días · naranja 30+ · rojo 60+. 📞 llama al cliente.</p>
 </main>
 
 <script>
 var DATOS = __DATOS__;
+// Buscar, filtrar y ordenar solo existen con JavaScript: sin él (visor de
+// WhatsApp o de Android) se ve la tabla ya escrita, sin controles que no sirven.
+["buscar", "chips", "notaOrden"].forEach(function (id) { document.getElementById(id).hidden = false; });
 var orden = { col: "d", desc: true };
 var minDias = 0;
 
