@@ -19,5 +19,7 @@ services:
         sync: false             # el contenido de data\clave_web.txt
       - key: GEMINI_API_KEY
         sync: false             # ventas por audio; se saca en aistudio.google.com
+      - key: GROQ_API_KEY
+        sync: false             # respaldo de Gemini; se saca en console.groq.com
       - key: SECRETO
         generateValue: true     # Render inventa uno al azar

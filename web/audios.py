@@ -5,6 +5,9 @@ venta de siempre. Nada se guarda como venta sin que alguien lo confirme.
 
 Necesita GEMINI_API_KEY (se saca gratis en aistudio.google.com). Con
 GEMINI_MODELO se pueden cambiar los modelos (separados por comas, en orden).
+Con GROQ_API_KEY (gratis en console.groq.com), si Gemini falla o se queda sin
+cupo, el audio lo escucha Groq: primero lo pasa a texto con Whisper y luego
+arma la venta (GROQ_MODELO, igual que GEMINI_MODELO).
 """
 import base64
 import hashlib
@@ -16,6 +19,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from datetime import date, datetime
 
 from flask import abort, redirect, render_template, request, session, url_for
@@ -32,6 +36,9 @@ PASAR_AL_SIGUIENTE = {404, 429, 500, 503, 504}
 # rato: cada intento gastaría más cupo o tiempo. modelo → hasta cuándo.
 _en_pausa = {}
 PAUSA = {429: 15 * 60, 404: 6 * 60 * 60}
+GROQ_MODELOS = [m.strip() for m in os.environ.get(
+    "GROQ_MODELO", "openai/gpt-oss-120b,openai/gpt-oss-20b").split(",") if m.strip()]
+GROQ_WHISPER = "whisper-large-v3"
 TAMANO_MAXIMO = 15 * 1024 * 1024        # una nota de voz de un minuto pesa ~100 KB
 
 # extensión → (tipo para el navegador, tipo para Gemini)
@@ -216,11 +223,36 @@ def _catalogo(conn):
 
 
 def escuchar(audio, tipo, catalogo):
-    """Manda el audio a Gemini y devuelve lo que entendió (dict con la forma
-    de ESQUEMA). Lanza RuntimeError con un mensaje para mostrar."""
-    clave = os.environ.get("GEMINI_API_KEY")
-    if not clave:
+    """Lo que se entendió del audio (dict con la forma de ESQUEMA, más
+    "motor": quién lo escuchó). Primero Gemini, que oye el audio directo; si
+    falla o no tiene cupo, Groq. Lanza RuntimeError con un mensaje para
+    mostrar."""
+    gemini, groq = os.environ.get("GEMINI_API_KEY"), os.environ.get("GROQ_API_KEY")
+    if not (gemini or groq):
         raise RuntimeError("Falta la clave de Gemini (GEMINI_API_KEY) en el servidor.")
+    # Todo debe caber en los 60 s de gunicorn, para poder mostrar el error
+    limite = time.monotonic() + 50
+    error_gemini = None
+    if gemini:
+        try:
+            # Con Groq de respaldo, a Gemini se le dejan 25 s menos para Groq
+            resultado = _escuchar_gemini(gemini, audio, tipo, catalogo,
+                                         limite - 25 if groq else limite)
+            return {**resultado, "motor": "Gemini"}
+        except RuntimeError as e:
+            if not groq:
+                raise
+            error_gemini = e
+    try:
+        resultado = _escuchar_groq(groq, audio, tipo, catalogo, limite)
+    except RuntimeError as e:
+        if error_gemini:
+            raise RuntimeError(f"{error_gemini} Groq tampoco pudo: {e}") from e
+        raise
+    return {**resultado, "motor": "Groq"}
+
+
+def _escuchar_gemini(clave, audio, tipo, catalogo, limite):
     cuerpo = {
         "systemInstruction": {"parts": [{"text": INSTRUCCIONES}]},
         "contents": [{"role": "user", "parts": [
@@ -231,9 +263,7 @@ def escuchar(audio, tipo, catalogo):
                              "responseJsonSchema": ESQUEMA},
     }
     datos = json.dumps(cuerpo).encode()
-    # Todo debe caber en los 60 s de gunicorn, para poder mostrar el error.
-    # Dos vueltas por la lista: una saturación suele durar segundos.
-    limite = time.monotonic() + 50
+    # Dos vueltas por la lista: una saturación suele durar segundos
     respuesta, codigos, intentos = None, [], []
     for modelo in MODELOS + [None] + MODELOS:
         quedan = limite - time.monotonic()
@@ -286,6 +316,116 @@ def escuchar(audio, tipo, catalogo):
     return resultado
 
 
+# ── Escuchar (Groq, de respaldo) ─────────────────────────────────────────────
+# Groq no oye el audio: Whisper lo pasa a texto y otro modelo arma la venta
+# con las mismas instrucciones.
+NOTA_GROQ = """
+
+La nota de voz ya viene pasada a texto, y ese paso pudo equivocarse con los
+nombres (de clientes y productos): búscalos por cómo suenan. En transcripcion
+devuelve el mismo texto que recibes."""
+
+EXTENSION_GROQ = {"audio/ogg": "ogg", "audio/aac": "m4a", "audio/mp3": "mp3",
+                  "audio/mpeg": "mp3", "audio/wav": "wav", "audio/webm": "webm",
+                  "audio/flac": "flac"}
+
+
+def _estricto(esquema):
+    """El esquema con additionalProperties: false en cada objeto, como pide
+    el modo estricto de Groq."""
+    if isinstance(esquema, dict):
+        copia = {k: _estricto(v) for k, v in esquema.items()}
+        if copia.get("type") == "object":
+            copia["additionalProperties"] = False
+        return copia
+    return esquema
+
+
+def _groq(ruta, clave, datos, tipo, espera):
+    pedido = urllib.request.Request(
+        f"https://api.groq.com/openai/v1/{ruta}", data=datos, method="POST",
+        headers={"Content-Type": tipo, "Authorization": f"Bearer {clave}",
+                 "User-Agent": "charcuteria-hye/1.0"})
+    with urllib.request.urlopen(pedido, timeout=espera) as r:
+        return json.load(r)
+
+
+def _formulario(campos, nombre, tipo, contenido):
+    """Cuerpo multipart/form-data (urllib no lo arma solo)."""
+    borde = uuid.uuid4().hex
+    partes = [f'--{borde}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
+              for k, v in campos.items()]
+    partes.append(f'--{borde}\r\nContent-Disposition: form-data; name="file"; '
+                  f'filename="{nombre}"\r\nContent-Type: {tipo}\r\n\r\n'.encode()
+                  + contenido + b"\r\n")
+    partes.append(f"--{borde}--\r\n".encode())
+    return b"".join(partes), f"multipart/form-data; boundary={borde}"
+
+
+def _error_groq(e, que):
+    if e.code == 401:
+        return RuntimeError("La clave de Groq (GROQ_API_KEY) no es válida.")
+    if e.code == 429:
+        return RuntimeError("Se acabó por ahora el cupo gratis de Groq.")
+    return RuntimeError(f"Groq respondió con error {e.code} al {que}. {_detalle(e)}".strip())
+
+
+def _escuchar_groq(clave, audio, tipo, catalogo, limite):
+    # Los nombres del catálogo ayudan a Whisper a escribirlos bien
+    nombres = [l.split(" | ")[1] for l in catalogo.splitlines() if l[:1].isdigit() and " | " in l]
+    pista = ("Venta en una charcutería. " + ", ".join(nombres))[:600]
+    cuerpo, formato = _formulario(
+        {"model": GROQ_WHISPER, "language": "es", "response_format": "json", "prompt": pista},
+        "audio." + EXTENSION_GROQ.get(tipo, "ogg"), tipo, audio)
+    try:
+        texto = _groq("audio/transcriptions", clave, cuerpo, formato,
+                      max(5, limite - time.monotonic()))["text"].strip()
+    except urllib.error.HTTPError as e:
+        raise _error_groq(e, "pasar el audio a texto") from e
+    except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
+        raise RuntimeError("No se pudo pasar el audio a texto con Groq.") from e
+    if not texto:
+        raise RuntimeError("Groq no entendió nada en el audio.")
+
+    datos = json.dumps({
+        "messages": [
+            {"role": "system", "content": INSTRUCCIONES + NOTA_GROQ},
+            {"role": "user", "content": catalogo + "\n\nNOTA DE VOZ (pasada a texto):\n" + texto},
+        ],
+        "response_format": {"type": "json_schema", "json_schema": {
+            "name": "venta", "strict": True, "schema": _estricto(ESQUEMA)}},
+    })
+    ultimo = None
+    for modelo in GROQ_MODELOS:
+        if _en_pausa.get("groq:" + modelo, 0) > time.monotonic():
+            continue
+        quedan = limite - time.monotonic()
+        if quedan < 3:
+            break
+        try:
+            respuesta = _groq("chat/completions", clave,
+                              json.dumps({"model": modelo, **json.loads(datos)}).encode(),
+                              "application/json", quedan)
+            resultado = json.loads(respuesta["choices"][0]["message"]["content"])
+        except urllib.error.HTTPError as e:
+            ultimo = _error_groq(e, "armar la venta")
+            if e.code in PAUSA:
+                _en_pausa["groq:" + modelo] = time.monotonic() + PAUSA[e.code]
+            if e.code in PASAR_AL_SIGUIENTE:
+                continue
+            raise ultimo from e
+        except (urllib.error.URLError, TimeoutError) as e:
+            raise RuntimeError("No se pudo hablar con Groq (sin conexión o tardó demasiado).") from e
+        except (KeyError, IndexError, ValueError) as e:
+            ultimo = RuntimeError("Groq no devolvió una respuesta que se pueda leer.")
+            continue
+        if isinstance(resultado, dict) and isinstance(resultado.get("lineas"), list):
+            resultado["transcripcion"] = texto
+            return resultado
+        ultimo = RuntimeError("Groq devolvió algo incompleto.")
+    raise ultimo or RuntimeError("Se acabó por ahora el cupo gratis de Groq.")
+
+
 def _pedir(modelo, datos, clave, espera):
     pedido = urllib.request.Request(
         f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent",
@@ -301,8 +441,29 @@ def audios_diagnostico():
     """Qué modelos ve la clave de Gemini y cómo responde cada uno a un
     mensaje corto de texto. Para cuando todo sale "saturado"."""
     clave = os.environ.get("GEMINI_API_KEY")
-    if not clave:
-        return _texto("Falta GEMINI_API_KEY en el servidor.")
+    lineas = _diagnostico_gemini(clave) if clave else ["Gemini: sin clave (GEMINI_API_KEY)."]
+    groq = os.environ.get("GROQ_API_KEY")
+    lineas.append("")
+    if not groq:
+        lineas.append("Groq (respaldo): sin clave (GROQ_API_KEY).")
+    else:
+        try:
+            pedido = urllib.request.Request(
+                "https://api.groq.com/openai/v1/models",
+                headers={"Authorization": f"Bearer {groq}", "User-Agent": "charcuteria-hye/1.0"})
+            with urllib.request.urlopen(pedido, timeout=10) as r:
+                ids = {m["id"] for m in json.load(r).get("data", [])}
+            lineas.append("Groq (respaldo): la clave funciona.")
+            for m in [GROQ_WHISPER] + GROQ_MODELOS:
+                lineas.append(f"  {m}: {'disponible' if m in ids else 'NO disponible'}")
+        except urllib.error.HTTPError as e:
+            lineas.append(f"Groq (respaldo): error {e.code} {_detalle(e)}")
+        except (urllib.error.URLError, TimeoutError):
+            lineas.append("Groq (respaldo): no respondió")
+    return _texto("\n".join(lineas))
+
+
+def _diagnostico_gemini(clave):
     lineas = []
     try:
         pedido = urllib.request.Request(
@@ -338,7 +499,7 @@ def audios_diagnostico():
             lineas.append(f"  {modelo}: error {e.code} {_detalle(e)}")
         except (urllib.error.URLError, TimeoutError):
             lineas.append(f"  {modelo}: no respondió a tiempo")
-    return _texto("\n".join(lineas))
+    return lineas
 
 
 def _detalle(error):
@@ -452,7 +613,8 @@ def resumen(conn, resultado):
     return {"transcripcion": resultado.get("transcripcion") or "",
             "fiada": resultado.get("tipo") == "fiado", "cliente": cliente,
             "cliente_dicho": resultado.get("cliente_dicho") or "",
-            "lineas": lineas, "total": total, "dudas": resultado.get("dudas") or []}
+            "lineas": lineas, "total": total, "dudas": resultado.get("dudas") or [],
+            "motor": resultado.get("motor")}
 
 
 def fecha_sugerida(fila):
@@ -527,7 +689,7 @@ def audios():
          WHERE a.estado = 'registrado' ORDER BY a.id DESC LIMIT 10""").fetchall()
     return render_template(
         "audios.html", pendientes=pendientes, registrados=registrados,
-        sin_clave=not os.environ.get("GEMINI_API_KEY"),
+        sin_clave=not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GROQ_API_KEY")),
         aviso=session.pop("aviso_audios", None), error=session.pop("aviso_audios_error", None),
         url_atajo=_url_atajo())
 
