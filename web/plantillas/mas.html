@@ -24,11 +24,13 @@
   {{ enlace(url_for('caja'), 'caja', 'Caja', 'Efectivo del día y últimos 30 días') }}
 </ul>
 
-<p class="seccion">Inventario y gastos</p>
+<p class="seccion">Inventario{{ " y gastos" if ve_gastos() }}</p>
 <ul class="lista">
   {{ enlace(url_for('inventario'), 'inventario', 'Inventario', 'Productos, stock y precios') }}
   {{ enlace(url_for('compras'), 'compras', 'Compras', 'Lo que llega del proveedor') }}
+  {% if ve_gastos() %}
   {{ enlace(url_for('gastos'), 'gastos', 'Gastos', 'Arriendo, servicios y otros') }}
+  {% endif %}
   {{ enlace(url_for('perdidas'), 'perdidas', 'Pérdidas', 'Mermas y vencidos') }}
 </ul>
 

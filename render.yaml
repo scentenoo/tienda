@@ -17,6 +17,8 @@ services:
         sync: false
       - key: CLAVE_HUELLA
         sync: false             # el contenido de data\clave_web.txt
+      - key: CLAVE_HUELLA_HERMANA
+        sync: false             # opcional: contraseña que entra a todo menos a gastos
       - key: GEMINI_API_KEY
         sync: false             # ventas por audio; se saca en aistudio.google.com
       - key: GROQ_API_KEY

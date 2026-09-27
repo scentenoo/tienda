@@ -3,12 +3,15 @@
 Configuración por variables de entorno (en Cloud Run van como secretos):
   TURSO_URL, TURSO_TOKEN   la base en la nube
   CLAVE_HUELLA             huella de la contraseña (python -m web.clave)
+  CLAVE_HUELLA_HERMANA     huella de una segunda contraseña (opcional): entra a
+                           todo menos a los gastos
   SECRETO                  clave para firmar la sesión (cualquier texto largo al azar)
   GEMINI_API_KEY           para las ventas por audio (opcional; ver web/audios.py)
   TZ=America/Bogota        para que "hoy" sea el día de Colombia
 
 Para probarla en el PC:  TIENDA_DESARROLLO=1 python -m web.app
-(usa data/nube_prueba.json y acepta la contraseña de TIENDA_CLAVE_PRUEBA).
+(usa data/nube_prueba.json y acepta la contraseña de TIENDA_CLAVE_PRUEBA, y
+la de TIENDA_CLAVE_HERMANA_PRUEBA para entrar sin gastos).
 """
 import io
 import json
@@ -43,16 +46,19 @@ def _configurar():
     url, token = os.environ.get("TURSO_URL"), os.environ.get("TURSO_TOKEN")
     clave = os.environ.get("CLAVE_HUELLA")
     secreto = os.environ.get("SECRETO")
+    clave_hermana = os.environ.get("CLAVE_HUELLA_HERMANA")
     if DESARROLLO:
         if not url:
             prueba = json.loads((RAIZ / "data" / "nube_prueba.json").read_text(encoding="utf-8"))
             url, token = prueba["url"], prueba["token"]
         clave = clave or huella(os.environ.get("TIENDA_CLAVE_PRUEBA", "prueba1234"))
         secreto = secreto or "solo-para-desarrollo"
+        clave_hermana = clave_hermana or huella(os.environ.get("TIENDA_CLAVE_HERMANA_PRUEBA", "hermana1234"))
     if not (url and token and clave and secreto):
         raise RuntimeError("Faltan TURSO_URL, TURSO_TOKEN, CLAVE_HUELLA o SECRETO")
     app.config.update(
         TURSO_URL=url, TURSO_TOKEN=token, CLAVE_HUELLA=clave, SECRET_KEY=secreto,
+        CLAVE_HUELLA_HERMANA=clave_hermana,
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=not DESARROLLO,
         PERMANENT_SESSION_LIFETIME=timedelta(days=30),
@@ -113,6 +119,24 @@ def requiere_ingreso(vista):
     return envuelta
 
 
+# La contraseña de la hermana entra a todo menos a los gastos: ni verlos,
+# ni agregarlos, ni cambiarlos.
+def ve_gastos():
+    return not session.get("sin_gastos")
+
+
+app.jinja_env.globals["ve_gastos"] = ve_gastos
+
+
+def requiere_gastos(vista):
+    @wraps(vista)
+    def envuelta(*args, **kwargs):
+        if not ve_gastos():
+            abort(404)      # como si no existiera: sin avisarle nada
+        return vista(*args, **kwargs)
+    return envuelta
+
+
 @app.after_request
 def _cabeceras(resp):
     resp.headers["X-Frame-Options"] = "DENY"
@@ -132,13 +156,19 @@ def ingresar():
     error = None
     if request.method == "POST":
         _revisar_csrf()
+        clave = request.form.get("clave", "")
+        es_dueno = verificar(clave, app.config["CLAVE_HUELLA"])
+        es_hermana = (not es_dueno and bool(app.config["CLAVE_HUELLA_HERMANA"])
+                      and verificar(clave, app.config["CLAVE_HUELLA_HERMANA"]))
         if _bloqueado():
             error = "Demasiados intentos. Espere 15 minutos."
-        elif verificar(request.form.get("clave", ""), app.config["CLAVE_HUELLA"]):
+        elif es_dueno or es_hermana:
             _fallos.clear()
             session.clear()
             session.permanent = True
             session["ingreso"] = True
+            if es_hermana:
+                session["sin_gastos"] = True
             siguiente = request.args.get("siguiente", "/")
             # Solo rutas propias: nada de redirigir a otro sitio
             if not siguiente.startswith("/") or siguiente.startswith("//"):

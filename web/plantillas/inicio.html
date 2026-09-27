@@ -29,10 +29,12 @@
   </div>
 </div>
 
-<div class="accesos">
+<div class="accesos"{% if not ve_gastos() %} style="grid-template-columns: repeat(2, 1fr)"{% endif %}>
   <a class="principal" href="{{ url_for('venta_nueva') }}">{{ icono('vender', 26) }}Nueva venta</a>
   <a href="{{ url_for('compra_nueva') }}">{{ icono('compras', 26) }}Nueva compra</a>
+  {% if ve_gastos() %}
   <a href="{{ url_for('gasto') }}">{{ icono('gastos', 26) }}Nuevo gasto</a>
+  {% endif %}
 </div>
 
 <p class="seccion">Cobrar</p>
@@ -47,12 +49,14 @@
   {{ enlace(url_for('caja'), 'caja', 'Caja', 'Efectivo del día y últimos 30 días') }}
 </ul>
 
-<p class="seccion">Inventario y gastos</p>
+<p class="seccion">Inventario{{ " y gastos" if ve_gastos() }}</p>
 <ul class="lista">
   {{ enlace(url_for('inventario'), 'inventario', 'Inventario',
             (agotados ~ ' agotado' ~ ('' if agotados == 1 else 's') ~ ' · stock y precios') if agotados else 'Stock y precios') }}
   {{ enlace(url_for('compras'), 'compras', 'Compras', 'Lo que llega del proveedor') }}
+  {% if ve_gastos() %}
   {{ enlace(url_for('gastos'), 'gastos', 'Gastos', 'Arriendo, servicios y otros') }}
+  {% endif %}
   {{ enlace(url_for('perdidas'), 'perdidas', 'Pérdidas', 'Mermas y vencidos') }}
 </ul>
 <style>a.kpi { color: inherit; text-decoration: none; }</style>

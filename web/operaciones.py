@@ -14,7 +14,7 @@ from servicios.inventario import (crear_producto, editar_producto, eliminar_prod
                                   usos_del_producto)
 from utils.conciliacion import MESES_ES
 from web.app import (_dia_largo, _json_seguro, _leer_decimal, _leer_monto, _revisar_csrf,
-                     _usuario_admin, app, db, pesos, requiere_ingreso)
+                     _usuario_admin, app, db, pesos, requiere_gastos, requiere_ingreso)
 
 
 def _fecha_form(nombre, por_defecto=None):
@@ -223,6 +223,7 @@ def compra_eliminar(purchase_id):
 # ── Gastos ───────────────────────────────────────────────────────────────────
 @app.get("/gastos")
 @requiere_ingreso
+@requiere_gastos
 def gastos():
     inicio, titulo = _mes_de(request.args.get("mes"))
     fin = (inicio + timedelta(days=32)).replace(day=1)
@@ -239,6 +240,7 @@ def gastos():
 @app.route("/gasto/nuevo", methods=["GET", "POST"])
 @app.route("/gasto/<int:expense_id>", methods=["GET", "POST"])
 @requiere_ingreso
+@requiere_gastos
 def gasto(expense_id=None):
     conn = db()
     g = None
