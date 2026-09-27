@@ -37,6 +37,7 @@
       {% else %}
       <div>Sin detalle de productos</div>
       {% endfor %}
+      <div style="margin-top:8px"><a href="{{ url_for('venta', sale_id=v['id']) }}">Abrir venta #{{ v['id'] }} (editar o eliminar) ›</a></div>
     </div>
   </details></li>
   {% endfor %}

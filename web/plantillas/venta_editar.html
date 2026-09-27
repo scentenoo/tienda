@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}Editar venta #{{ v['id'] }}{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('venta', sale_id=v['id']) }}">‹ Venta #{{ v['id'] }}</a>
+<h1>Editar venta #{{ v['id'] }}</h1>
+<p class="sub">Los productos no cambian. Si cambia el total, la diferencia queda como cargo o descuento.</p>
+
+<form method="post" class="tarjeta">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <label class="campo">Total
+    <input type="text" name="total" id="total" inputmode="numeric" value="{{ v['total']|round|int }}" required>
+  </label>
+  <label class="campo">Tipo
+    <select name="tipo" id="tipo">
+      <option value="contado" {{ 'selected' if v['payment_method'] != 'credit' }}>Contado</option>
+      <option value="fiado" {{ 'selected' if v['payment_method'] == 'credit' }}>Fiado</option>
+    </select>
+  </label>
+  <label class="campo" id="campoCliente">Cliente
+    <select name="cliente">
+      <option value="">— Elija —</option>
+      {% for c in clientes %}
+      <option value="{{ c['id'] }}" {{ 'selected' if c['id'] == v['client_id'] }}>{{ c['name'] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button class="boton" style="width:100%; margin-top: 14px">Guardar cambios</button>
+</form>
+<script>
+var tipo = document.getElementById("tipo"), cli = document.getElementById("campoCliente");
+function ver() { cli.hidden = tipo.value !== "fiado"; }
+tipo.addEventListener("change", ver); ver();
+var t = document.getElementById("total");
+function f() { var d = t.value.replace(/\D/g, ""); t.value = d ? "$" + d.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ""; }
+t.addEventListener("input", f); f();
+</script>
+{% endblock %}

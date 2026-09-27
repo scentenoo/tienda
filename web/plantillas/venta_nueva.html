@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block titulo %}Nueva venta · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
+<h1>Nueva venta</h1>
+{% if error %}<div class="error" style="margin-top:10px">{{ error }}</div>{% endif %}
+
+<h2>Productos</h2>
+<input type="search" id="buscarProducto" placeholder="Buscar producto…" autocomplete="off">
+<ul class="lista resultados" id="resultados"></ul>
+
+<div class="tarjeta" id="agregar" hidden>
+  <div class="fila-agregar"><b id="agNombre"></b><span class="sub" id="agInfo"></span></div>
+  <div class="dos">
+    <label class="campo">Cantidad
+      <input type="text" id="agCantidad" inputmode="decimal" placeholder="Ej: 1 o 1,5" autocomplete="off">
+    </label>
+    <label class="campo">o por dinero
+      <input type="text" id="agDinero" inputmode="numeric" placeholder="$0" autocomplete="off">
+    </label>
+  </div>
+  <p class="sub" id="agSubtotal" style="margin:8px 0 0"></p>
+  <div class="error" id="agError" hidden></div>
+  <div class="dos" style="margin-top:10px">
+    <button type="button" class="boton secundario" id="agCancelar">Cancelar</button>
+    <button type="button" class="boton" id="agOk">Agregar</button>
+  </div>
+</div>
+
+<ul class="lista" id="carrito" style="margin-top:12px"></ul>
+<p class="vacio" id="carritoVacio">Todavía no hay productos en la venta.</p>
+
+<h2>Forma de pago</h2>
+<div class="dos">
+  <button type="button" class="boton secundario opcion" data-fiada="0">💵 Contado</button>
+  <button type="button" class="boton secundario opcion" data-fiada="1">📝 Fiado</button>
+</div>
+
+<div id="seccionFiado" hidden>
+  <label class="campo" style="margin-top:14px">Cliente
+    <input type="search" id="buscarCliente" placeholder="Buscar cliente…" autocomplete="off">
+  </label>
+  <ul class="lista resultados" id="resultadosCliente"></ul>
+  <div class="tarjeta elegido" id="clienteElegido" hidden></div>
+  <p class="sub" style="margin-top:8px">¿No está? <a href="{{ url_for('cliente_nuevo', volver='venta') }}">Crear cliente nuevo</a></p>
+
+  <label class="campo">Ajuste (opcional)</label>
+  <div class="ajuste">
+    <button type="button" class="boton secundario" id="signo">+ Cargo</button>
+    <input type="text" id="ajuste" inputmode="numeric" placeholder="$0" autocomplete="off">
+  </div>
+  <label class="campo">Razón del ajuste
+    <input type="text" id="motivo" maxlength="120" placeholder="Ej: domicilio">
+  </label>
+</div>
+
+<div class="pie-venta">
+  <div><span class="sub" style="margin:0">Total</span><b id="total">$0</b></div>
+  <form method="post" id="formulario">
+    <input type="hidden" name="csrf" value="{{ csrf() }}">
+    <input type="hidden" name="borrador" id="borrador">
+    <button class="boton" id="continuar" disabled>Continuar</button>
+  </form>
+</div>
+
+<style>
+.resultados:empty { display: none; }
+.resultados { margin-top: 6px; }
+.resultados .fila { cursor: pointer; }
+.dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fila-agregar b { display: block; font-size: 1.05rem; }
+.opcion.on { background: var(--acento); color: var(--sobre-acento); }
+.elegido { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
+.ajuste { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-top: 4px; }
+.quitar { background: none; border: 0; color: var(--alerta); font-size: 1.3rem; padding: 0 0 0 10px; cursor: pointer; }
+.pie-venta { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; margin: 20px -16px -40px; padding: 12px 16px 16px; background: var(--tarjeta);
+  border-top: 1px solid var(--borde); }
+.pie-venta b { display: block; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+</style>
+
+<script>
+var PRODUCTOS = {{ productos|safe }};
+var CLIENTES = {{ clientes|safe }};
+// El carrito se guarda en el teléfono mientras se arma la venta, para no
+// perderlo si se sale a crear un cliente o se recarga la página.
+function guardado() { try { return JSON.parse(sessionStorage.getItem("ventaBorrador")); } catch (e) { return null; } }
+var venta = {{ borrador|safe }} || guardado() ||
+            { lineas: [], fiada: false, cliente: null, ajuste: "", signo: "+", motivo: "" };
+var clienteNuevo = +new URLSearchParams(location.search).get("cliente");
+if (clienteNuevo) { venta.fiada = true; venta.cliente = clienteNuevo; }
+var elegido = null;
+
+function $(id) { return document.getElementById(id); }
+function pesos(v) { return "$" + Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+function cant(q) { return (Math.round(q * 1000) / 1000).toString().replace(".", ","); }
+function num(t) { return parseFloat(String(t || "").replace(",", ".")) || 0; }
+function dinero(t) { return parseInt(String(t || "").replace(/\D/g, ""), 10) || 0; }
+function sinTildes(s) { return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) {
+  return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+function producto(id) { return PRODUCTOS.find(function (p) { return p.id === id; }); }
+function cantidadDe(l) { var p = producto(l.id); return l.m ? dinero(l.m) / p.p : num(l.q); }
+function subtotalDe(l) { var p = producto(l.id); return l.m ? dinero(l.m) : p.p * num(l.q); }
+function formatearDinero(campo) {
+  var d = campo.value.replace(/\D/g, "");
+  campo.value = d ? "$" + d.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
+}
+// Si el producto ya no está (se agotó), se quita del borrador
+venta.lineas = venta.lineas.filter(function (l) { return producto(l.id); });
+
+// ── Buscar y agregar productos ──
+$("buscarProducto").addEventListener("input", function () {
+  var q = sinTildes(this.value.trim());
+  $("resultados").innerHTML = !q ? "" : PRODUCTOS.filter(function (p) {
+    return sinTildes(p.n).indexOf(q) !== -1;
+  }).slice(0, 8).map(function (p) {
+    return '<li><div class="fila" data-id="' + p.id + '"><div class="izq"><b>' + esc(p.n) +
+      '</b><span>Stock: ' + cant(p.s) + '</span></div><div class="der">' + pesos(p.p) + '</div></div></li>';
+  }).join("") || '<li><div class="fila"><span class="sub" style="margin:0">Sin resultados</span></div></li>';
+});
+$("resultados").addEventListener("click", function (e) {
+  var f = e.target.closest("[data-id]"); if (!f) return;
+  elegido = producto(+f.dataset.id);
+  $("agNombre").textContent = elegido.n;
+  $("agInfo").textContent = pesos(elegido.p) + " · stock " + cant(elegido.s);
+  $("agCantidad").value = ""; $("agDinero").value = ""; $("agError").hidden = true;
+  $("agSubtotal").textContent = "";
+  $("agregar").hidden = false; $("resultados").innerHTML = ""; $("buscarProducto").value = "";
+  $("agCantidad").focus();
+});
+function subtotalAgregar() {
+  var s = $("agDinero").value ? dinero($("agDinero").value) : elegido.p * num($("agCantidad").value);
+  var q = $("agDinero").value ? dinero($("agDinero").value) / elegido.p : num($("agCantidad").value);
+  $("agSubtotal").textContent = s > 0 ? cant(q) + " × " + pesos(elegido.p) + " = " + pesos(s) : "";
+}
+$("agCantidad").addEventListener("input", function () { $("agDinero").value = ""; subtotalAgregar(); });
+$("agDinero").addEventListener("input", function () { formatearDinero(this); $("agCantidad").value = ""; subtotalAgregar(); });
+$("agCancelar").addEventListener("click", function () { $("agregar").hidden = true; });
+$("agOk").addEventListener("click", function () {
+  var linea = $("agDinero").value ? { id: elegido.id, m: String(dinero($("agDinero").value)) }
+                                  : { id: elegido.id, q: $("agCantidad").value };
+  var q = cantidadDe(linea);
+  var ya = venta.lineas.filter(function (l) { return l.id === elegido.id; })
+                       .reduce(function (s, l) { return s + cantidadDe(l); }, 0);
+  var error = q <= 0 ? "Escriba la cantidad o el dinero."
+            : q + ya > elegido.s + 1e-9 ? "Stock insuficiente. Disponible: " + cant(elegido.s) +
+                                          (ya ? " (ya hay " + cant(ya) + " en la venta)" : "")
+            : "";
+  if (error) { $("agError").textContent = error; $("agError").hidden = false; return; }
+  venta.lineas.push(linea);
+  $("agregar").hidden = true;
+  pintar();
+});
+
+// ── Carrito ──
+$("carrito").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-quitar]"); if (!b) return;
+  venta.lineas.splice(+b.dataset.quitar, 1); pintar();
+});
+
+// ── Contado / fiado ──
+document.querySelectorAll(".opcion").forEach(function (b) {
+  b.addEventListener("click", function () { venta.fiada = b.dataset.fiada === "1"; pintar(); });
+});
+$("buscarCliente").addEventListener("input", function () {
+  var q = sinTildes(this.value.trim());
+  $("resultadosCliente").innerHTML = !q ? "" : CLIENTES.filter(function (c) {
+    return sinTildes(c.n).indexOf(q) !== -1;
+  }).slice(0, 8).map(function (c) {
+    return '<li><div class="fila" data-cliente="' + c.id + '"><div class="izq"><b>' + esc(c.n) +
+      '</b></div><div class="der">' + (c.d > 0 ? '<span class="etiqueta debe">' + pesos(c.d) + '</span>' : "") +
+      '</div></div></li>';
+  }).join("") || '<li><div class="fila"><span class="sub" style="margin:0">Sin resultados</span></div></li>';
+});
+$("resultadosCliente").addEventListener("click", function (e) {
+  var f = e.target.closest("[data-cliente]"); if (!f) return;
+  venta.cliente = +f.dataset.cliente;
+  $("resultadosCliente").innerHTML = ""; $("buscarCliente").value = "";
+  pintar();
+});
+$("clienteElegido").addEventListener("click", function (e) {
+  if (e.target.closest("[data-cambiar]")) { venta.cliente = null; pintar(); $("buscarCliente").focus(); }
+});
+$("signo").addEventListener("click", function () { venta.signo = venta.signo === "+" ? "-" : "+"; pintar(); });
+$("ajuste").addEventListener("input", function () { formatearDinero(this); venta.ajuste = String(dinero(this.value)); pintar(); });
+$("motivo").addEventListener("input", function () { venta.motivo = this.value; });
+
+function total() {
+  var t = venta.lineas.reduce(function (s, l) { return s + subtotalDe(l); }, 0);
+  if (venta.fiada) t += (venta.signo === "-" ? -1 : 1) * dinero(venta.ajuste);
+  return t;
+}
+
+function pintar() {
+  $("carrito").innerHTML = venta.lineas.map(function (l, i) {
+    var p = producto(l.id);
+    return '<li><div class="fila"><div class="izq"><b>' + esc(p.n) + '</b><span>' + cant(cantidadDe(l)) +
+      " × " + pesos(p.p) + '</span></div><div class="der">' + pesos(subtotalDe(l)) +
+      '<button type="button" class="quitar" data-quitar="' + i + '" aria-label="Quitar">×</button></div></div></li>';
+  }).join("");
+  $("carrito").hidden = !venta.lineas.length;
+  $("carritoVacio").hidden = !!venta.lineas.length;
+  document.querySelectorAll(".opcion").forEach(function (b) {
+    b.classList.toggle("on", (b.dataset.fiada === "1") === venta.fiada);
+  });
+  $("seccionFiado").hidden = !venta.fiada;
+  var c = CLIENTES.find(function (x) { return x.id === venta.cliente; });
+  $("clienteElegido").hidden = !c;
+  $("buscarCliente").parentElement.hidden = !!c;
+  if (c) $("clienteElegido").innerHTML = '<div><b>' + esc(c.n) + '</b><br><span class="sub" style="margin:0">' +
+    (c.d > 0 ? "Debe " + pesos(c.d) : "Al día") + '</span></div><button type="button" class="boton secundario chico" data-cambiar>Cambiar</button>';
+  $("signo").textContent = venta.signo === "-" ? "− Descuento" : "+ Cargo";
+  $("ajuste").value = venta.ajuste && +venta.ajuste ? pesos(+venta.ajuste) : "";
+  $("motivo").value = venta.motivo || "";
+  $("total").textContent = pesos(total());
+  $("continuar").disabled = !venta.lineas.length || (venta.fiada && !c) || total() <= 0;
+  try { sessionStorage.setItem("ventaBorrador", JSON.stringify(venta)); } catch (e) {}
+}
+
+$("formulario").addEventListener("submit", function () {
+  $("borrador").value = JSON.stringify(venta);
+});
+pintar();
+</script>
+{% endblock %}

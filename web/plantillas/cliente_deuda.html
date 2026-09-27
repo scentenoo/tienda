@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block titulo %}Agregar deuda · {{ c['name'] }}{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('cliente', client_id=c['id']) }}">‹ {{ c['name'] }}</a>
+<h1>Agregar deuda</h1>
+<p class="sub">Deuda sin venta, escrita a mano. Crédito disponible: <b>{{ disponible|pesos }}</b></p>
+
+{% if disponible <= 0 %}
+<div class="tarjeta">
+  <p style="margin-top:0">{{ c['name'] }} no tiene crédito disponible. Para agregarle deuda a mano,
+  primero súbale el <b>límite de crédito</b> (así funciona también en el PC).</p>
+  <a class="boton" style="width:100%" href="{{ url_for('cliente_editar', client_id=c['id']) }}">Editar límite de crédito</a>
+</div>
+{% else %}
+<form method="post" class="tarjeta" id="formulario">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <input type="hidden" name="codigo" value="{{ codigo }}">
+  <label class="campo">Monto
+    <input type="text" name="monto" id="monto" value="{{ monto }}" inputmode="numeric" placeholder="$0" required autofocus>
+  </label>
+  <label class="campo">Descripción
+    <input type="text" name="nota" value="{{ nota }}" maxlength="120" required placeholder="Ej: préstamo, pedido especial">
+  </label>
+  <button class="boton" style="width:100%; margin-top: 14px">Agregar deuda</button>
+</form>
+<script>
+var m = document.getElementById("monto");
+function f() { var d = m.value.replace(/\D/g, ""); m.value = d ? "$" + d.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ""; }
+m.addEventListener("input", f); f();
+document.getElementById("formulario").addEventListener("submit", function (e) {
+  if (!confirm("¿Agregar " + m.value + " a la deuda de " + {{ c['name']|tojson }} + "?")) { e.preventDefault(); return; }
+  var b = this.querySelector("button"); b.disabled = true; b.textContent = "Guardando…";
+});
+</script>
+{% endif %}
+{% endblock %}

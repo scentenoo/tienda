@@ -11,7 +11,7 @@ from utils.validators import safe_float_conversion
 from utils.theme import FONT_TITLE, FONT_HEADER, FONT_BOLD, FONT_NORMAL, FONT_SMALL, ROW_COLORS
 
 from config.database import get_connection
-from servicios.ventas import registrar_venta
+from servicios.ventas import editar_venta, eliminar_venta, registrar_venta
 from views.sale_detail_window import SaleDetailWindow
 from utils.ventanas import hacer_modal, centrar_ventana
 
@@ -1201,63 +1201,52 @@ class SalesWindow:
             total_entry = ttk.Entry(main_frame, textvariable=total_var, width=15)
             total_entry.grid(row=0, column=1, pady=5, padx=(5, 0))
             
-            # Estado
-            ttk.Label(main_frame, text="Estado:").grid(row=1, column=0, sticky=tk.W, pady=5)
-            status_var = tk.StringVar(value=sale.status if hasattr(sale, 'status') else "paid")
-            status_combo = ttk.Combobox(main_frame, textvariable=status_var, width=15, state="readonly")
-            status_combo['values'] = ["paid", "pending"]
-            status_combo.grid(row=1, column=1, pady=5, padx=(5, 0))
-            
+            # Pagada / pendiente ya no se elige a mano: sale de los abonos
+            # del cliente (servicios.ventas.editar_venta lo recalcula).
+            ttk.Label(main_frame, text="Tipo:").grid(row=1, column=0, sticky=tk.W, pady=5)
+            tipos = {"Contado": "cash", "Fiado": "credit"}
+            payment_var = tk.StringVar(value="Fiado" if sale.payment_method == "credit" else "Contado")
+            payment_combo = ttk.Combobox(main_frame, textvariable=payment_var, width=15, state="readonly")
+            payment_combo['values'] = list(tipos)
+            payment_combo.grid(row=1, column=1, pady=5, padx=(5, 0))
+
             # Cliente
             ttk.Label(main_frame, text="Cliente:").grid(row=2, column=0, sticky=tk.W, pady=5)
-            client_var = tk.StringVar(value=sale.client_name if hasattr(sale, 'client_name') and sale.client_name else "")
+            actual = next((c.name for c in self.clients if c.id == sale.client_id), "")
+            client_var = tk.StringVar(value=actual)
             client_combo = ttk.Combobox(main_frame, textvariable=client_var, width=20)
             client_combo['values'] = [c.name for c in self.clients]
             client_combo.grid(row=2, column=1, pady=5, padx=(5, 0))
-            
-            # Tipo de pago
-            ttk.Label(main_frame, text="Tipo de Pago:").grid(row=3, column=0, sticky=tk.W, pady=5)
-            payment_var = tk.StringVar(value=sale.payment_method if sale.payment_method else "cash")
-            payment_combo = ttk.Combobox(main_frame, textvariable=payment_var, width=15, state="readonly")
-            payment_combo['values'] = ["cash", "credit"]
-            payment_combo.grid(row=3, column=1, pady=5, padx=(5, 0))
-            
+
             def save_changes():
-                """Guardar cambios"""
+                """Guardar cambios (antes creaba una venta duplicada)"""
+                conn = None
                 try:
                     new_total = safe_float_conversion(total_var.get())
-                    new_status = status_var.get()
-                    new_client = client_var.get()
-                    new_payment = payment_var.get()
-                    
-                    if new_total <= 0:
-                        messagebox.showerror("Error", "El total debe ser mayor a cero")
+                    fiada = tipos[payment_var.get()] == "credit"
+                    cliente = next((c for c in self.clients if c.name == client_var.get()), None)
+                    if fiada and cliente is None:
+                        messagebox.showerror("Error", "Seleccione un cliente registrado para la venta fiada")
                         return
-                    
-                    # Actualizar la venta
-                    sale.total = new_total
-                    sale.status = new_status
-                    sale.client_name = new_client if new_client else None
-                    sale.payment_method = new_payment
-                    
-                    # Buscar ID del cliente
-                    sale.client_id = None
-                    for client in self.clients:
-                        if client.name == new_client:
-                            sale.client_id = client.id
-                            break
-                    
-                    if sale.save():
-                        messagebox.showinfo("Éxito", "Venta actualizada correctamente")
-                        edit_window.destroy()
-                        self.load_sales()
-                    else:
-                        messagebox.showerror("Error", "No se pudo actualizar la venta")
-                        
-                except ValueError:
-                    messagebox.showerror("Error", "El total debe ser un número válido")
+
+                    conn = get_connection()
+                    editar_venta(conn, sale.id, new_total, fiada, cliente.id if cliente else None)
+                    conn.commit()
+                    messagebox.showinfo("Éxito", "Venta actualizada correctamente")
+                    edit_window.destroy()
+                    self.load_data()
+
+                except ValueError as e:
+                    if conn:
+                        conn.rollback()
+                    messagebox.showerror("Error", str(e) or "El total debe ser un número válido")
                 except Exception as e:
+                    if conn:
+                        conn.rollback()
                     messagebox.showerror("Error", f"Error al actualizar: {str(e)}")
+                finally:
+                    if conn:
+                        conn.close()
             
             # Botones
             button_frame = ttk.Frame(main_frame)
@@ -1295,78 +1284,18 @@ class SalesWindow:
                 return
             
             conn = get_connection()
-            cursor = conn.cursor()
-            
             try:
-                # 1. Obtener detalles para restaurar stock
-                cursor.execute('SELECT product_id, quantity FROM sale_details WHERE sale_id = ?', (sale.id,))
-                details = cursor.fetchall()
-                
-                # 2. Si era venta fiada, actualizar deuda
-                if sale.status == "pending" and sale.client_id:
-                    # Actualizar deuda del cliente
-                    cursor.execute('''
-                        UPDATE clients 
-                        SET total_debt = total_debt - ?
-                        WHERE id = ?
-                    ''', (sale.total, sale.client_id))
-                    
-                    # CORRECCIÓN: Usar hora actual en lugar de calcular tiempo artificial
-                    cursor.execute('''
-                        INSERT INTO client_transactions 
-                        (client_id, transaction_type, amount, description, created_at, sale_id)
-                        VALUES (?, 'debit_reversal', ?, ?, datetime('now', 'localtime'), ?)
-                    ''', (sale.client_id, sale.total, 
-                        f"Reversión de venta #{sale.id}", sale.id))
-                
-                # 3. Archivar antes de borrar, para que el historial del cliente
-                #    pueda seguir mostrando el detalle de esta venta. Las
-                #    transacciones del cliente conservan el sale_id y sin esto
-                #    quedaban apuntando a una venta inexistente.
-                cursor.execute('''
-                    INSERT OR REPLACE INTO sales_eliminadas
-                        (id, client_id, total, payment_method, notes, created_at,
-                         user_id, status, adjustment, adjustment_reason, eliminada_en)
-                    SELECT id, client_id, total, payment_method, notes, created_at,
-                           user_id, status, adjustment, adjustment_reason,
-                           datetime('now', 'localtime')
-                      FROM sales WHERE id = ?
-                ''', (sale.id,))
-
-                cursor.execute('''
-                    INSERT OR REPLACE INTO sale_details_eliminados
-                        (id, sale_id, product_id, product_name, quantity,
-                         unit_price, sale_price, subtotal, cost_price)
-                    SELECT sd.id, sd.sale_id, sd.product_id, p.name, sd.quantity,
-                           sd.unit_price, sd.sale_price, sd.subtotal, sd.cost_price
-                      FROM sale_details sd
-                      LEFT JOIN products p ON p.id = sd.product_id
-                     WHERE sd.sale_id = ?
-                ''', (sale.id,))
-
-                # 4. Eliminar registros
-                cursor.execute('DELETE FROM sale_details WHERE sale_id = ?', (sale.id,))
-                cursor.execute('DELETE FROM sales WHERE id = ?', (sale.id,))
-                
+                # Stock, deuda, archivo y borrado: servicios/ventas.py
+                eliminar_venta(conn, sale.id)
                 conn.commit()
-                
-                # 5. Actualizar stock localmente
-                for detail in details:
-                    product = next((p for p in self.products if p.id == detail['product_id']), None)
-                    if product:
-                        product.stock += detail['quantity']
-                        product.save()
-                
                 messagebox.showinfo("Éxito", "Venta eliminada correctamente")
                 self.load_data()
-                
             except Exception as e:
                 conn.rollback()
                 messagebox.showerror("Error", f"Error al eliminar: {str(e)}")
-                raise
             finally:
                 conn.close()
-                
+
         except Exception as e:
             messagebox.showerror("Error", f"Error inesperado: {str(e)}")
     

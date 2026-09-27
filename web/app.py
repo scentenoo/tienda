@@ -26,6 +26,9 @@ from utils import estado_cuenta
 from utils.conciliacion import MESES_ES, deudores, telefonos_clientes
 from utils.informe_movil import html_pendientes
 from servicios.abonos import registrar_abono
+from servicios.clientes import (agregar_deuda, credito_disponible, crear_cliente,
+                                editar_cliente, eliminar_cliente)
+from servicios.ventas import editar_venta, eliminar_venta, preparar_items, registrar_venta
 from web.clave import huella, verificar
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -236,15 +239,21 @@ def clientes():
 @requiere_ingreso
 def cliente(client_id):
     conn = db()
-    c = conn.execute("SELECT id, name, phone, total_debt, notes FROM clients WHERE id = ?",
-                     (client_id,)).fetchone()
+    c = conn.execute("""SELECT id, name, phone, address, credit_limit, total_debt, notes
+                          FROM clients WHERE id = ?""", (client_id,)).fetchone()
     if c is None:
         abort(404)
+    todo = request.args.get("todo") == "1"
     movimientos = conn.execute("""
-        SELECT created_at, transaction_type, amount, description FROM client_transactions
-         WHERE client_id = ? ORDER BY created_at DESC, id DESC LIMIT 25""", (client_id,)).fetchall()
-    return render_template("cliente.html", c=c, movimientos=movimientos,
-                           aviso=session.pop("aviso", None))
+        SELECT t.created_at, t.transaction_type, t.amount, t.description, t.sale_id,
+               EXISTS (SELECT 1 FROM sales s WHERE s.id = t.sale_id) AS venta_existe
+          FROM client_transactions t
+         WHERE t.client_id = ? ORDER BY t.created_at DESC, t.id DESC""" + ("" if todo else " LIMIT 26"),
+                               (client_id,)).fetchall()
+    hay_mas = not todo and len(movimientos) > 25
+    return render_template("cliente.html", c=c, movimientos=movimientos[:None if todo else 25],
+                           hay_mas=hay_mas, aviso=session.pop("aviso", None),
+                           aviso_cliente=session.pop("aviso_cliente", None))
 
 
 @app.get("/cliente/<int:client_id>/estado-de-cuenta.pdf")
@@ -347,6 +356,274 @@ def abono_confirmar(client_id):
     session["aviso"] = {"monto": pendiente["monto"], "deuda_nueva": resumen["deuda_nueva"],
                         "exceso": resumen["exceso"]}
     return redirect(url_for("cliente", client_id=client_id))
+
+
+# ── Clientes: crear, editar, eliminar, deuda manual ──────────────────────────
+def _form_cliente():
+    f = request.form
+    return (f.get("nombre"), f.get("telefono"), f.get("direccion"),
+            _leer_monto(f.get("limite")), f.get("notas"))
+
+
+@app.route("/cliente/nuevo", methods=["GET", "POST"])
+@requiere_ingreso
+def cliente_nuevo():
+    volver = request.args.get("volver")
+    if request.method == "GET":
+        return render_template("cliente_form.html", c=None, error=None, volver=volver)
+    _revisar_csrf()
+    conn = db()
+    try:
+        client_id = crear_cliente(conn, *_form_cliente())
+        conn.commit()
+    except ValueError as e:
+        conn.rollback()
+        return render_template("cliente_form.html", c=request.form, error=str(e), volver=volver)
+    if volver == "venta":
+        return redirect(url_for("venta_nueva", cliente=client_id))
+    return redirect(url_for("cliente", client_id=client_id))
+
+
+@app.route("/cliente/<int:client_id>/editar", methods=["GET", "POST"])
+@requiere_ingreso
+def cliente_editar(client_id):
+    conn = db()
+    c = conn.execute("SELECT id, name, phone, address, credit_limit, notes FROM clients WHERE id = ?",
+                     (client_id,)).fetchone()
+    if c is None:
+        abort(404)
+    if request.method == "GET":
+        datos = {"id": c["id"], "nombre": c["name"], "telefono": c["phone"] or "",
+                 "direccion": c["address"] or "", "limite": int(c["credit_limit"] or 0),
+                 "notas": c["notes"] or ""}
+        return render_template("cliente_form.html", c=datos, error=None, volver=None)
+    _revisar_csrf()
+    try:
+        editar_cliente(conn, client_id, *_form_cliente())
+        conn.commit()
+    except ValueError as e:
+        conn.rollback()
+        return render_template("cliente_form.html", c={**request.form, "id": client_id},
+                               error=str(e), volver=None)
+    return redirect(url_for("cliente", client_id=client_id))
+
+
+@app.route("/cliente/<int:client_id>/eliminar", methods=["GET", "POST"])
+@requiere_ingreso
+def cliente_eliminar(client_id):
+    conn = db()
+    c = _cliente_o_404(conn, client_id)
+    error = None
+    if request.method == "POST":
+        _revisar_csrf()
+        try:
+            eliminar_cliente(conn, client_id)
+            conn.commit()
+            return redirect(url_for("clientes"))
+        except ValueError as e:
+            conn.rollback()
+            error = str(e)
+    return render_template("cliente_eliminar.html", c=c, error=error)
+
+
+@app.route("/cliente/<int:client_id>/deuda", methods=["GET", "POST"])
+@requiere_ingreso
+def cliente_deuda(client_id):
+    conn = db()
+    c = _cliente_o_404(conn, client_id)
+    disponible = credito_disponible(conn, client_id)
+    error, monto, nota = None, "", ""
+    if request.method == "POST":
+        _revisar_csrf()
+        monto, nota = request.form.get("monto", ""), request.form.get("nota", "")
+        codigo = session.pop("deuda_codigo", None)
+        if not codigo or not secrets.compare_digest(codigo, request.form.get("codigo", "")):
+            return redirect(url_for("cliente", client_id=client_id))   # doble envío
+        try:
+            agregar_deuda(conn, client_id, _leer_monto(monto), nota)
+            conn.commit()
+            session["aviso_cliente"] = f"Deuda de {pesos(_leer_monto(monto))} agregada."
+            return redirect(url_for("cliente", client_id=client_id))
+        except ValueError as e:
+            conn.rollback()
+            error = str(e)
+    session["deuda_codigo"] = secrets.token_urlsafe(16)
+    return render_template("cliente_deuda.html", c=c, disponible=disponible, error=error,
+                           monto=monto, nota=nota, codigo=session["deuda_codigo"])
+
+
+# ── Ventas: nueva, detalle, editar, eliminar ─────────────────────────────────
+def _leer_decimal(texto):
+    """'1,5' o '1.5' → 1.5 (cantidades: aquí la coma es decimal)."""
+    try:
+        return float(str(texto or "").replace(",", ".").strip() or 0)
+    except ValueError:
+        return 0.0
+
+
+def _datos_venta_nueva(conn):
+    productos = [{"id": f[0], "n": f[1], "p": f[2], "s": f[3]} for f in conn.execute(
+        "SELECT id, name, price, stock FROM products WHERE stock > 0 ORDER BY name COLLATE NOCASE")]
+    clientes = [{"id": f[0], "n": f[1], "d": f[2] or 0} for f in conn.execute(
+        "SELECT id, name, total_debt FROM clients ORDER BY name COLLATE NOCASE")]
+    return productos, clientes
+
+
+def _json_seguro(datos):
+    # "</" dentro de <script> cerraría la etiqueta antes de tiempo
+    return json.dumps(datos, ensure_ascii=False).replace("</", "<\\/")
+
+
+@app.route("/venta/nueva", methods=["GET", "POST"])
+@requiere_ingreso
+def venta_nueva():
+    conn = db()
+    productos, clientes = _datos_venta_nueva(conn)
+    if request.method == "GET":
+        return render_template("venta_nueva.html", productos=_json_seguro(productos),
+                               clientes=_json_seguro(clientes), borrador="null", error=None)
+
+    _revisar_csrf()
+    borrador = request.form.get("borrador", "")
+    def de_nuevo(error):
+        return render_template("venta_nueva.html", productos=_json_seguro(productos),
+                               clientes=_json_seguro(clientes),
+                               borrador=_json_seguro(json.loads(borrador)) if borrador else "null",
+                               error=error)
+    if request.form.get("corregir"):
+        return de_nuevo(None)   # desde la confirmación: volver al carrito tal cual
+    try:
+        venta = json.loads(borrador)
+        pedidos = [(int(l["id"]), _leer_decimal(l.get("q")), _leer_monto(str(l.get("m") or "")))
+                   for l in venta.get("lineas", [])]
+        items = preparar_items(conn, pedidos)
+    except ValueError as e:
+        return de_nuevo(str(e))
+    except (KeyError, TypeError, json.JSONDecodeError):
+        return de_nuevo("No se pudo leer la venta; vuelva a intentarlo.")
+
+    fiada = venta.get("fiada") is True
+    cliente, ajuste, motivo = None, 0.0, None
+    if fiada:
+        cliente = conn.execute("SELECT id, name, total_debt FROM clients WHERE id = ?",
+                               (int(venta.get("cliente") or 0),)).fetchone()
+        if cliente is None:
+            return de_nuevo("Elija el cliente de la venta fiada.")
+        ajuste = float(_leer_monto(str(venta.get("ajuste") or "")))
+        if venta.get("signo") == "-":
+            ajuste = -ajuste
+        motivo = (venta.get("motivo") or "").strip() or None
+
+    subtotal = sum(i["subtotal"] for i in items)
+    if subtotal + ajuste <= 0:
+        return de_nuevo("El total de la venta debe ser mayor a cero.")
+    codigo = secrets.token_urlsafe(16)
+    session["venta_pendiente"] = {
+        "codigo": codigo, "pedidos": pedidos, "fiada": fiada,
+        "cliente": cliente["id"] if cliente else None, "ajuste": ajuste, "motivo": motivo}
+    return render_template("venta_confirmar.html", items=items, fiada=fiada, cliente=cliente,
+                           ajuste=ajuste, motivo=motivo, subtotal=subtotal,
+                           total=subtotal + ajuste, codigo=codigo, borrador=borrador)
+
+
+@app.post("/venta/confirmar")
+@requiere_ingreso
+def venta_confirmar():
+    _revisar_csrf()
+    p = session.pop("venta_pendiente", None)
+    if not p or not secrets.compare_digest(p["codigo"], request.form.get("codigo", "")):
+        return redirect(url_for("ventas"))   # ya se guardó (doble toque) o caducó
+    conn = db()
+    try:
+        # Se vuelve a validar: el stock pudo cambiar desde la confirmación
+        items = preparar_items(conn, p["pedidos"])
+        sale_id, total = registrar_venta(conn, items, _usuario_admin(conn), p["cliente"],
+                                         p["fiada"], p["ajuste"], p["motivo"])
+        conn.commit()
+    except ValueError as e:
+        conn.rollback()
+        return render_template("aviso.html", titulo="No se guardó la venta", mensaje=str(e)), 409
+    except Exception as e:
+        conn.rollback()
+        return render_template("aviso.html", titulo="No se guardó la venta",
+                               mensaje=f"No se guardó nada. Detalle: {e}"), 500
+    session["aviso_venta"] = {"texto": f"Venta #{sale_id} guardada por {pesos(total)}."}
+    return redirect(url_for("venta", sale_id=sale_id))
+
+
+def _usuario_admin(conn):
+    """Las ventas guardan quién las hizo; desde el celular es el dueño."""
+    fila = conn.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").fetchone()
+    return fila[0] if fila else None
+
+
+def _venta_o_aviso(conn, sale_id):
+    return conn.execute("""
+        SELECT s.id, s.created_at, s.total, s.status, s.payment_method, s.client_id,
+               s.adjustment, s.adjustment_reason, s.notes, c.name AS cliente, c.total_debt AS deuda
+          FROM sales s LEFT JOIN clients c ON c.id = s.client_id WHERE s.id = ?""",
+                        (sale_id,)).fetchone()
+
+
+@app.get("/venta/<int:sale_id>")
+@requiere_ingreso
+def venta(sale_id):
+    conn = db()
+    v = _venta_o_aviso(conn, sale_id)
+    if v is None:
+        return render_template("aviso.html", titulo=f"Venta #{sale_id}",
+                               mensaje="Esta venta no existe o fue eliminada."), 404
+    productos = conn.execute("""
+        SELECT d.quantity, COALESCE(p.name, 'Producto'), d.sale_price, d.subtotal
+          FROM sale_details d LEFT JOIN products p ON p.id = d.product_id
+         WHERE d.sale_id = ? ORDER BY d.id""", (sale_id,)).fetchall()
+    return render_template("venta.html", v=v, productos=productos,
+                           aviso=session.pop("aviso_venta", None))
+
+
+@app.route("/venta/<int:sale_id>/editar", methods=["GET", "POST"])
+@requiere_ingreso
+def venta_editar(sale_id):
+    conn = db()
+    v = _venta_o_aviso(conn, sale_id)
+    if v is None:
+        abort(404)
+    clientes = conn.execute("SELECT id, name FROM clients ORDER BY name COLLATE NOCASE").fetchall()
+    error = None
+    if request.method == "POST":
+        _revisar_csrf()
+        total = _leer_monto(request.form.get("total"))
+        fiada = request.form.get("tipo") == "fiado"
+        client_id = int(request.form.get("cliente") or 0) or None
+        try:
+            editar_venta(conn, sale_id, total, fiada, client_id)
+            conn.commit()
+            session["aviso_venta"] = {"texto": "Venta actualizada."}
+            return redirect(url_for("venta", sale_id=sale_id))
+        except ValueError as e:
+            conn.rollback()
+            error = str(e)
+    return render_template("venta_editar.html", v=v, clientes=clientes, error=error)
+
+
+@app.route("/venta/<int:sale_id>/eliminar", methods=["GET", "POST"])
+@requiere_ingreso
+def venta_eliminar(sale_id):
+    conn = db()
+    v = _venta_o_aviso(conn, sale_id)
+    if v is None:
+        return redirect(url_for("ventas"))
+    if request.method == "GET":
+        return render_template("venta_eliminar.html", v=v)
+    _revisar_csrf()
+    dia = str(v["created_at"])[:10]
+    try:
+        eliminar_venta(conn, sale_id)
+        conn.commit()
+    except ValueError as e:
+        conn.rollback()
+        return render_template("aviso.html", titulo="No se eliminó", mensaje=str(e)), 409
+    return redirect(url_for("ventas", dia=dia))
 
 
 @app.get("/inventario")

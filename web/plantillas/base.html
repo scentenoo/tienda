@@ -25,6 +25,7 @@
 }
 * { box-sizing: border-box; }
 button, input { font-family: inherit; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--fondo); color: var(--texto);
   font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 main { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
@@ -87,6 +88,10 @@ details summary::-webkit-details-marker { display: none; }
 .resumen-abono div span { color: var(--suave); }
 .resumen-abono .total { border-top: 1px solid var(--borde); margin-top: 4px; padding-top: 10px; font-size: 1.1rem; }
 .resumen-abono .aviso-exceso { display: block; background: var(--aviso-fondo); color: var(--aviso); border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: .88rem; }
+select, textarea { width: 100%; font: inherit; font-size: 16px; padding: 11px 14px; border-radius: 10px;
+  border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); margin-top: 4px; }
+.boton.peligro { background: var(--alerta); color: #fff; }
+a.fila:active { background: var(--chip); }
 .exito { background: var(--bien-fondo); color: var(--bien); padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; }
 </style>
 </head>

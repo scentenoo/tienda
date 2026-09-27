@@ -5,7 +5,11 @@
 <h1>{{ c['name'] }}</h1>
 <p class="sub">
   {% if c['phone'] %}<a href="tel:{{ c['phone'] }}">📞 {{ c['phone'] }}</a>{% else %}Sin teléfono registrado{% endif %}
+  {% if c['address'] %} · {{ c['address'] }}{% endif %}
+  · <a href="{{ url_for('cliente_editar', client_id=c['id']) }}">Editar</a>
 </p>
+{% if c['notes'] %}<p class="sub" style="margin-top:-8px">📝 {{ c['notes'] }}</p>{% endif %}
+{% if aviso_cliente %}<div class="exito">✓ {{ aviso_cliente }}</div>{% endif %}
 
 {% if aviso %}
 <div class="exito">✓ Abono de {{ aviso['monto']|pesos }} guardado.
@@ -31,23 +35,30 @@
 </div>
 {% endif %}
 
-<h2>Últimos movimientos</h2>
+<h2>{{ 'Todos los movimientos' if request.args.get('todo') else 'Últimos movimientos' }}</h2>
 {% if movimientos %}
 <ul class="lista">
   {% for m in movimientos %}
   {% set es_cargo = m['transaction_type'] == 'debit' %}
-  <li><div class="fila">
+  {% set enlace = m['sale_id'] and m['venta_existe'] %}
+  <li><{{ 'a href=' ~ url_for('venta', sale_id=m['sale_id']) if enlace else 'div' }} class="fila">
     <div class="izq">
-      <b>{% if es_cargo %}Compra{% elif m['transaction_type'] == 'debit_reversal' %}Venta anulada{% elif m['transaction_type'] == 'credit_balance' %}Saldo a favor{% else %}Abono{% endif %}</b>
-      <span>{{ m['created_at']|fecha }}{% if m['description'] and not es_cargo %} · {{ m['description'] }}{% endif %}</span>
+      <b>{% if es_cargo and not m['sale_id'] %}Deuda agregada{% elif es_cargo %}Compra #{{ m['sale_id'] }}{% endif %}{% if not es_cargo %}{% if m['transaction_type'] == 'debit_reversal' %}Venta anulada{% elif m['transaction_type'] == 'credit_balance' %}Saldo a favor{% else %}Abono{% endif %}{% endif %}{% if enlace %} ›{% endif %}</b>
+      <span>{{ m['created_at']|fecha }}{% if m['description'] and (not es_cargo or not m['sale_id']) %} · {{ m['description'] }}{% endif %}</span>
     </div>
     <div class="der {{ 'negativo' if es_cargo else 'positivo' }}">{{ '+' if es_cargo else '−' }}{{ m['amount']|pesos }}</div>
-  </div></li>
+  </{{ 'a' if enlace else 'div' }}></li>
   {% endfor %}
 </ul>
 {% else %}
 <p class="vacio">Todavía no tiene movimientos.</p>
 {% endif %}
+{% if hay_mas %}<a class="boton secundario" style="width:100%; margin-top:10px" href="{{ url_for('cliente', client_id=c['id'], todo=1) }}">Ver todo el historial</a>{% endif %}
+
+<div class="botones" style="margin-top:22px">
+  <a class="boton secundario" href="{{ url_for('cliente_deuda', client_id=c['id']) }}">Agregar deuda</a>
+  <a class="boton secundario" style="color: var(--alerta)" href="{{ url_for('cliente_eliminar', client_id=c['id']) }}">Eliminar cliente</a>
+</div>
 
 <script>
 // En Android, "Compartir" abre el menú del teléfono con el PDF listo para

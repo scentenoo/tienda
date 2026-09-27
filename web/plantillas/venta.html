@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titulo %}Venta #{{ v['id'] }} · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('ventas', dia=v['created_at'][:10]) }}">‹ Ventas</a>
+{% if aviso %}<div class="exito">✓ {{ aviso['texto'] }}</div>
+<script>try { sessionStorage.removeItem("ventaBorrador"); } catch (e) {}</script>{% endif %}
+<h1>Venta #{{ v['id'] }}</h1>
+<p class="sub">{{ v['created_at']|fecha }}</p>
+
+<div class="tarjeta resumen-abono">
+  <div><span>Tipo</span><b>{{ 'Fiado' if v['payment_method'] == 'credit' else 'Contado' }}</b></div>
+  {% if v['cliente'] %}
+  <div><span>Cliente</span><b><a href="{{ url_for('cliente', client_id=v['client_id']) }}">{{ v['cliente'] }}</a></b></div>
+  {% endif %}
+  {% if v['payment_method'] == 'credit' %}
+  <div><span>Estado</span><b>{% if v['status'] == 'paid' %}<span class="etiqueta pagado">Pagada</span>{% else %}<span class="etiqueta fiado">Pendiente</span>{% endif %}</b></div>
+  {% endif %}
+  {% if v['adjustment'] %}
+  <div><span>{{ 'Cargo' if v['adjustment'] > 0 else 'Descuento' }}{% if v['adjustment_reason'] %} ({{ v['adjustment_reason'] }}){% endif %}</span>
+       <b>{{ '+' if v['adjustment'] > 0 else '−' }}{{ v['adjustment']|abs|pesos }}</b></div>
+  {% endif %}
+  <div class="total"><span>Total</span><b>{{ v['total']|pesos }}</b></div>
+</div>
+
+<h2>Productos</h2>
+{% if productos %}
+<ul class="lista">
+  {% for q, nombre, precio, subtotal in productos %}
+  <li><div class="fila">
+    <div class="izq"><b>{{ nombre }}</b><span>{{ q|cantidad }} × {{ precio|pesos }}</span></div>
+    <div class="der">{{ subtotal|pesos }}</div>
+  </div></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">Esta venta no tiene productos registrados.</p>
+{% endif %}
+
+<div class="botones">
+  <a class="boton secundario" href="{{ url_for('venta_editar', sale_id=v['id']) }}">Editar</a>
+  <a class="boton secundario" style="color: var(--alerta)" href="{{ url_for('venta_eliminar', sale_id=v['id']) }}">Eliminar</a>
+</div>
+<a class="boton" style="width:100%" href="{{ url_for('venta_nueva') }}">Nueva venta</a>
+{% endblock %}

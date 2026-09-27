@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% set editando = c and c.get('id') %}
+{% block titulo %}{{ 'Editar cliente' if editando else 'Nuevo cliente' }} · Charcutería HYE{% endblock %}
+{% block contenido %}
+{% if editando %}
+<a class="volver" href="{{ url_for('cliente', client_id=c['id']) }}">‹ Volver</a>
+{% elif volver == 'venta' %}
+<a class="volver" href="{{ url_for('venta_nueva') }}">‹ Volver a la venta</a>
+{% else %}
+<a class="volver" href="{{ url_for('clientes') }}">‹ Clientes</a>
+{% endif %}
+<h1>{{ 'Editar cliente' if editando else 'Nuevo cliente' }}</h1>
+
+<form method="post" class="tarjeta" style="margin-top:12px">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <label class="campo">Nombre *
+    <input type="text" name="nombre" value="{{ c.get('nombre', '') if c else '' }}" required maxlength="80" autofocus>
+  </label>
+  <label class="campo">Teléfono
+    <input type="text" name="telefono" value="{{ c.get('telefono', '') if c else '' }}" inputmode="tel" maxlength="30">
+  </label>
+  <label class="campo">Dirección
+    <input type="text" name="direccion" value="{{ c.get('direccion', '') if c else '' }}" maxlength="120">
+  </label>
+  <label class="campo">Límite de crédito
+    <input type="text" name="limite" id="limite" value="{{ c.get('limite', '') if c else '' }}" inputmode="numeric" placeholder="$0">
+  </label>
+  <p class="sub" style="margin:4px 0 0">Solo hace falta para agregarle deuda a mano, sin venta.</p>
+  <label class="campo">Notas
+    <textarea name="notas" rows="3" maxlength="500">{{ c.get('notas', '') if c else '' }}</textarea>
+  </label>
+  <button class="boton" style="width:100%; margin-top: 14px">{{ 'Guardar cambios' if editando else 'Crear cliente' }}</button>
+</form>
+<script>
+var l = document.getElementById("limite");
+function f() { var d = l.value.replace(/\D/g, ""); l.value = d ? "$" + d.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ""; }
+l.addEventListener("input", f); f();
+</script>
+{% endblock %}

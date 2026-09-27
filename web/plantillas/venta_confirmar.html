@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titulo %}Confirmar venta · Charcutería HYE{% endblock %}
+{% block contenido %}
+<form method="post" action="{{ url_for('venta_nueva') }}" style="margin-bottom:10px">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <input type="hidden" name="borrador" value="{{ borrador }}">
+  <button class="volver enlace" formaction="{{ url_for('venta_nueva') }}" name="corregir" value="1">‹ Corregir</button>
+</form>
+<h1>Confirmar venta</h1>
+<p class="sub">{% if fiada %}Fiado a <b>{{ cliente['name'] }}</b>{% else %}Contado{% endif %}</p>
+
+<ul class="lista">
+  {% for i in items %}
+  <li><div class="fila">
+    <div class="izq"><b>{{ i['product_name'] }}</b><span>{{ i['quantity']|cantidad }} × {{ i['unit_price']|pesos }}</span></div>
+    <div class="der">{{ i['subtotal']|pesos }}</div>
+  </div></li>
+  {% endfor %}
+</ul>
+
+<div class="tarjeta resumen-abono" style="margin-top:12px">
+  {% if fiada and ajuste %}
+  <div><span>Productos</span><b>{{ subtotal|pesos }}</b></div>
+  <div><span>{{ 'Cargo' if ajuste > 0 else 'Descuento' }}{% if motivo %} ({{ motivo }}){% endif %}</span>
+       <b>{{ '+' if ajuste > 0 else '−' }}{{ ajuste|abs|pesos }}</b></div>
+  {% endif %}
+  <div class="total"><span>Total</span><b>{{ total|pesos }}</b></div>
+  {% if fiada %}
+  <div><span>Deuda de {{ cliente['name'] }} después</span><b class="negativo">{{ (cliente['total_debt'] + total)|pesos }}</b></div>
+  {% endif %}
+</div>
+
+<form method="post" action="{{ url_for('venta_confirmar') }}" id="confirmar">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <input type="hidden" name="codigo" value="{{ codigo }}">
+  <button class="boton" style="width:100%; margin-top: 16px">Guardar venta de {{ total|pesos }}</button>
+</form>
+<style>.enlace { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }</style>
+<script>
+document.getElementById("confirmar").addEventListener("submit", function () {
+  var b = this.querySelector("button"); b.disabled = true; b.textContent = "Guardando…";
+});
+</script>
+{% endblock %}

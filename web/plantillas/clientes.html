@@ -3,7 +3,7 @@
 {% block contenido %}
 <a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
 <h1>Clientes</h1>
-<p class="sub">Primero los que deben</p>
+<p class="sub">Primero los que deben · <a href="{{ url_for('cliente_nuevo') }}">+ Nuevo cliente</a></p>
 
 <form class="buscar" method="get">
   <input type="search" name="q" value="{{ q }}" placeholder="Buscar cliente…" autocomplete="off">

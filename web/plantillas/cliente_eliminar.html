@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block titulo %}Eliminar cliente · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('cliente', client_id=c['id']) }}">‹ {{ c['name'] }}</a>
+<h1>¿Eliminar a {{ c['name'] }}?</h1>
+{% if error %}<div class="error" style="margin-top:12px">{{ error }}</div>{% endif %}
+{% if c['total_debt'] > 0 %}
+<p class="tarjeta" style="margin-top:12px">Tiene una deuda de <b>{{ c['total_debt']|pesos }}</b>. Debe saldarla antes de eliminarlo.</p>
+<a class="boton secundario" style="width:100%" href="{{ url_for('cliente', client_id=c['id']) }}">Volver</a>
+{% else %}
+<p class="tarjeta" style="margin-top:12px">Esta acción no se puede deshacer.</p>
+<form method="post">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <div class="botones">
+    <a class="boton secundario" href="{{ url_for('cliente', client_id=c['id']) }}">No, volver</a>
+    <button class="boton peligro">Sí, eliminar</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block titulo %}Eliminar venta #{{ v['id'] }}{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('venta', sale_id=v['id']) }}">‹ Venta #{{ v['id'] }}</a>
+<h1>¿Eliminar la venta #{{ v['id'] }}?</h1>
+<div class="tarjeta" style="margin-top:12px">
+  <p style="margin-top:0"><b>{{ v['total']|pesos }}</b> · {{ v['created_at']|fecha }}{% if v['cliente'] %} · {{ v['cliente'] }}{% endif %}</p>
+  <p class="sub" style="margin-bottom:0">
+    Los productos vuelven al inventario.
+    {% if v['status'] == 'pending' and v['client_id'] %}Se descuentan {{ v['total']|pesos }} de la deuda de {{ v['cliente'] }}.{% endif %}
+    Queda guardada en el archivo de ventas eliminadas.
+  </p>
+</div>
+<form method="post" id="eliminar">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <div class="botones">
+    <a class="boton secundario" href="{{ url_for('venta', sale_id=v['id']) }}">No, volver</a>
+    <button class="boton peligro">Sí, eliminar</button>
+  </div>
+</form>
+<script>
+document.getElementById("eliminar").addEventListener("submit", function () {
+  var b = this.querySelector("button"); b.disabled = true; b.textContent = "Eliminando…";
+});
+</script>
+{% endblock %}
