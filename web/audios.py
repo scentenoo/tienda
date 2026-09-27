@@ -4,7 +4,7 @@ venta, y aquí se revisan una por una antes de guardarlas con la pantalla de
 venta de siempre. Nada se guarda como venta sin que alguien lo confirme.
 
 Necesita GEMINI_API_KEY (se saca gratis en aistudio.google.com). Con
-GEMINI_MODELO se puede cambiar el modelo.
+GEMINI_MODELO se pueden cambiar los modelos (separados por comas, en orden).
 """
 import base64
 import hashlib
@@ -12,6 +12,7 @@ import hmac
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 from datetime import date, datetime
@@ -20,7 +21,11 @@ from flask import abort, redirect, render_template, request, session, url_for
 
 from web.app import DESARROLLO, _revisar_csrf, app, db, pesos, requiere_ingreso
 
-MODELO = os.environ.get("GEMINI_MODELO", "gemini-3.8-flash")
+# Si uno está saturado (Google responde 503) o se acabó su cupo gratis del
+# día (429), se prueba el siguiente.
+MODELOS = [m.strip() for m in os.environ.get(
+    "GEMINI_MODELO", "gemini-3.8-flash,gemini-3.7-flash,gemini-2.5-flash").split(",") if m.strip()]
+PASAR_AL_SIGUIENTE = {404, 429, 500, 503, 504}
 TAMANO_MAXIMO = 15 * 1024 * 1024        # una nota de voz de un minuto pesa ~100 KB
 
 # extensión → (tipo para el navegador, tipo para Gemini)
@@ -219,26 +224,41 @@ def escuchar(audio, tipo, catalogo):
         "generationConfig": {"responseMimeType": "application/json",
                              "responseJsonSchema": ESQUEMA},
     }
-    pedido = urllib.request.Request(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{MODELO}:generateContent",
-        data=json.dumps(cuerpo).encode(), method="POST",
-        headers={"Content-Type": "application/json", "x-goog-api-key": clave})
-    try:
-        # Menos que los 60 s de gunicorn, para poder mostrar el error
-        with urllib.request.urlopen(pedido, timeout=50) as r:
-            respuesta = json.load(r)
-    except urllib.error.HTTPError as e:
+    datos = json.dumps(cuerpo).encode()
+    # Todo debe caber en los 60 s de gunicorn, para poder mostrar el error.
+    # Dos vueltas por la lista: una saturación suele durar segundos.
+    limite = time.monotonic() + 50
+    respuesta, codigos = None, []
+    for modelo in MODELOS + [None] + MODELOS:
+        quedan = limite - time.monotonic()
+        if quedan < 5:
+            break
+        if modelo is None:          # entre vuelta y vuelta, una pausa
+            time.sleep(min(3, quedan - 5))
+            continue
         try:
-            detalle = json.load(e).get("error", {}).get("message", "")
-        except ValueError:
-            detalle = ""
-        if e.code == 429:
-            raise RuntimeError("Gemini dice que se pasó el límite de uso por ahora. "
-                               "Espere un rato y vuelva a intentar.") from e
-        raise RuntimeError(f"Gemini respondió con error {e.code}. {detalle}".strip()) from e
-    except (urllib.error.URLError, TimeoutError) as e:
-        raise RuntimeError("No se pudo hablar con Gemini (sin conexión o tardó demasiado). "
-                           "Vuelva a intentar.") from e
+            respuesta = _pedir(modelo, datos, clave, quedan)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in PASAR_AL_SIGUIENTE:
+                try:
+                    detalle = json.load(e).get("error", {}).get("message", "")
+                except ValueError:
+                    detalle = ""
+                raise RuntimeError(f"Gemini respondió con error {e.code}. {detalle}".strip()) from e
+            codigos.append(e.code)
+        except (urllib.error.URLError, TimeoutError) as e:
+            raise RuntimeError("No se pudo hablar con Gemini (sin conexión o tardó "
+                               "demasiado). Vuelva a intentar.") from e
+    if respuesta is None:
+        if codigos and all(c == 404 for c in codigos):
+            raise RuntimeError(f"Ninguno de los modelos de Gemini está disponible ({', '.join(MODELOS)}). "
+                               "Revise GEMINI_MODELO en el servidor.")
+        if 429 in codigos and not {500, 503, 504} & set(codigos):
+            raise RuntimeError("Se acabó por ahora el cupo gratis de Gemini. "
+                               "Espere un rato (o hasta mañana) y vuelva a intentar.")
+        raise RuntimeError("Gemini está saturado en este momento. "
+                           "Vuelva a intentar en unos minutos.")
     try:
         partes = respuesta["candidates"][0]["content"]["parts"]
         texto = "".join(p.get("text", "") for p in partes if not p.get("thought"))
@@ -249,6 +269,15 @@ def escuchar(audio, tipo, catalogo):
     if not isinstance(resultado, dict) or not isinstance(resultado.get("lineas"), list):
         raise RuntimeError("Gemini devolvió algo incompleto. Vuelva a intentar.")
     return resultado
+
+
+def _pedir(modelo, datos, clave, espera):
+    pedido = urllib.request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent",
+        data=datos, method="POST",
+        headers={"Content-Type": "application/json", "x-goog-api-key": clave})
+    with urllib.request.urlopen(pedido, timeout=espera) as r:
+        return json.load(r)
 
 
 def _tipo_gemini(fila):
