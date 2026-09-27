@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block titulo %}Historial · Charcutería HYE{% endblock %}
+{% block contenido %}
+<style>
+  .filtros { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .filtros a { padding: 6px 12px; border-radius: 999px; background: var(--chip); color: var(--texto);
+    text-decoration: none; font-size: .85rem; }
+  .filtros a.on { background: var(--acento); color: var(--sobre-acento); font-weight: 600; }
+  .conteo { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 14px; }
+  .mov { padding: 10px 14px; }
+  .mov .arriba { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .mov .hora { color: var(--suave); font-size: .82rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mov .que { font-weight: 600; }
+  .mov.visita .que { font-weight: 400; color: var(--suave); }
+  .mov .det { white-space: pre-line; color: var(--suave); font-size: .85rem; margin-top: 4px; }
+  .mov .res { font-size: .85rem; margin-top: 4px; color: var(--alerta); }
+  .mov .equipo { color: var(--suave); font-size: .75rem; margin-top: 4px; }
+  .etiqueta.gris { background: var(--chip); color: var(--suave); }
+</style>
+
+<h1>Historial</h1>
+<p class="sub">Todo lo que se hace en esta página: a qué horas, qué pantallas se abren, qué se guarda,
+  cambia o borra, y lo que se intentó y no se hizo. Solo usted lo ve.</p>
+
+<div class="filtros">
+  {% for valor, nombre in (('hermana', 'Hermana'), ('dueño', 'Yo'), ('todos', 'Todos')) %}
+  <a class="{{ 'on' if quien == valor }}" href="{{ url_for('historial', dia=dia_iso, quien=valor, ver=ver) }}">{{ nombre }}</a>
+  {% endfor %}
+  <span style="width:8px"></span>
+  <a class="{{ 'on' if ver == 'todo' }}" href="{{ url_for('historial', dia=dia_iso, quien=quien, ver='todo') }}">Todo</a>
+  <a class="{{ 'on' if ver == 'cambios' }}" href="{{ url_for('historial', dia=dia_iso, quien=quien, ver='cambios') }}">Sin pantallas</a>
+</div>
+
+<div class="navdia">
+  <a href="{{ url_for('historial', dia=anterior, quien=quien, ver=ver) }}">‹ Anterior</a>
+  <b>{{ 'Hoy, ' if es_hoy }}{{ dia }}</b>
+  {% if siguiente %}<a href="{{ url_for('historial', dia=siguiente, quien=quien, ver=ver) }}">Siguiente ›</a>{% else %}<span></span>{% endif %}
+</div>
+
+{% if primera %}
+<p class="sub">Primer movimiento {{ primera|fecha }} · último {{ ultima|fecha }}</p>
+<div class="conteo">
+  {% for clase, nombre in clases.items() if cuenta[clase] %}
+  <span class="etiqueta {{ {'nuevo': 'pagado', 'cambio': 'fiado', 'borrado': 'debe', 'fallido': 'debe', 'paso': 'fiado'}.get(clase, 'gris') }}">{{ nombre }}: {{ cuenta[clase] }}</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if filas %}
+<ul class="lista">
+  {% for f in filas %}
+  {% set etiqueta = {'nuevo': ('Guardó', 'pagado'), 'cambio': ('Cambió', 'fiado'), 'borrado': ('Borró', 'debe'),
+                     'fallido': ('No se hizo', 'debe'), 'paso': ('Sin confirmar', 'fiado'),
+                     'ingreso': ('Entrada', 'gris')}.get(f['clase']) %}
+  <li class="mov {{ f['clase'] }}">
+    <div class="arriba">
+      <span class="que">{{ f['accion'] }}</span>
+      <span class="hora">{{ f['momento'][11:16] }}</span>
+    </div>
+    {% if etiqueta or quien == 'todos' %}
+    <div style="margin-top:4px">
+      {% if etiqueta %}<span class="etiqueta {{ etiqueta[1] }}">{{ etiqueta[0] }}</span>{% endif %}
+      {% if quien == 'todos' %}<span class="etiqueta gris">{{ {'hermana': 'Hermana', 'dueño': 'Yo'}.get(f['quien'], 'Desconocido') }}</span>{% endif %}
+    </div>
+    {% endif %}
+    {% if f['detalle'] %}<div class="det">{{ f['detalle'] }}</div>{% endif %}
+    {% if f['clase'] == 'paso' %}
+      <div class="res">{{ 'Nunca lo confirmó: no se guardó' if f['id'] in sin_confirmar else 'Después lo confirmó' }}</div>
+    {% elif f['resultado'] %}
+      <div class="res">{{ f['resultado'] }}</div>
+    {% endif %}
+    {% if f['clase'] != 'visita' %}<div class="equipo">{{ f['equipo'] }}</div>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">No hubo movimientos este día.</p>
+{% endif %}
+{% endblock %}

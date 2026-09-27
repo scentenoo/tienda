@@ -69,9 +69,25 @@ _configurar()
 
 
 # ── Base de datos: una conexión por visita ───────────────────────────────────
+class _ConexionVisita:
+    """La conexión de la visita. Anota si algo se guardó, para que el
+    historial sepa si lo que se intentó se hizo de verdad."""
+
+    def __init__(self, conn):
+        self._conn = conn
+        self.guardo = False
+
+    def __getattr__(self, nombre):
+        return getattr(self._conn, nombre)
+
+    def commit(self):
+        self._conn.commit()
+        self.guardo = True
+
+
 def db():
     if "db" not in g:
-        g.db = conexion_directa(app.config["TURSO_URL"], app.config["TURSO_TOKEN"])
+        g.db = _ConexionVisita(conexion_directa(app.config["TURSO_URL"], app.config["TURSO_TOKEN"]))
     return g.db
 
 
@@ -789,9 +805,10 @@ def _no_existe(_e):
     return render_template("aviso.html", titulo="No existe", mensaje="Esa página no existe."), 404
 
 
-# Inventario, compras, gastos, pérdidas y caja; ventas por audio
+# Inventario, compras, gastos, pérdidas y caja; ventas por audio; historial
 import web.operaciones  # noqa: E402,F401
 import web.audios  # noqa: E402,F401
+import web.historial  # noqa: E402,F401
 
 
 if __name__ == "__main__":
