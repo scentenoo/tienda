@@ -7,7 +7,7 @@
   <button class="volver enlace" formaction="{{ url_for('venta_nueva') }}" name="corregir" value="1">‹ Corregir</button>
 </form>
 <h1>Confirmar venta</h1>
-<p class="sub">{% if fiada %}Fiado a <b>{{ cliente['name'] }}</b>{% else %}Contado{% endif %}</p>
+<p class="sub">{% if fiada %}Fiado a <b>{{ cliente['name'] }}</b>{% else %}Contado{% endif %}{% if dia %} · venta del <b>{{ dia }}</b>{% endif %}</p>
 
 <ul class="lista">
   {% for i in items %}

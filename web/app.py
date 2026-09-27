@@ -4,6 +4,7 @@ Configuración por variables de entorno (en Cloud Run van como secretos):
   TURSO_URL, TURSO_TOKEN   la base en la nube
   CLAVE_HUELLA             huella de la contraseña (python -m web.clave)
   SECRETO                  clave para firmar la sesión (cualquier texto largo al azar)
+  GEMINI_API_KEY           para las ventas por audio (opcional; ver web/audios.py)
   TZ=America/Bogota        para que "hoy" sea el día de Colombia
 
 Para probarla en el PC:  TIENDA_DESARROLLO=1 python -m web.app
@@ -402,7 +403,7 @@ def cliente_nuevo():
         conn.rollback()
         return render_template("cliente_form.html", c=request.form, error=str(e), volver=volver)
     if volver == "venta":
-        return redirect(url_for("venta_nueva", cliente=client_id))
+        return redirect(url_for("venta_nueva", cliente=client_id, audio=request.args.get("audio")))
     return redirect(url_for("cliente", client_id=client_id))
 
 
@@ -496,20 +497,40 @@ def _json_seguro(datos):
     return json.dumps(datos, ensure_ascii=False).replace("</", "<\\/")
 
 
+def _id_audio(texto):
+    try:
+        return int(texto or 0) or None
+    except (TypeError, ValueError):
+        return None
+
+
 @app.route("/venta/nueva", methods=["GET", "POST"])
 @requiere_ingreso
 def venta_nueva():
+    from web.audios import contexto_para_venta
     conn = db()
     productos, clientes = _datos_venta_nueva(conn)
     if request.method == "GET":
+        # Desde "Ventas por audio": el carrito llega armado con lo que se entendió
+        audio_id = _id_audio(request.args.get("audio"))
+        audio = contexto_para_venta(audio_id) if audio_id else None
+        if audio_id and audio is None:
+            return redirect(url_for("audios"))   # ya se registró o se descartó
         return render_template("venta_nueva.html", productos=_json_seguro(productos),
-                               clientes=_json_seguro(clientes), borrador="null", error=None)
+                               clientes=_json_seguro(clientes), audio=audio,
+                               borrador=_json_seguro(audio["borrador"]) if audio else "null",
+                               error=None)
 
     _revisar_csrf()
     borrador = request.form.get("borrador", "")
+    try:
+        audio_id = _id_audio(json.loads(borrador).get("audio")) if borrador else None
+    except (ValueError, AttributeError):
+        audio_id = None
     def de_nuevo(error):
         return render_template("venta_nueva.html", productos=_json_seguro(productos),
                                clientes=_json_seguro(clientes),
+                               audio=contexto_para_venta(audio_id) if audio_id else None,
                                borrador=_json_seguro(json.loads(borrador)) if borrador else "null",
                                error=error)
     if request.form.get("corregir"):
@@ -539,13 +560,24 @@ def venta_nueva():
     subtotal = sum(i["subtotal"] for i in items)
     if subtotal + ajuste <= 0:
         return de_nuevo("El total de la venta debe ser mayor a cero.")
+    dia = None
+    if audio_id:
+        # Las ventas por audio se guardan con el día en que se hicieron
+        try:
+            dia = date.fromisoformat(str(venta.get("fecha") or ""))
+        except ValueError:
+            return de_nuevo("Elija el día de la venta.")
+        if dia > date.today():
+            return de_nuevo("El día de la venta no puede ser después de hoy.")
     codigo = secrets.token_urlsafe(16)
     session["venta_pendiente"] = {
         "codigo": codigo, "pedidos": pedidos, "fiada": fiada,
-        "cliente": cliente["id"] if cliente else None, "ajuste": ajuste, "motivo": motivo}
+        "cliente": cliente["id"] if cliente else None, "ajuste": ajuste, "motivo": motivo,
+        "audio": audio_id, "dia": dia.isoformat() if dia else None}
     return render_template("venta_confirmar.html", items=items, fiada=fiada, cliente=cliente,
                            ajuste=ajuste, motivo=motivo, subtotal=subtotal,
-                           total=subtotal + ajuste, codigo=codigo, borrador=borrador)
+                           total=subtotal + ajuste, codigo=codigo, borrador=borrador,
+                           dia=_dia_largo(dia) if dia and dia != date.today() else None)
 
 
 @app.post("/venta/confirmar")
@@ -556,11 +588,20 @@ def venta_confirmar():
     if not p or not secrets.compare_digest(p["codigo"], request.form.get("codigo", "")):
         return redirect(url_for("ventas"))   # ya se guardó (doble toque) o caducó
     conn = db()
+    audio_id = p.get("audio")
     try:
         # Se vuelve a validar: el stock pudo cambiar desde la confirmación
         items = preparar_items(conn, p["pedidos"])
+        fecha = None
+        if audio_id:
+            from web.audios import fecha_de_venta
+            fecha = fecha_de_venta(conn, audio_id, date.fromisoformat(p["dia"]))
         sale_id, total = registrar_venta(conn, items, _usuario_admin(conn), p["cliente"],
-                                         p["fiada"], p["ajuste"], p["motivo"])
+                                         p["fiada"], p["ajuste"], p["motivo"], fecha)
+        if audio_id:
+            from web.audios import marcar_registrado
+            if not marcar_registrado(conn, audio_id, sale_id):
+                raise ValueError("Ese audio ya se había registrado como venta.")
         conn.commit()
     except ValueError as e:
         conn.rollback()
@@ -569,6 +610,11 @@ def venta_confirmar():
         conn.rollback()
         return render_template("aviso.html", titulo="No se guardó la venta",
                                mensaje=f"No se guardó nada. Detalle: {e}"), 500
+    if audio_id:
+        # De vuelta a la lista, para seguir con el siguiente audio
+        session["aviso_audios"] = {"texto": f"Venta #{sale_id} guardada por {pesos(total)}.",
+                                   "sale_id": sale_id}
+        return redirect(url_for("audios"))
     session["aviso_venta"] = {"texto": f"Venta #{sale_id} guardada por {pesos(total)}."}
     return redirect(url_for("venta", sale_id=sale_id))
 
@@ -713,8 +759,9 @@ def _no_existe(_e):
     return render_template("aviso.html", titulo="No existe", mensaje="Esa página no existe."), 404
 
 
-# Inventario, compras, gastos, pérdidas y caja
+# Inventario, compras, gastos, pérdidas y caja; ventas por audio
 import web.operaciones  # noqa: E402,F401
+import web.audios  # noqa: E402,F401
 
 
 if __name__ == "__main__":

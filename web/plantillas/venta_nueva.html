@@ -1,9 +1,29 @@
 {% extends "base.html" %}
 {% block titulo %}Nueva venta · Charcutería HYE{% endblock %}
 {% block contenido %}
-<a class="volver" href="{{ url_for('inicio') }}">‹ Cancelar</a>
-<h1>Nueva venta</h1>
+<a class="volver" href="{{ url_for('audios') if audio else url_for('inicio') }}">‹ Cancelar</a>
+<h1>{{ 'Venta del audio' if audio else 'Nueva venta' }}</h1>
 {% if error %}<div class="error" style="margin-top:10px">{{ error }}</div>{% endif %}
+
+{% if audio %}
+<div class="tarjeta desde-audio">
+  <audio controls preload="none" src="{{ url_for('audio_archivo', audio_id=audio.id) }}"></audio>
+  <p class="dicho">“{{ audio.resumen.transcripcion }}”</p>
+  {% if audio.resumen.dudas or audio.fuera or (audio.resumen.fiada and not audio.resumen.cliente) %}
+  <ul class="dudas">
+    {% if audio.resumen.fiada and not audio.resumen.cliente %}
+    <li>No se identificó al cliente{% if audio.resumen.cliente_dicho %} («{{ audio.resumen.cliente_dicho }}»){% endif %}: elíjalo abajo.</li>
+    {% endif %}
+    {% for l in audio.fuera %}<li>No se agregó «{{ l.dicho or l.nombre }}»{% if l.id %} ({{ l.nombre }}){% endif %}: {{ l.problema }}.</li>{% endfor %}
+    {% for d in audio.resumen.dudas %}<li>{{ d }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <label class="campo" style="margin-top:10px">Día de la venta
+    <input type="date" id="fecha" max="{{ audio.hoy }}" required>
+  </label>
+  {% if not audio.fecha_en_nombre %}<p class="sub" style="margin:4px 0 0">El audio no traía la fecha: revise el día.</p>{% endif %}
+</div>
+{% endif %}
 
 <h2>Productos</h2>
 <input type="search" id="buscarProducto" placeholder="Buscar producto…" autocomplete="off">
@@ -42,7 +62,7 @@
   </label>
   <ul class="lista resultados" id="resultadosCliente"></ul>
   <div class="tarjeta elegido" id="clienteElegido" hidden></div>
-  <p class="sub" style="margin-top:8px">¿No está? <a href="{{ url_for('cliente_nuevo', volver='venta') }}">Crear cliente nuevo</a></p>
+  <p class="sub" style="margin-top:8px">¿No está? <a href="{{ url_for('cliente_nuevo', volver='venta', audio=audio.id if audio else None) }}">Crear cliente nuevo</a></p>
 
   <label class="campo">Ajuste (opcional)</label>
   <div class="ajuste">
@@ -76,6 +96,13 @@
 .pie-venta { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center;
   gap: 12px; margin: 20px -16px -40px; padding: 12px 16px 16px; background: var(--tarjeta);
   border-top: 1px solid var(--borde); }
+.desde-audio { margin-top: 12px; }
+.desde-audio audio { width: 100%; height: 40px; }
+.desde-audio .dicho { font-style: italic; margin: 10px 0 0; }
+.dudas { background: var(--aviso-fondo); color: var(--aviso); border-radius: 8px; margin: 10px 0 0;
+  padding: 8px 10px 8px 26px; font-size: .88rem; }
+input[type=date] { width: 100%; font-size: 16px; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); }
 .pie-venta b { display: block; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
 </style>
 
@@ -85,7 +112,11 @@ var CLIENTES = {{ clientes|safe }};
 // El carrito se guarda en el teléfono mientras se arma la venta, para no
 // perderlo si se sale a crear un cliente o se recarga la página.
 function guardado() { try { return JSON.parse(sessionStorage.getItem("ventaBorrador")); } catch (e) { return null; } }
-var venta = {{ borrador|safe }} || guardado() ||
+// Un carrito guardado de un audio solo sirve para ese mismo audio (al volver
+// de crear un cliente); nunca se mezcla con una venta normal ni con otro audio.
+var inicial = {{ borrador|safe }}, anterior = guardado();
+if (anterior && (anterior.audio || null) !== ((inicial && inicial.audio) || null)) anterior = null;
+var venta = (inicial && inicial.audio && anterior) ? anterior : inicial || anterior ||
             { lineas: [], fiada: false, cliente: null, ajuste: "", signo: "+", motivo: "" };
 var clienteNuevo = +new URLSearchParams(location.search).get("cliente");
 if (clienteNuevo) { venta.fiada = true; venta.cliente = clienteNuevo; }
@@ -185,6 +216,10 @@ $("clienteElegido").addEventListener("click", function (e) {
 $("signo").addEventListener("click", function () { venta.signo = venta.signo === "+" ? "-" : "+"; pintar(); });
 $("ajuste").addEventListener("input", function () { formatearDinero(this); venta.ajuste = String(dinero(this.value)); pintar(); });
 $("motivo").addEventListener("input", function () { venta.motivo = this.value; });
+if ($("fecha")) {
+  $("fecha").value = venta.fecha || "";
+  $("fecha").addEventListener("change", function () { venta.fecha = this.value; pintar(); });
+}
 
 function total() {
   var t = venta.lineas.reduce(function (s, l) { return s + subtotalDe(l); }, 0);
@@ -214,7 +249,8 @@ function pintar() {
   $("ajuste").value = venta.ajuste && +venta.ajuste ? pesos(+venta.ajuste) : "";
   $("motivo").value = venta.motivo || "";
   $("total").textContent = pesos(total());
-  $("continuar").disabled = !venta.lineas.length || (venta.fiada && !c) || total() <= 0;
+  $("continuar").disabled = !venta.lineas.length || (venta.fiada && !c) || total() <= 0 ||
+                            (venta.audio && !venta.fecha);
   try { sessionStorage.setItem("ventaBorrador", JSON.stringify(venta)); } catch (e) {}
 }
 

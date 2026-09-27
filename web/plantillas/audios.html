@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block titulo %}Ventas por audio · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('mas') }}">‹ Más</a>
+<h1>Ventas por audio</h1>
+<p class="sub">Gemini escucha cada nota de voz y arma la venta. Revísela y guárdela.</p>
+
+{% if aviso %}<div class="exito">✓ {{ aviso['texto'] }} <a href="{{ url_for('venta', sale_id=aviso['sale_id']) }}">Ver</a></div>
+<script>try { sessionStorage.removeItem("ventaBorrador"); } catch (e) {}</script>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if sin_clave %}<div class="error">Falta la clave de Gemini en el servidor (GEMINI_API_KEY): los audios se reciben, pero no se pueden escuchar todavía.</div>{% endif %}
+
+<div class="tarjeta" id="progreso" hidden></div>
+
+{% if pendientes %}
+{% for a in pendientes %}
+<div class="tarjeta audio" id="audio-{{ a.id }}">
+  <div class="cabeza">
+    <b>{{ a.fecha|dia_corto }}{% if a.hora %} · {{ a.hora }}{% endif %}</b>
+    {% if not a.fecha_en_nombre %}<span class="etiqueta fiado">revisar día</span>{% endif %}
+  </div>
+  <audio controls preload="none" src="{{ url_for('audio_archivo', audio_id=a.id) }}"></audio>
+
+  {% if a.estado == 'listo' %}
+    {% set r = a.r %}
+    <p class="dicho">“{{ r.transcripcion }}”</p>
+    <p class="quien">
+      {% if not r.fiada %}💵 Contado
+      {% elif r.cliente %}📝 Fiado a <b>{{ r.cliente['name'] }}</b>
+      {% else %}📝 Fiado · <b class="negativo">cliente sin identificar</b>{% if r.cliente_dicho %} («{{ r.cliente_dicho }}»){% endif %}
+      {% endif %}
+    </p>
+    <ul class="lineas">
+      {% for l in r.lineas %}
+      <li{% if l.problema %} class="mal"{% endif %}>
+        <span>{{ l.cantidad|cantidad }} × {{ l.nombre }}{% if l.problema %} — {{ l.problema }}{% endif %}</span>
+        <span>{{ l.subtotal|pesos }}</span>
+      </li>
+      {% else %}<li class="mal"><span>No se entendió ningún producto</span></li>
+      {% endfor %}
+      <li class="total"><span>Total</span><span>{{ r.total|pesos }}</span></li>
+    </ul>
+    {% if r.dudas %}<ul class="dudas">{% for d in r.dudas %}<li>{{ d }}</li>{% endfor %}</ul>{% endif %}
+    <div class="botones">
+      <form method="post" action="{{ url_for('audio_descartar', audio_id=a.id) }}" class="descartar">
+        <input type="hidden" name="csrf" value="{{ csrf() }}">
+        <button class="boton secundario" style="width:100%">Descartar</button>
+      </form>
+      <a class="boton" href="{{ url_for('venta_nueva', audio=a.id) }}">Revisar y guardar</a>
+    </div>
+    <form method="post" action="{{ url_for('audio_procesar', audio_id=a.id) }}" class="otra-vez">
+      <input type="hidden" name="csrf" value="{{ csrf() }}">
+      <button class="enlace">Volver a escuchar</button>
+    </form>
+  {% else %}
+    {% if a.estado == 'error' %}<div class="error" style="margin:10px 0 0">{{ a.error }}</div>{% endif %}
+    <div class="botones">
+      <form method="post" action="{{ url_for('audio_descartar', audio_id=a.id) }}" class="descartar">
+        <input type="hidden" name="csrf" value="{{ csrf() }}">
+        <button class="boton secundario" style="width:100%">Descartar</button>
+      </form>
+      <form method="post" action="{{ url_for('audio_procesar', audio_id=a.id) }}"
+            {% if a.estado == 'nuevo' and not sin_clave %}data-procesar="{{ a.id }}"{% endif %}>
+        <input type="hidden" name="csrf" value="{{ csrf() }}">
+        <button class="boton" style="width:100%">{{ 'Reintentar' if a.estado == 'error' else 'Escuchar' }}</button>
+      </form>
+    </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<p class="vacio">No hay audios por revisar.</p>
+{% endif %}
+
+<h2>Subir audios</h2>
+<form method="post" action="{{ url_for('audios_subir') }}" enctype="multipart/form-data" class="tarjeta">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <input type="file" name="audios" multiple accept="audio/*,.opus,.ogg,.m4a" required>
+  <button class="boton" style="width:100%; margin-top:10px">Subir</button>
+</form>
+<p class="sub" style="margin-top:8px">Lo más fácil es compartirlos desde WhatsApp con el atajo del iPhone (abajo).</p>
+
+{% if registrados %}
+<h2>Guardadas hace poco</h2>
+<ul class="lista">
+  {% for v in registrados %}
+  <li>{% if v['total'] is not none %}<a class="fila" href="{{ url_for('venta', sale_id=v['sale_id']) }}">
+    <div class="izq"><b>Venta #{{ v['sale_id'] }} · {{ v['cliente'] or 'Contado' }}</b><span>{{ v['created_at']|fecha }}</span></div>
+    <div class="der">{{ v['total']|pesos }}</div></a>
+  {% else %}<div class="fila"><div class="izq"><b>Venta #{{ v['sale_id'] }}</b><span>Eliminada</span></div></div>{% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<details class="tarjeta atajo">
+  <summary><b>Configurar el atajo del iPhone</b></summary>
+  <p>Con este atajo, en WhatsApp se seleccionan los audios, se toca <b>Compartir</b> y se elige
+     <b>Ventas HYE</b>. Se arma una sola vez en la app <b>Atajos</b>:</p>
+  <ol>
+    <li>Toque <b>+</b> para crear un atajo y póngale de nombre <b>Ventas HYE</b>.</li>
+    <li>Toque el ícono <b>ⓘ</b> (o «Detalles») y active <b>Mostrar en hoja para compartir</b>.
+        En los tipos que recibe deje solo <b>Archivos</b> y <b>Multimedia</b>.</li>
+    <li>Agregue la acción <b>Repetir con cada</b> y elija <b>Entrada del atajo</b>.</li>
+    <li>Dentro de la repetición agregue <b>Obtener contenido de URL</b>:
+      <ul>
+        <li>URL: la dirección de abajo (con la clave).</li>
+        <li>Método: <b>POST</b>. Cuerpo de la solicitud: <b>Formulario</b>.</li>
+        <li>Agregue un campo de tipo <b>Archivo</b>, con nombre <b>audio</b> y valor <b>Elemento repetido</b>.</li>
+      </ul></li>
+    <li>Después de la repetición agregue <b>Abrir URL</b> con
+        <code>{{ url_atajo.split('/audios/')[0] }}/audios</code> para revisarlos enseguida.</li>
+  </ol>
+  <label class="campo">Dirección para el atajo (es secreta: no la comparta)
+    <input type="text" readonly value="{{ url_atajo }}" id="urlAtajo">
+  </label>
+  <button type="button" class="boton secundario chico" id="copiar">Copiar dirección</button>
+</details>
+
+<style>
+.audio { margin-bottom: 12px; }
+.audio .cabeza { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.audio audio { width: 100%; height: 40px; }
+.dicho { font-style: italic; margin: 10px 0 6px; }
+.quien { margin: 0 0 6px; }
+.lineas { list-style: none; margin: 0; padding: 0; font-size: .92rem; font-variant-numeric: tabular-nums; }
+.lineas li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-top: 1px solid var(--borde); }
+.lineas li:first-child { border-top: 0; }
+.lineas li.mal { color: var(--alerta); }
+.lineas li.total { font-weight: 700; }
+.dudas { background: var(--aviso-fondo); color: var(--aviso); border-radius: 8px; margin: 8px 0 0;
+  padding: 8px 10px 8px 26px; font-size: .88rem; }
+.audio .botones { margin: 12px 0 0; }
+.audio .botones a { width: 100%; }
+.enlace { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; color: var(--acento); font-size: .85rem; }
+.otra-vez { margin-top: 8px; text-align: center; }
+input[type=file] { width: 100%; font-size: 15px; }
+.atajo { margin-top: 22px; }
+.atajo p, .atajo ol { font-size: .92rem; }
+.atajo ol { padding-left: 20px; }
+.atajo code { word-break: break-all; }
+</style>
+<script>
+document.querySelectorAll("form.descartar").forEach(function (f) {
+  f.addEventListener("submit", function (e) { if (!confirm("¿Descartar este audio?")) e.preventDefault(); });
+});
+document.getElementById("copiar").addEventListener("click", function () {
+  var campo = document.getElementById("urlAtajo"), b = this;
+  function listo() { b.textContent = "Copiada ✓"; }
+  if (navigator.clipboard) navigator.clipboard.writeText(campo.value).then(listo, function () { campo.select(); });
+  else { campo.select(); document.execCommand("copy"); listo(); }
+});
+
+// Los audios nuevos se escuchan solos, uno por uno, y al final se recarga
+var cola = Array.prototype.slice.call(document.querySelectorAll("form[data-procesar]"));
+if (cola.length) {
+  var aviso = document.getElementById("progreso"), hechos = 0;
+  aviso.hidden = false;
+  cola.forEach(function (f) { f.querySelector("button").disabled = true; });
+  (function siguiente() {
+    if (!cola.length) { location.reload(); return; }
+    var f = cola.shift();
+    aviso.textContent = "Escuchando audio " + (++hechos) + " de " + (hechos + cola.length) + "…";
+    f.querySelector("button").textContent = "Escuchando…";
+    fetch(f.action, { method: "POST", body: new FormData(f), headers: { "X-Fetch": "1" },
+                      credentials: "same-origin" })
+      .then(siguiente, siguiente);
+  })();
+}
+</script>
+{% endblock %}

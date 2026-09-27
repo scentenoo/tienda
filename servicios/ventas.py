@@ -17,12 +17,14 @@ def descripcion_fiado(sale_id, ajuste, motivo):
 
 
 def registrar_venta(conn, items, user_id, client_id=None, fiada=False,
-                    ajuste=0.0, motivo_ajuste=None):
+                    ajuste=0.0, motivo_ajuste=None, fecha=None):
     """Guarda la venta y devuelve (sale_id, total). No hace commit.
 
     items: dicts con product_id, quantity, unit_price, subtotal y cost_price.
     El ajuste (cargo o descuento) solo aplica a las fiadas, como en la
     pantalla de ventas.
+    fecha: '2026-09-26 17:03:00' para una venta de otro día (las que llegan
+    por audio); sin ella, la de este momento.
     """
     if not items:
         raise ValueError("Debe agregar al menos un producto a la venta")
@@ -38,9 +40,9 @@ def registrar_venta(conn, items, user_id, client_id=None, fiada=False,
     cursor.execute("""
         INSERT INTO sales (client_id, total, status, payment_method, adjustment,
                            adjustment_reason, created_at, user_id)
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), ?)
+        VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now', 'localtime')), ?)
     """, (client_id if fiada else None, total, status, "credit" if fiada else "cash",
-          ajuste, motivo_ajuste, user_id))
+          ajuste, motivo_ajuste, fecha, user_id))
     sale_id = cursor.lastrowid
 
     # Todos los productos en una sola instrucción
@@ -68,8 +70,8 @@ def registrar_venta(conn, items, user_id, client_id=None, fiada=False,
         cursor.execute("""
             INSERT INTO client_transactions
                 (client_id, transaction_type, amount, description, sale_id, created_at)
-            VALUES (?, 'debit', ?, ?, ?, datetime('now', 'localtime'))
-        """, (client_id, total, descripcion_fiado(sale_id, ajuste, motivo_ajuste), sale_id))
+            VALUES (?, 'debit', ?, ?, ?, COALESCE(?, datetime('now', 'localtime')))
+        """, (client_id, total, descripcion_fiado(sale_id, ajuste, motivo_ajuste), sale_id, fecha))
 
     return sale_id, total
 
