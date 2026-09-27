@@ -92,12 +92,49 @@ select, textarea { width: 100%; font: inherit; font-size: 16px; padding: 11px 14
   border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); margin-top: 4px; }
 .boton.peligro { background: var(--alerta); color: #fff; }
 a.fila:active { background: var(--chip); }
+main.con-barra { padding-bottom: 96px; }
+.barra { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: grid;
+  grid-template-columns: repeat(5, 1fr); background: var(--tarjeta); border-top: 1px solid var(--borde);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
+.barra a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0;
+  color: var(--suave); text-decoration: none; font-size: .72rem; }
+.barra a.on { color: var(--acento); font-weight: 700; }
+.barra a.vender { color: var(--acento); font-weight: 700; }
+.icono { flex: none; }
+.seccion { margin: 22px 0 8px; font-size: .78rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--suave); }
+.accesos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.accesos a { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px;
+  border-radius: 12px; background: var(--tarjeta); border: 1px solid var(--borde); color: var(--texto);
+  text-decoration: none; font-size: .85rem; font-weight: 600; text-align: center; }
+.accesos a.principal { background: var(--acento); color: var(--sobre-acento); border-color: var(--acento); }
+.lista .fila .ico { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
+  background: var(--chip); color: var(--acento); margin-right: 12px; flex: none; }
+.lista .fila .izq.con-ico { display: flex; align-items: center; }
 .exito { background: var(--bien-fondo); color: var(--bien); padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; }
 </style>
 </head>
 <body>
-<main>
+{% from "iconos.html" import icono %}
+{# La barra de abajo: no va en el ingreso ni en las pantallas que ya tienen
+   abajo su propio total y botón de guardar. #}
+{% set ep = request.endpoint or '' %}
+{% set con_barra = session.get('ingreso') and ep not in ('ingresar', 'venta_nueva', 'compra_nueva') %}
+{% set pestana = 'inicio' if ep == 'inicio'
+   else 'ventas' if ep.startswith('venta')
+   else 'clientes' if ep.startswith('cliente') or ep in ('abono', 'abono_confirmar')
+   else 'mas' %}
+<main{% if con_barra %} class="con-barra"{% endif %}>
 {% block contenido %}{% endblock %}
 </main>
+{% if con_barra %}
+<nav class="barra">
+  <a href="{{ url_for('inicio') }}" class="{{ 'on' if pestana == 'inicio' }}">{{ icono('inicio') }}<span>Inicio</span></a>
+  <a href="{{ url_for('venta_nueva') }}" class="vender">{{ icono('vender', 26) }}<span>Vender</span></a>
+  <a href="{{ url_for('clientes') }}" class="{{ 'on' if pestana == 'clientes' }}">{{ icono('clientes') }}<span>Clientes</span></a>
+  <a href="{{ url_for('ventas') }}" class="{{ 'on' if pestana == 'ventas' }}">{{ icono('ventas') }}<span>Ventas</span></a>
+  <a href="{{ url_for('mas') }}" class="{{ 'on' if pestana == 'mas' }}">{{ icono('mas') }}<span>Más</span></a>
+</nav>
+{% endif %}
 </body>
 </html>

@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block titulo %}Pérdidas · Charcutería HYE{% endblock %}
 {% block contenido %}
-<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
 {% if aviso %}<div class="exito">{{ aviso }}</div>{% endif %}
 <h1>Pérdidas y mermas</h1>
 <a class="boton" style="width:100%; margin: 10px 0 12px" href="{{ url_for('perdida_nueva') }}">＋ Registrar pérdida</a>

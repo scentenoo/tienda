@@ -199,6 +199,10 @@ def inicio():
         SELECT COUNT(*), COALESCE(SUM(total), 0),
                COALESCE(SUM(CASE WHEN payment_method = 'credit' THEN total END), 0)
           FROM sales WHERE date(created_at) = ?""", (hoy,)).fetchone()
+    contado_hoy = conn.execute("""
+        SELECT COALESCE(SUM(total), 0) FROM sales
+         WHERE date(created_at) = ? AND payment_method = 'cash' AND status = 'paid'""",
+                               (hoy,)).fetchone()[0]
     abonos_hoy = conn.execute("""
         SELECT COALESCE(SUM(amount), 0) FROM client_transactions
          WHERE transaction_type = 'credit' AND date(created_at) = ?""", (hoy,)).fetchone()[0]
@@ -210,7 +214,13 @@ def inicio():
         "inicio.html", hoy=_dia_largo(date.today()), mes=MESES_ES[int(mes[5:]) - 1],
         clientes_deben=cobrar[0], por_cobrar=cobrar[1],
         ventas_hoy=ventas_hoy[0], vendido_hoy=ventas_hoy[1], fiado_hoy=ventas_hoy[2],
-        abonos_hoy=abonos_hoy, vendido_mes=ventas_mes, agotados=agotados)
+        abonos_hoy=abonos_hoy, contado_hoy=contado_hoy, vendido_mes=ventas_mes, agotados=agotados)
+
+
+@app.get("/mas")
+@requiere_ingreso
+def mas():
+    return render_template("mas.html")
 
 
 @app.get("/pendientes")
