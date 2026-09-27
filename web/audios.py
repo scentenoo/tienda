@@ -228,7 +228,7 @@ def escuchar(audio, tipo, catalogo):
     # Todo debe caber en los 60 s de gunicorn, para poder mostrar el error.
     # Dos vueltas por la lista: una saturación suele durar segundos.
     limite = time.monotonic() + 50
-    respuesta, codigos = None, []
+    respuesta, codigos, intentos = None, [], []
     for modelo in MODELOS + [None] + MODELOS:
         quedan = limite - time.monotonic()
         if quedan < 5:
@@ -247,6 +247,7 @@ def escuchar(audio, tipo, catalogo):
                     detalle = ""
                 raise RuntimeError(f"Gemini respondió con error {e.code}. {detalle}".strip()) from e
             codigos.append(e.code)
+            intentos.append(f"{modelo}: {e.code}")
         except (urllib.error.URLError, TimeoutError) as e:
             raise RuntimeError("No se pudo hablar con Gemini (sin conexión o tardó "
                                "demasiado). Vuelva a intentar.") from e
@@ -257,8 +258,8 @@ def escuchar(audio, tipo, catalogo):
         if 429 in codigos and not {500, 503, 504} & set(codigos):
             raise RuntimeError("Se acabó por ahora el cupo gratis de Gemini. "
                                "Espere un rato (o hasta mañana) y vuelva a intentar.")
-        raise RuntimeError("Gemini está saturado en este momento. "
-                           "Vuelva a intentar en unos minutos.")
+        raise RuntimeError("Gemini está saturado en este momento. Vuelva a intentar en "
+                           "unos minutos. (" + ", ".join(intentos) + ")")
     try:
         partes = respuesta["candidates"][0]["content"]["parts"]
         texto = "".join(p.get("text", "") for p in partes if not p.get("thought"))
@@ -278,6 +279,63 @@ def _pedir(modelo, datos, clave, espera):
         headers={"Content-Type": "application/json", "x-goog-api-key": clave})
     with urllib.request.urlopen(pedido, timeout=espera) as r:
         return json.load(r)
+
+
+@app.get("/audios/diagnostico")
+@requiere_ingreso
+def audios_diagnostico():
+    """Qué modelos ve la clave de Gemini y cómo responde cada uno a un
+    mensaje corto de texto. Para cuando todo sale "saturado"."""
+    clave = os.environ.get("GEMINI_API_KEY")
+    if not clave:
+        return _texto("Falta GEMINI_API_KEY en el servidor.")
+    lineas = []
+    try:
+        pedido = urllib.request.Request(
+            "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
+            headers={"x-goog-api-key": clave})
+        with urllib.request.urlopen(pedido, timeout=15) as r:
+            modelos = [m["name"].split("/", 1)[1] for m in json.load(r).get("models", [])
+                       if "generateContent" in m.get("supportedGenerationMethods", [])]
+        lineas.append(f"La clave ve {len(modelos)} modelos. Los 'flash':")
+        lineas += ["  " + m for m in modelos if "flash" in m]
+    except urllib.error.HTTPError as e:
+        modelos = []
+        lineas.append(f"Listar modelos: error {e.code} {_detalle(e)}")
+    except (urllib.error.URLError, TimeoutError) as e:
+        modelos = []
+        lineas.append(f"Listar modelos: sin conexión ({e})")
+    lineas.append("")
+    lineas.append("Prueba con texto (sin audio):")
+    probar = MODELOS + [m for m in modelos if "flash" in m and m not in MODELOS
+                        and "image" not in m and "tts" not in m and "live" not in m][:4]
+    datos = json.dumps({"contents": [{"parts": [{"text": "Responde solo: ok"}]}]}).encode()
+    limite = time.monotonic() + 45
+    for modelo in probar:
+        quedan = limite - time.monotonic()
+        if quedan < 3:
+            lineas.append(f"  {modelo}: sin tiempo para probarlo")
+            continue
+        inicio = time.monotonic()
+        try:
+            _pedir(modelo, datos, clave, min(quedan, 15))
+            lineas.append(f"  {modelo}: BIEN ({time.monotonic() - inicio:.1f} s)")
+        except urllib.error.HTTPError as e:
+            lineas.append(f"  {modelo}: error {e.code} {_detalle(e)}")
+        except (urllib.error.URLError, TimeoutError):
+            lineas.append(f"  {modelo}: no respondió a tiempo")
+    return _texto("\n".join(lineas))
+
+
+def _detalle(error):
+    try:
+        return json.load(error).get("error", {}).get("message", "")[:200]
+    except ValueError:
+        return ""
+
+
+def _texto(contenido):
+    return app.response_class(contenido, mimetype="text/plain; charset=utf-8")
 
 
 def _tipo_gemini(fila):
