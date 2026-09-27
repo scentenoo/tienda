@@ -17,14 +17,16 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
-                                TableStyle)
+from reportlab.platypus import (KeepTogether, Paragraph, SimpleDocTemplate, Spacer,
+                                Table, TableStyle)
 
 from utils.conciliacion import MESES_ES
 from utils.pdf import _moneda, _ruta
 
 NEGOCIO = "Charcutería HYE"
 PAGO_NEQUI = "Puede pagar por Nequi al 311 875 8761 a nombre de Samir Centeno."
+# Notas que se ponen solas al registrar un pago y no le dicen nada al cliente
+NOTAS_VACIAS = {"abono", "pago", "pago total", "pago parcial", "abono parcial"}
 
 
 def _fecha(texto, corta=False) -> str:
@@ -127,156 +129,166 @@ def nombre_archivo(datos) -> str:
 
 def exportar_pdf(datos, destino=None):
     """Genera el PDF en `destino` (una ruta o un archivo en memoria, como
-    io.BytesIO, que usa la página del celular); sin destino, en Informes."""
+    io.BytesIO, que usa la página del celular); sin destino, en Informes.
+
+    Es para clientes que no saben de contabilidad y lo leen en el celular:
+    primero cuánto debe y cómo pagar, luego la cuenta en tres renglones y
+    al final cada compra como un recibo, sin columna de saldo."""
     ruta = destino if destino is not None else _ruta(nombre_archivo(datos))
     doc = SimpleDocTemplate(ruta if hasattr(ruta, "write") else str(ruta), pagesize=A4,
                             leftMargin=15 * mm, rightMargin=15 * mm,
                             topMargin=14 * mm, bottomMargin=14 * mm,
-                            title=f"Estado de cuenta - {datos['nombre']}")
-    estilos = getSampleStyleSheet()
-    normal = estilos["Normal"]
-    pequeno = ParagraphStyle("pequeno", parent=normal, fontSize=8.5, leading=11)
-    gris = colors.HexColor("#6b7580")
-
-    contenido = [
-        Paragraph(NEGOCIO, estilos["Title"]),
-        Paragraph("<b>Estado de cuenta</b>", ParagraphStyle(
-            "sub", parent=normal, fontSize=13, alignment=1, spaceAfter=8)),
-        Table([[f"Cliente: {datos['nombre']}",
-                datetime.now().strftime("Fecha: %d/%m/%Y")]],
-              colWidths=[120 * mm, 60 * mm],
-              style=[("ALIGN", (1, 0), (1, 0), "RIGHT"), ("FONTSIZE", (0, 0), (-1, -1), 10.5)]),
-        Spacer(1, 4 * mm),
-    ]
+                            title=f"Su cuenta - {datos['nombre']}")
+    ancho = 180 * mm
+    azul, gris = colors.HexColor("#2c3e50"), colors.HexColor("#6b7580")
+    verde, rojo, naranja = (colors.HexColor("#1e7e34"), colors.HexColor("#c0392b"),
+                            colors.HexColor("#b9770e"))
+    fondo_verde, borde = colors.HexColor("#e3f4e8"), colors.HexColor("#bdc3c7")
+    normal = ParagraphStyle("normal", parent=getSampleStyleSheet()["Normal"],
+                            fontSize=12, leading=16)
+    titulo = ParagraphStyle("titulo", parent=normal, fontName="Helvetica-Bold",
+                            fontSize=15, leading=19, spaceBefore=4, spaceAfter=6)
+    derecha = ParagraphStyle("derecha", parent=normal, alignment=2)
+    centro = ParagraphStyle("centro", parent=normal, alignment=1)
 
     primer_nombre = datos["nombre"].split()[0] if datos["nombre"].split() else ""
-    contenido += [Paragraph(f"Hola, {escape(primer_nombre)}. Aquí le compartimos el detalle de su "
-                            "cuenta con nosotros.", normal), Spacer(1, 3 * mm)]
+    encabezado = Table([[Paragraph(f"<b>{NEGOCIO}</b>", normal),
+                         Paragraph(datetime.now().strftime("%d/%m/%Y"), derecha)]],
+                       colWidths=[ancho / 2] * 2)
+    encabezado.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, 0), 0.8, azul),
+                                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
+    contenido = [encabezado, Spacer(1, 6 * mm),
+                 Paragraph(f"Hola, <b>{escape(primer_nombre)}</b>. Este es el resumen "
+                           "de su cuenta con nosotros.", normal), Spacer(1, 4 * mm)]
 
-    caja = Table([["Saldo pendiente", _moneda(datos["deuda"])]], colWidths=[110 * mm, 70 * mm])
-    caja.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#2c3e50")),
-        ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 16),
-        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-        ("TOPPADDING", (0, 0), (-1, -1), 9), ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
-        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-    ]))
-    contenido += [caja, Spacer(1, 3 * mm)]
-
-    if not datos["movimientos"]:
-        contenido.append(Paragraph("Su cuenta está al día. ¡Muchas gracias!", normal))
-        doc.build(contenido)
+    if not datos["movimientos"] or datos["deuda"] <= 0.5:
+        caja = Table([[Paragraph("<b>Su cuenta está al día.</b> ¡Muchas gracias!",
+                                 ParagraphStyle("aldia", parent=centro, fontSize=16,
+                                                leading=20, textColor=verde))]],
+                     colWidths=[ancho])
+        caja.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), fondo_verde),
+                                  ("TOPPADDING", (0, 0), (-1, -1), 14),
+                                  ("BOTTOMPADDING", (0, 0), (-1, -1), 14)]))
+        doc.build(contenido + [caja])
         return ruta
+
+    # Lo primero: cuánto debe y cómo pagarlo
+    caja = Table([
+        [Paragraph("Usted debe", ParagraphStyle("debe", parent=centro, fontSize=14,
+                                                 leading=18, textColor=colors.white))],
+        [Paragraph(f"<b>{_moneda(datos['deuda'])}</b>", ParagraphStyle(
+            "monto", parent=centro, fontSize=32, leading=38, textColor=colors.white))],
+        [Paragraph(PAGO_NEQUI, ParagraphStyle("nequi", parent=centro, fontSize=11.5,
+                                              leading=15, textColor=colors.white))],
+    ], colWidths=[ancho])
+    caja.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), azul),
+        ("TOPPADDING", (0, 0), (-1, 0), 12), ("BOTTOMPADDING", (0, -1), (-1, -1), 12),
+        ("TOPPADDING", (0, -1), (-1, -1), 8),
+    ]))
+    contenido += [caja, Spacer(1, 7 * mm)]
 
     # Si hubo ventas anuladas, lo descontado no fue todo abonos
     anulaciones = any(m.get("anulacion") for m in datos["movimientos"])
     ya = "ya se descontaron" if anulaciones else "ya abonó"
 
-    # Lo primero que pregunta el cliente: ¿de qué compras es lo que debo?
-    pendientes = []
-    for m in datos["movimientos"]:
-        if m["tipo"] == "debit" and m["queda"] > 0.5:
-            parte = f"compra del {_fecha(m['fecha'], True)}: {_moneda(m['queda'])}"
-            if m["abonado"] > 0.5:
-                parte += f" (de {_moneda(m['monto'])}, {ya} {_moneda(m['abonado'])})"
-            pendientes.append(parte)
-    contenido += [Paragraph("<b>Corresponde a:</b> " + " · ".join(pendientes), normal),
-                  Spacer(1, 4 * mm)]
-
-    if datos["en_ceros"]:
-        desde = (f"Su cuenta quedó en $0 el {_fecha(datos['en_ceros'])}. "
-                 "Desde entonces, estas son sus compras y abonos:")
-    else:
-        desde = "Estas son sus compras y abonos desde la primera compra:"
-    contenido += [Paragraph(desde, normal), Spacer(1, 3 * mm)]
-
-    tabla = [["Fecha", "Detalle", "Cant.", "Precio", "Valor", "Saldo"]]
-    estilo = [
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
-        ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#2c3e50")),
-    ]
-
-    for m in datos["movimientos"]:
-        i = len(tabla)
-        if i > 1:
-            estilo.append(("LINEABOVE", (0, i), (-1, i), 0.4, colors.HexColor("#bdc3c7")))
-
-        if m["tipo"] == "credit":
-            texto = ("Venta anulada" if m.get("anulacion")
-                     else "Ajuste a su favor" if "ajuste" in m["descripcion"].lower() else "Abono")
-            tabla.append([_fecha(m["fecha"], True), texto, "", "",
-                          "-" + _moneda(m["monto"]), _moneda(m["saldo"])])
-            estilo += [("BACKGROUND", (0, i), (-1, i), colors.HexColor("#d4edda")),
-                       ("FONTNAME", (0, i), (-1, i), "Helvetica-Bold")]
-            continue
-
-        titulo = "Compra" if m["sale_id"] else (m["descripcion"] or "Cargo")
-        tabla.append([_fecha(m["fecha"], True), titulo, "", "",
-                      _moneda(m["monto"]), _moneda(m["saldo"])])
-        estilo.append(("FONTNAME", (0, i), (-1, i), "Helvetica-Bold"))
-
-        suma = 0.0
-        for cant, producto, precio, subtotal in m["productos"]:
-            suma += subtotal
-            tabla.append(["", Paragraph(escape(producto), pequeno), _cantidad(cant),
-                          _moneda(precio), _moneda(subtotal), ""])
-        if m["productos"] and abs(m["monto"] - suma) > 0.5:
-            dif = m["monto"] - suma
-            tabla.append(["", "Ajuste de precio", "", "",
-                          ("+" if dif > 0 else "-") + _moneda(abs(dif)), ""])
-
-        if m["queda"] <= 0.5:
-            estado = ("Ya quedó saldada" if anulaciones else "Ya quedó pagada con sus abonos")
-        elif m["abonado"] > 0.5:
-            estado = (f"De esta compra {ya} {_moneda(m['abonado'])}; "
-                      f"quedan {_moneda(m['queda'])} pendientes")
-        else:
-            estado = "Pendiente por pagar"
-        j = len(tabla)
-        tabla.append(["", estado, "", "", "", ""])
-        estilo += [("SPAN", (1, j), (5, j)), ("TEXTCOLOR", (1, j), (1, j), gris),
-                   ("FONTNAME", (1, j), (1, j), "Helvetica-Oblique")]
-
-    t = Table(tabla, colWidths=[22 * mm, 68 * mm, 14 * mm, 25 * mm, 26 * mm, 25 * mm],
-              repeatRows=1)
-    t.setStyle(TableStyle(estilo))
-    contenido += [t, Spacer(1, 5 * mm)]
-
-    compras = sum(m["monto"] for m in datos["movimientos"] if m["tipo"] == "debit")
+    # La cuenta en tres renglones: compró, pagó, falta
+    compras = [m for m in datos["movimientos"] if m["tipo"] == "debit"]
     abonos = sum(m["monto"] for m in datos["movimientos"]
                  if m["tipo"] == "credit" and not m.get("anulacion"))
     anuladas = sum(m["monto"] for m in datos["movimientos"] if m.get("anulacion"))
-    filas = [["Total de compras", _moneda(compras)],
-             ["(-) Total abonado", "-" + _moneda(abonos)]]
+    desde = f" desde el {_fecha(datos['en_ceros'])}" if datos["en_ceros"] else ""
+    n = len(compras)
+    filas = [[Paragraph(f"Lo que ha comprado{desde} ({n} {'compra' if n == 1 else 'compras'})",
+                        normal), _moneda(sum(m["monto"] for m in compras))]]
+    if abonos:
+        filas.append([Paragraph("Lo que ya pagó", normal), "- " + _moneda(abonos)])
     if anuladas:
-        filas.append(["(-) Ventas anuladas", "-" + _moneda(anuladas)])
-    filas.append(["Saldo pendiente", _moneda(datos["deuda"])])
-    resumen = Table(filas, colWidths=[50 * mm, 35 * mm], hAlign="RIGHT")
-    resumen.setStyle(TableStyle([
-        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-        ("LINEABOVE", (0, -1), (-1, -1), 0.8, colors.black),
+        filas.append([Paragraph("Ventas anuladas (no se cobran)", normal),
+                      "- " + _moneda(anuladas)])
+    filas.append([Paragraph("<b>Lo que falta por pagar</b>", normal), _moneda(datos["deuda"])])
+    cuenta = Table(filas, colWidths=[ancho - 45 * mm, 45 * mm])
+    cuenta.setStyle(TableStyle([
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTSIZE", (1, 0), (1, -1), 12),
+        ("FONTNAME", (1, -1), (1, -1), "Helvetica-Bold"),
+        ("TEXTCOLOR", (1, -1), (1, -1), rojo),
+        ("LINEABOVE", (0, -1), (-1, -1), 1, azul),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
-    contenido += [resumen, Spacer(1, 6 * mm)]
+    contenido += [Paragraph("¿De dónde sale esta cuenta?", titulo), cuenta, Spacer(1, 7 * mm),
+                  Paragraph("Sus compras y pagos, uno por uno", titulo)]
 
-    pago = Table([[Paragraph(f"<b>{PAGO_NEQUI}</b>", normal)]], colWidths=[180 * mm])
-    pago.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f3e8ff")),
-        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#7b2cbf")),
-        ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-    ]))
-    contenido += [pago, Spacer(1, 5 * mm), Paragraph(
+    # Cada compra como un recibo; cada pago, un renglón verde
+    for m in datos["movimientos"]:
+        if m["tipo"] == "credit":
+            if m.get("anulacion"):
+                texto = f"<b>Venta anulada</b> el {_fecha(m['fecha'])} (se descontó)"
+            elif "ajuste" in m["descripcion"].lower():
+                texto = f"<b>Ajuste a su favor</b> el {_fecha(m['fecha'])}"
+            else:
+                texto = f"<b>Pago recibido</b> el {_fecha(m['fecha'])}. ¡Gracias!"
+            # La nota que se escribió al registrarlo, si dice algo más que "abono"
+            nota = m["descripcion"].strip()
+            if nota and not m.get("anulacion") and nota.lower().rstrip(".") not in NOTAS_VACIAS:
+                texto += f"<br/><font size=10.5 color='#4a5560'><i>Nota: {escape(nota)}</i></font>"
+            fila = Table([[Paragraph(texto, normal),
+                           Paragraph(f"<b>- {_moneda(m['monto'])}</b>", derecha)]],
+                         colWidths=[ancho - 40 * mm, 40 * mm])
+            fila.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), fondo_verde),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ]))
+            contenido += [fila, Spacer(1, 3 * mm)]
+            continue
+
+        nombre = (f"Compra del {_fecha(m['fecha'])}" if m["sale_id"]
+                  else f"{escape(m['descripcion'] or 'Deuda anotada')} ({_fecha(m['fecha'])})")
+        recibo = [[Paragraph(f"<b>{nombre}</b>", normal),
+                   Paragraph(f"<b>{_moneda(m['monto'])}</b>", derecha)]]
+        suma = 0.0
+        for cant, producto, precio, subtotal in m["productos"]:
+            suma += subtotal
+            detalle = f"{_cantidad(cant)} × {escape(producto)}"
+            if abs(cant - 1) > 0.001:
+                detalle += f" <font size=9.5 color='#6b7580'>(a {_moneda(precio)} c/u)</font>"
+            recibo.append([Paragraph(detalle, normal), Paragraph(_moneda(subtotal), derecha)])
+        if m["productos"] and abs(m["monto"] - suma) > 0.5:
+            dif = m["monto"] - suma
+            recibo.append([Paragraph("Ajuste de precio" if dif > 0 else "Descuento", normal),
+                           Paragraph(("+ " if dif > 0 else "- ") + _moneda(abs(dif)), derecha)])
+
+        if m["queda"] <= 0.5:
+            estado, color = ("Ya quedó saldada" if anulaciones else "Ya está pagada"), verde
+        elif m["abonado"] > 0.5:
+            estado = (f"De esta compra {ya} {_moneda(m['abonado'])}. "
+                      f"<b>Faltan {_moneda(m['queda'])}</b>")
+            color = naranja
+        else:
+            estado, color = f"<b>Falta pagarla completa: {_moneda(m['queda'])}</b>", rojo
+        recibo.append([Paragraph(estado, ParagraphStyle("estado", parent=normal,
+                                                         textColor=color)), ""])
+        ultima = len(recibo) - 1
+        t = Table(recibo, colWidths=[ancho - 40 * mm, 40 * mm])
+        t.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.6, borde),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f4")),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.6, borde),
+            ("LINEABOVE", (0, ultima), (-1, ultima), 0.4, colors.HexColor("#dfe3e6")),
+            ("SPAN", (0, ultima), (1, ultima)), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, 0), 7), ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
+            ("TOPPADDING", (0, ultima), (-1, ultima), 6),
+            ("BOTTOMPADDING", (0, ultima), (-1, ultima), 7),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        contenido += [KeepTogether(t), Spacer(1, 3 * mm)]
+
+    contenido += [Spacer(1, 4 * mm), Paragraph(
         "¡Gracias por su confianza! Cualquier duda con gusto se la aclaramos.",
-        ParagraphStyle("gracias", parent=normal, alignment=1, textColor=gris))]
+        ParagraphStyle("gracias", parent=centro, textColor=gris))]
 
     doc.build(contenido)
     return ruta
