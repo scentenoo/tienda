@@ -12,7 +12,7 @@
 {% if aviso_cliente %}<div class="exito">✓ {{ aviso_cliente }}</div>{% endif %}
 
 {% if aviso %}
-<div class="exito">✓ Abono de {{ aviso['monto']|pesos }} guardado.
+<div class="exito">✓ {{ 'Pago total' if aviso['pago_total'] else 'Abono' }} de {{ aviso['monto']|pesos }} guardado.
   {% if aviso['deuda_nueva'] > 0 %}Queda debiendo {{ aviso['deuda_nueva']|pesos }}.{% else %}Quedó al día.{% endif %}
   {% if aviso['exceso'] > 0 %}{{ aviso['exceso']|pesos }} quedaron como saldo a favor.{% endif %}
 </div>

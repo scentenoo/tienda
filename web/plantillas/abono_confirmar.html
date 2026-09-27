@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block titulo %}Confirmar abono · {{ c['name'] }}{% endblock %}
+{% block titulo %}Confirmar {{ 'pago total' if pago_total else 'abono' }} · {{ c['name'] }}{% endblock %}
 {% block contenido %}
 <a class="volver" href="{{ url_for('abono', client_id=c['id']) }}">‹ Corregir</a>
-<h1>Confirmar abono</h1>
+<h1>Confirmar {{ 'pago total' if pago_total else 'abono' }}</h1>
 <p class="sub">{{ c['name'] }} · "{{ nota }}"</p>
 
 <div class="tarjeta resumen-abono">
   <div><span>Saldo actual</span><b>{{ deuda|pesos }}</b></div>
-  <div><span>Abono</span><b class="positivo">−{{ monto|pesos }}</b></div>
+  <div><span>{{ 'Pago total' if pago_total else 'Abono' }}</span><b class="positivo">−{{ monto|pesos }}</b></div>
   <div class="total"><span>Queda debiendo</span><b>{{ queda|pesos }}</b></div>
   {% if exceso > 0 %}
   <div class="aviso-exceso">Paga {{ exceso|pesos }} de más: se anota como saldo a favor.</div>
@@ -30,7 +30,7 @@
 <form method="post" action="{{ url_for('abono_confirmar', client_id=c['id']) }}" id="confirmar">
   <input type="hidden" name="csrf" value="{{ csrf() }}">
   <input type="hidden" name="codigo" value="{{ codigo }}">
-  <button class="boton" style="width:100%; margin-top: 16px">Guardar abono de {{ monto|pesos }}</button>
+  <button class="boton" style="width:100%; margin-top: 16px">Guardar {{ 'pago total' if pago_total else 'abono' }} de {{ monto|pesos }}</button>
 </form>
 
 <script>

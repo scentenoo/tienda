@@ -383,6 +383,11 @@ def abono(client_id):
 
     _revisar_csrf()
     monto, nota = _leer_monto(request.form.get("monto")), request.form.get("nota", "").strip()
+    deuda = float(c["total_debt"] or 0)
+    pago_total = deuda > 0 and monto >= round(deuda)
+    # Si paga todo no es un abono: la nota por defecto se corrige sola
+    if pago_total and nota.lower() == "abono":
+        nota = "pago total"
     error = None
     if monto <= 0:
         error = "Escriba el monto del abono."
@@ -396,10 +401,9 @@ def abono(client_id):
     # la página, el abono no se registra dos veces.
     codigo = secrets.token_urlsafe(16)
     session["abono_pendiente"] = {"codigo": codigo, "cliente": client_id,
-                                  "monto": monto, "nota": nota}
-    deuda = float(c["total_debt"] or 0)
+                                  "monto": monto, "nota": nota, "pago_total": pago_total}
     return render_template(
-        "abono_confirmar.html", c=c, monto=monto, nota=nota, codigo=codigo,
+        "abono_confirmar.html", c=c, monto=monto, nota=nota, codigo=codigo, pago_total=pago_total,
         deuda=deuda, queda=max(0.0, deuda - monto), exceso=max(0.0, monto - max(deuda, 0)),
         reparto=_reparto_abono(conn, client_id, monto))
 
@@ -423,7 +427,7 @@ def abono_confirmar(client_id):
         return render_template("aviso.html", titulo="No se registró el abono",
                                mensaje=f"No se guardó nada. Detalle: {e}"), 500
     session["aviso"] = {"monto": pendiente["monto"], "deuda_nueva": resumen["deuda_nueva"],
-                        "exceso": resumen["exceso"]}
+                        "exceso": resumen["exceso"], "pago_total": pendiente.get("pago_total")}
     return redirect(url_for("cliente", client_id=client_id))
 
 

@@ -259,8 +259,9 @@ def _accion(conn, plantillas, resp):
     if ep == "abono":
         nombre = _nombre(conn, "clients", _id("client_id"))
         if plantilla == "abono_confirmar.html":
-            return ("paso", f"Empezó un abono de {pesos(ctx.get('monto'))} a {nombre}",
-                    _escrito(("nota", "Nota")), "Falta tocar Confirmar")
+            que = "un pago total" if ctx.get("pago_total") else "un abono"
+            return ("paso", f"Empezó {que} de {pesos(ctx.get('monto'))} a {nombre}",
+                    f"Nota: {ctx.get('nota')}", "Falta tocar Confirmar")
         return "fallido", f"Intentó un abono a {nombre}", _escrito(("monto", "Monto"), ("nota", "Nota")), resultado
     if ep == "abono_confirmar":
         p = g.pendiente.get("abono_pendiente") or {}
@@ -268,7 +269,8 @@ def _accion(conn, plantillas, resp):
         if conn.guardo:
             deuda = conn.execute("SELECT total_debt FROM clients WHERE id = ?",
                                  (_id("client_id"),)).fetchone()
-            return ("nuevo", f"Registró un abono de {pesos(p.get('monto'))} a {nombre}",
+            que = "un pago total" if p.get("pago_total") else "un abono"
+            return ("nuevo", f"Registró {que} de {pesos(p.get('monto'))} a {nombre}",
                     f"Nota: {p.get('nota')}\nLa deuda quedó en {pesos(deuda[0] if deuda else 0)}", "")
         return ("fallido", f"Tocó Confirmar en un abono a {nombre}", "",
                 resultado if resultado != "No se guardó nada"

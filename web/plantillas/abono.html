@@ -16,7 +16,7 @@
   <button type="button" class="boton secundario chico" id="todo">Paga todo: {{ c['total_debt']|pesos }}</button>
   {% endif %}
   <label class="campo">Nota
-    <input type="text" name="nota" value="{{ nota }}" maxlength="120" required>
+    <input type="text" name="nota" value="{{ nota }}" maxlength="120" required id="nota">
   </label>
   <button class="boton" style="width:100%; margin-top: 14px">Continuar</button>
   <p class="sub" style="margin: 10px 0 0">En el siguiente paso verá cómo queda antes de guardar.</p>
@@ -29,10 +29,21 @@ function formatear() {
   var d = campo.value.replace(/\D/g, "");
   campo.value = d ? "$" + d.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
 }
-campo.addEventListener("input", formatear);
+// Si paga toda la deuda no es un abono sino un pago total; la nota cambia
+// sola, salvo que se haya escrito otra cosa
+var nota = document.getElementById("nota"), deuda = {{ c['total_debt']|round|int }};
+function ajustarNota() {
+  var monto = parseInt(campo.value.replace(/\D/g, "") || "0", 10);
+  var total = deuda > 0 && monto >= deuda;
+  if (total && nota.value.trim().toLowerCase() === "abono") nota.value = "pago total";
+  if (!total && nota.value.trim().toLowerCase() === "pago total") nota.value = "abono";
+}
+campo.addEventListener("input", function () { formatear(); ajustarNota(); });
 formatear();
 document.getElementById("todo")?.addEventListener("click", function () {
-  campo.value = "{{ c['total_debt']|round|int }}"; formatear();
+  campo.value = String(deuda); formatear();
+  if (!nota.value.trim()) nota.value = "abono";
+  ajustarNota();
 });
 </script>
 {% endblock %}
