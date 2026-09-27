@@ -504,7 +504,7 @@ class ReportsWindow:
                     COALESCE(SUM(
                         CASE 
                             WHEN ct.transaction_type = 'debit' THEN ct.amount
-                            WHEN ct.transaction_type = 'credit' THEN -ct.amount
+                            WHEN ct.transaction_type IN ('credit', 'debit_reversal') THEN -ct.amount
                             ELSE 0
                         END
                     ), 0) as calculated_debt
@@ -932,7 +932,7 @@ class ReportsWindow:
                 cursor.execute("""
                     SELECT 
                         COALESCE(SUM(CASE WHEN transaction_type = 'debit' THEN amount ELSE 0 END), 0) as debits,
-                        COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE 0 END), 0) as credits
+                        COALESCE(SUM(CASE WHEN transaction_type IN ('credit', 'debit_reversal') THEN amount ELSE 0 END), 0) as credits
                     FROM client_transactions 
                     WHERE client_id = ?
                 """, (client_id,))
@@ -1058,7 +1058,7 @@ class ReportsWindow:
             cursor.execute("""
                 SELECT 
                     COALESCE(SUM(CASE WHEN transaction_type = 'debit' THEN amount ELSE 0 END), 0) as debits,
-                    COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE 0 END), 0) as credits
+                    COALESCE(SUM(CASE WHEN transaction_type IN ('credit', 'debit_reversal') THEN amount ELSE 0 END), 0) as credits
                 FROM client_transactions 
                 WHERE client_id = ?
             """, (self.client.id,))
@@ -2302,7 +2302,7 @@ class ReportsWindow:
                 cursor.execute("""
                     SELECT 
                         COALESCE(SUM(CASE WHEN transaction_type = 'debit' THEN amount ELSE 0 END), 0) as debits,
-                        COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE 0 END), 0) as credits
+                        COALESCE(SUM(CASE WHEN transaction_type IN ('credit', 'debit_reversal') THEN amount ELSE 0 END), 0) as credits
                     FROM client_transactions 
                     WHERE client_id = ?
                 """, (client_id,))

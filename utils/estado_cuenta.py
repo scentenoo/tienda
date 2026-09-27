@@ -85,13 +85,16 @@ def calcular(conn, client_id) -> dict:
     for _id, tipo, monto, descripcion, sale_id, fecha in filas:
         if _id in anulados:
             continue
-        if tipo == "debit_reversal":
-            # Reversión sin cargo que anular: cuenta como un saldo a favor
-            tipo, descripcion = "credit", "Anulación de venta"
+        anulacion = tipo == "debit_reversal"
+        if anulacion:
+            # Reversión sin cargo que anular: baja la deuda como un abono, pero
+            # no es plata que el cliente pagó
+            tipo, descripcion = "credit", "Venta anulada"
         monto = float(monto)
         saldo += monto if tipo == "debit" else -monto
         movimientos.append({"tipo": tipo, "monto": monto, "descripcion": descripcion or "",
-                            "sale_id": sale_id, "fecha": fecha, "saldo": saldo})
+                            "sale_id": sale_id, "fecha": fecha, "saldo": saldo,
+                            "anulacion": anulacion})
         if saldo <= 0.5:
             inicio = len(movimientos)   # quedó en ceros: se empieza después de aquí
 
@@ -167,13 +170,17 @@ def exportar_pdf(datos, destino=None):
         doc.build(contenido)
         return ruta
 
+    # Si hubo ventas anuladas, lo descontado no fue todo abonos
+    anulaciones = any(m.get("anulacion") for m in datos["movimientos"])
+    ya = "ya se descontaron" if anulaciones else "ya abonó"
+
     # Lo primero que pregunta el cliente: ¿de qué compras es lo que debo?
     pendientes = []
     for m in datos["movimientos"]:
         if m["tipo"] == "debit" and m["queda"] > 0.5:
             parte = f"compra del {_fecha(m['fecha'], True)}: {_moneda(m['queda'])}"
             if m["abonado"] > 0.5:
-                parte += f" (de {_moneda(m['monto'])}, ya abonó {_moneda(m['abonado'])})"
+                parte += f" (de {_moneda(m['monto'])}, {ya} {_moneda(m['abonado'])})"
             pendientes.append(parte)
     contenido += [Paragraph("<b>Corresponde a:</b> " + " · ".join(pendientes), normal),
                   Spacer(1, 4 * mm)]
@@ -203,7 +210,8 @@ def exportar_pdf(datos, destino=None):
             estilo.append(("LINEABOVE", (0, i), (-1, i), 0.4, colors.HexColor("#bdc3c7")))
 
         if m["tipo"] == "credit":
-            texto = "Ajuste a su favor" if "ajuste" in m["descripcion"].lower() else "Abono"
+            texto = ("Venta anulada" if m.get("anulacion")
+                     else "Ajuste a su favor" if "ajuste" in m["descripcion"].lower() else "Abono")
             tabla.append([_fecha(m["fecha"], True), texto, "", "",
                           "-" + _moneda(m["monto"]), _moneda(m["saldo"])])
             estilo += [("BACKGROUND", (0, i), (-1, i), colors.HexColor("#d4edda")),
@@ -226,9 +234,9 @@ def exportar_pdf(datos, destino=None):
                           ("+" if dif > 0 else "-") + _moneda(abs(dif)), ""])
 
         if m["queda"] <= 0.5:
-            estado = "Ya quedó pagada con sus abonos"
+            estado = ("Ya quedó saldada" if anulaciones else "Ya quedó pagada con sus abonos")
         elif m["abonado"] > 0.5:
-            estado = (f"De esta compra ya abonó {_moneda(m['abonado'])}; "
+            estado = (f"De esta compra {ya} {_moneda(m['abonado'])}; "
                       f"quedan {_moneda(m['queda'])} pendientes")
         else:
             estado = "Pendiente por pagar"
@@ -243,17 +251,20 @@ def exportar_pdf(datos, destino=None):
     contenido += [t, Spacer(1, 5 * mm)]
 
     compras = sum(m["monto"] for m in datos["movimientos"] if m["tipo"] == "debit")
-    abonos = sum(m["monto"] for m in datos["movimientos"] if m["tipo"] == "credit")
-    resumen = Table([
-        ["Total de compras", _moneda(compras)],
-        ["(-) Total abonado", "-" + _moneda(abonos)],
-        ["Saldo pendiente", _moneda(datos["deuda"])],
-    ], colWidths=[50 * mm, 35 * mm], hAlign="RIGHT")
+    abonos = sum(m["monto"] for m in datos["movimientos"]
+                 if m["tipo"] == "credit" and not m.get("anulacion"))
+    anuladas = sum(m["monto"] for m in datos["movimientos"] if m.get("anulacion"))
+    filas = [["Total de compras", _moneda(compras)],
+             ["(-) Total abonado", "-" + _moneda(abonos)]]
+    if anuladas:
+        filas.append(["(-) Ventas anuladas", "-" + _moneda(anuladas)])
+    filas.append(["Saldo pendiente", _moneda(datos["deuda"])])
+    resumen = Table(filas, colWidths=[50 * mm, 35 * mm], hAlign="RIGHT")
     resumen.setStyle(TableStyle([
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
         ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
-        ("LINEABOVE", (0, 2), (-1, 2), 0.8, colors.black),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("LINEABOVE", (0, -1), (-1, -1), 0.8, colors.black),
     ]))
     contenido += [resumen, Spacer(1, 6 * mm)]
 

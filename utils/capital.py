@@ -92,7 +92,8 @@ def girable_por_mes(conn) -> list:
     """Lo que de verdad se podía repartir cada mes, frente a lo que se giró.
 
     Girable = utilidad del mes − lo que creció la cartera ese mes. Si el fiado
-    crece, esa utilidad todavía está en la calle y no se puede repartir.
+    crece, esa utilidad todavía está en la calle y no se puede repartir. La
+    cartera crece con lo fiado y baja con los abonos y las ventas anuladas.
     """
     resultado = []
     for mes in meses_disponibles(conn):
@@ -101,7 +102,8 @@ def girable_por_mes(conn) -> list:
 
         delta = conn.execute("""
             SELECT COALESCE(SUM(CASE WHEN transaction_type = 'debit'  THEN amount ELSE 0 END), 0)
-                 - COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE 0 END), 0)
+                 - COALESCE(SUM(CASE WHEN transaction_type IN ('credit', 'debit_reversal')
+                                     THEN amount ELSE 0 END), 0)
               FROM client_transactions WHERE created_at >= ? AND created_at < ?""",
             (desde, hasta)).fetchone()[0]
 
