@@ -7,6 +7,11 @@
 <link rel="manifest" href="{{ url_for('manifiesto') }}">
 <link rel="icon" href="{{ url_for('static', filename='icono-192.png') }}">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icono-192.png') }}">
+{# iPhone: al agregarla a la pantalla de inicio se abre como app, sin barras de Safari #}
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HYE">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>{% block titulo %}Charcutería HYE{% endblock %}</title>
 <style>
 :root {
