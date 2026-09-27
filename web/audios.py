@@ -25,8 +25,13 @@ from web.app import DESARROLLO, _revisar_csrf, app, db, pesos, requiere_ingreso
 # Si uno está saturado (Google responde 503) o se acabó su cupo gratis del
 # día (429), se prueba el siguiente.
 MODELOS = [m.strip() for m in os.environ.get(
-    "GEMINI_MODELO", "gemini-3.8-flash,gemini-3.7-flash,gemini-2.5-flash").split(",") if m.strip()]
+    "GEMINI_MODELO", "gemini-3.8-flash,gemini-3.7-flash,gemini-2.5-flash,"
+                     "gemini-3.1-flash-lite,gemini-2.5-flash-lite").split(",") if m.strip()]
 PASAR_AL_SIGUIENTE = {404, 429, 500, 503, 504}
+# Un modelo sin cupo (429) o que no existe (404) no se vuelve a pedir en un
+# rato: cada intento gastaría más cupo o tiempo. modelo → hasta cuándo.
+_en_pausa = {}
+PAUSA = {429: 15 * 60, 404: 6 * 60 * 60}
 TAMANO_MAXIMO = 15 * 1024 * 1024        # una nota de voz de un minuto pesa ~100 KB
 
 # extensión → (tipo para el navegador, tipo para Gemini)
@@ -235,7 +240,13 @@ def escuchar(audio, tipo, catalogo):
         if quedan < 5:
             break
         if modelo is None:          # entre vuelta y vuelta, una pausa
+            if not intentos or all(c in PAUSA for c in codigos):
+                break               # nada saturado: otra vuelta no sirve
             time.sleep(min(3, quedan - 5))
+            continue
+        if _en_pausa.get(modelo, 0) > time.monotonic():
+            if f"{modelo}: en pausa" not in intentos:
+                intentos.append(f"{modelo}: en pausa")
             continue
         try:
             respuesta = _pedir(modelo, datos, clave, quedan)
@@ -249,6 +260,8 @@ def escuchar(audio, tipo, catalogo):
                 raise RuntimeError(f"Gemini respondió con error {e.code}. {detalle}".strip()) from e
             codigos.append(e.code)
             intentos.append(f"{modelo}: {e.code}")
+            if e.code in PAUSA:
+                _en_pausa[modelo] = time.monotonic() + PAUSA[e.code]
         except (urllib.error.URLError, TimeoutError) as e:
             raise RuntimeError("No se pudo hablar con Gemini (sin conexión o tardó "
                                "demasiado). Vuelva a intentar.") from e
@@ -256,7 +269,7 @@ def escuchar(audio, tipo, catalogo):
         if codigos and all(c == 404 for c in codigos):
             raise RuntimeError(f"Ninguno de los modelos de Gemini está disponible ({', '.join(MODELOS)}). "
                                "Revise GEMINI_MODELO en el servidor.")
-        if 429 in codigos and not {500, 503, 504} & set(codigos):
+        if not {500, 503, 504} & set(codigos) and (429 in codigos or not codigos):
             raise RuntimeError("Se acabó por ahora el cupo gratis de Gemini. "
                                "Espere un rato (o hasta mañana) y vuelva a intentar.")
         raise RuntimeError("Gemini está saturado en este momento. Vuelva a intentar en "
