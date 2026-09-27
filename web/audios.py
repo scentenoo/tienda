@@ -12,6 +12,7 @@ import hmac
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -343,6 +344,12 @@ def _tipo_gemini(fila):
     return TIPOS[extension][1] if extension in TIPOS else fila["tipo"]
 
 
+# Los audios que Gemini está escuchando ahora. La página corre en un solo
+# proceso (ver Dockerfile), así que basta con tenerlos en memoria.
+_escuchando = set()
+_candado = threading.Lock()
+
+
 @app.post("/audios/<int:audio_id>/procesar")
 @requiere_ingreso
 def audio_procesar(audio_id):
@@ -352,6 +359,11 @@ def audio_procesar(audio_id):
                         (audio_id,)).fetchone()
     if fila is None or fila["estado"] == "registrado":
         return _respuesta_procesar(audio_id)
+    # Un toque repetido mientras Gemini escucha no lo manda otra vez
+    with _candado:
+        if audio_id in _escuchando:
+            return _respuesta_procesar(audio_id)
+        _escuchando.add(audio_id)
     try:
         resultado = escuchar(bytes(fila["audio"]), _tipo_gemini(fila), _catalogo(conn))
         conn.execute("UPDATE audios_venta SET estado = 'listo', resultado = ?, error = NULL "
@@ -359,6 +371,9 @@ def audio_procesar(audio_id):
     except RuntimeError as e:
         conn.execute("UPDATE audios_venta SET estado = 'error', error = ? WHERE id = ?",
                      (str(e), audio_id))
+    finally:
+        with _candado:
+            _escuchando.discard(audio_id)
     conn.commit()
     return _respuesta_procesar(audio_id)
 
@@ -490,6 +505,7 @@ def audios():
                            "error": f["error"], "fecha": fecha_sugerida(f),
                            "hora": (f["grabado_en"] or "")[11:16],
                            "fecha_en_nombre": bool(f["grabado_en"]),
+                           "escuchando": f["id"] in _escuchando,
                            "r": resumen(conn, json.loads(f["resultado"])) if f["resultado"] else None})
     registrados = conn.execute("""
         SELECT a.sale_id, s.total, s.created_at, c.name AS cliente
