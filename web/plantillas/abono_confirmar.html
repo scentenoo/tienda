@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block titulo %}Confirmar abono · {{ c['name'] }}{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('abono', client_id=c['id']) }}">‹ Corregir</a>
+<h1>Confirmar abono</h1>
+<p class="sub">{{ c['name'] }} · "{{ nota }}"</p>
+
+<div class="tarjeta resumen-abono">
+  <div><span>Saldo actual</span><b>{{ deuda|pesos }}</b></div>
+  <div><span>Abono</span><b class="positivo">−{{ monto|pesos }}</b></div>
+  <div class="total"><span>Queda debiendo</span><b>{{ queda|pesos }}</b></div>
+  {% if exceso > 0 %}
+  <div class="aviso-exceso">Paga {{ exceso|pesos }} de más: se anota como saldo a favor.</div>
+  {% endif %}
+</div>
+
+{% if reparto %}
+<h2>Se aplica a</h2>
+<ul class="lista">
+  {% for r in reparto %}
+  <li><div class="fila">
+    <div class="izq"><b>Compra del {{ r['fecha']|fecha(false) }}</b>
+      <span>{% if r['queda'] <= 0.5 %}Queda pagada{% else %}Quedan {{ r['queda']|pesos }}{% endif %}</span></div>
+    <div class="der positivo">−{{ r['aplicado']|pesos }}</div>
+  </div></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<form method="post" action="{{ url_for('abono_confirmar', client_id=c['id']) }}" id="confirmar">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <input type="hidden" name="codigo" value="{{ codigo }}">
+  <button class="boton" style="width:100%; margin-top: 16px">Guardar abono de {{ monto|pesos }}</button>
+</form>
+
+<script>
+// Evita el doble toque; el servidor tampoco lo registraría dos veces.
+document.getElementById("confirmar").addEventListener("submit", function () {
+  var b = this.querySelector("button"); b.disabled = true; b.textContent = "Guardando…";
+});
+</script>
+{% endblock %}

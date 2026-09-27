@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}Abono · {{ c['name'] }}{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('cliente', client_id=c['id']) }}">‹ {{ c['name'] }}</a>
+<h1>Registrar abono</h1>
+<p class="sub">Saldo pendiente: <b>{{ c['total_debt']|pesos }}</b></p>
+
+<form method="post" class="tarjeta">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <label class="campo">Monto
+    <input type="text" name="monto" value="{{ monto }}" inputmode="numeric" placeholder="$0"
+           autocomplete="off" autofocus required id="monto">
+  </label>
+  {% if c['total_debt'] > 0 %}
+  <button type="button" class="boton secundario chico" id="todo">Paga todo: {{ c['total_debt']|pesos }}</button>
+  {% endif %}
+  <label class="campo">Nota
+    <input type="text" name="nota" value="{{ nota }}" maxlength="120" required>
+  </label>
+  <button class="boton" style="width:100%; margin-top: 14px">Continuar</button>
+  <p class="sub" style="margin: 10px 0 0">En el siguiente paso verá cómo queda antes de guardar.</p>
+</form>
+
+<script>
+// Puntos de miles mientras se escribe: 50000 → 50.000
+var campo = document.getElementById("monto");
+function formatear() {
+  var d = campo.value.replace(/\D/g, "");
+  campo.value = d ? "$" + d.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
+}
+campo.addEventListener("input", formatear);
+formatear();
+document.getElementById("todo")?.addEventListener("click", function () {
+  campo.value = "{{ c['total_debt']|round|int }}"; formatear();
+});
+</script>
+{% endblock %}

@@ -24,6 +24,7 @@
   }
 }
 * { box-sizing: border-box; }
+button, input { font-family: inherit; }
 body { margin: 0; background: var(--fondo); color: var(--texto);
   font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 main { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
@@ -77,6 +78,16 @@ details summary::-webkit-details-marker { display: none; }
 .pie { display: flex; justify-content: space-between; align-items: center; margin-top: 28px;
   color: var(--suave); font-size: .82rem; }
 .pie button { background: none; border: 0; color: var(--acento); font: inherit; cursor: pointer; padding: 0; }
+.campo { display: block; font-size: .88rem; color: var(--suave); margin-top: 12px; }
+.campo:first-of-type { margin-top: 0; }
+.campo input { margin-top: 4px; color: var(--texto); }
+.boton.chico { padding: 8px 12px; font-size: .88rem; margin-top: 8px; }
+.boton:disabled { opacity: .6; }
+.resumen-abono div { display: flex; justify-content: space-between; padding: 6px 0; font-variant-numeric: tabular-nums; }
+.resumen-abono div span { color: var(--suave); }
+.resumen-abono .total { border-top: 1px solid var(--borde); margin-top: 4px; padding-top: 10px; font-size: 1.1rem; }
+.resumen-abono .aviso-exceso { display: block; background: var(--aviso-fondo); color: var(--aviso); border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: .88rem; }
+.exito { background: var(--bien-fondo); color: var(--bien); padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; }
 </style>
 </head>
 <body>

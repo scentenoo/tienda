@@ -25,6 +25,7 @@ from config.nube import conexion_directa
 from utils import estado_cuenta
 from utils.conciliacion import MESES_ES, deudores, telefonos_clientes
 from utils.informe_movil import html_pendientes
+from servicios.abonos import registrar_abono
 from web.clave import huella, verificar
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -242,7 +243,8 @@ def cliente(client_id):
     movimientos = conn.execute("""
         SELECT created_at, transaction_type, amount, description FROM client_transactions
          WHERE client_id = ? ORDER BY created_at DESC, id DESC LIMIT 25""", (client_id,)).fetchall()
-    return render_template("cliente.html", c=c, movimientos=movimientos)
+    return render_template("cliente.html", c=c, movimientos=movimientos,
+                           aviso=session.pop("aviso", None))
 
 
 @app.get("/cliente/<int:client_id>/estado-de-cuenta.pdf")
@@ -258,6 +260,93 @@ def estado_de_cuenta(client_id):
     return send_file(pdf, mimetype="application/pdf",
                      download_name=estado_cuenta.nombre_archivo(datos) + ".pdf",
                      as_attachment=request.args.get("descargar") == "1")
+
+
+# ── Abonos ───────────────────────────────────────────────────────────────────
+def _leer_monto(texto):
+    """'50.000', '$50000' o '50 000' → 50000. En Colombia el punto separa
+    miles; no se usan centavos."""
+    limpio = "".join(c for c in (texto or "") if c.isdigit())
+    return int(limpio) if limpio else 0
+
+
+def _reparto_abono(conn, client_id, monto):
+    """A qué compras pendientes se aplicaría el abono, de la más vieja a la
+    más nueva: la misma regla del estado de cuenta y del PC."""
+    try:
+        datos = estado_cuenta.calcular(conn, client_id)
+    except ValueError:
+        return []
+    reparto, restante = [], monto
+    for m in datos["movimientos"]:
+        if m["tipo"] != "debit" or m["queda"] <= 0.5 or restante <= 0:
+            continue
+        aplicado = min(restante, m["queda"])
+        restante -= aplicado
+        reparto.append({"fecha": m["fecha"], "debe": m["queda"], "aplicado": aplicado,
+                        "queda": m["queda"] - aplicado})
+    return reparto
+
+
+def _cliente_o_404(conn, client_id):
+    c = conn.execute("SELECT id, name, total_debt FROM clients WHERE id = ?", (client_id,)).fetchone()
+    if c is None:
+        abort(404)
+    return c
+
+
+@app.route("/cliente/<int:client_id>/abono", methods=["GET", "POST"])
+@requiere_ingreso
+def abono(client_id):
+    conn = db()
+    c = _cliente_o_404(conn, client_id)
+    if request.method == "GET":
+        return render_template("abono.html", c=c, monto="", nota="abono", error=None)
+
+    _revisar_csrf()
+    monto, nota = _leer_monto(request.form.get("monto")), request.form.get("nota", "").strip()
+    error = None
+    if monto <= 0:
+        error = "Escriba el monto del abono."
+    elif not nota:
+        error = "Escriba una nota (por ejemplo: abono en efectivo)."
+    if error:
+        return render_template("abono.html", c=c, monto=request.form.get("monto", ""),
+                               nota=nota, error=error)
+
+    # Un código de un solo uso: si se toca dos veces "Confirmar" o se recarga
+    # la página, el abono no se registra dos veces.
+    codigo = secrets.token_urlsafe(16)
+    session["abono_pendiente"] = {"codigo": codigo, "cliente": client_id,
+                                  "monto": monto, "nota": nota}
+    deuda = float(c["total_debt"] or 0)
+    return render_template(
+        "abono_confirmar.html", c=c, monto=monto, nota=nota, codigo=codigo,
+        deuda=deuda, queda=max(0.0, deuda - monto), exceso=max(0.0, monto - max(deuda, 0)),
+        reparto=_reparto_abono(conn, client_id, monto))
+
+
+@app.post("/cliente/<int:client_id>/abono/confirmar")
+@requiere_ingreso
+def abono_confirmar(client_id):
+    _revisar_csrf()
+    pendiente = session.pop("abono_pendiente", None)
+    if (not pendiente or pendiente["cliente"] != client_id
+            or not secrets.compare_digest(pendiente["codigo"], request.form.get("codigo", ""))):
+        # Ya se registró (doble toque o recarga) o la confirmación caducó
+        return redirect(url_for("cliente", client_id=client_id))
+
+    conn = db()
+    try:
+        resumen = registrar_abono(conn, client_id, pendiente["monto"], pendiente["nota"])
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return render_template("aviso.html", titulo="No se registró el abono",
+                               mensaje=f"No se guardó nada. Detalle: {e}"), 500
+    session["aviso"] = {"monto": pendiente["monto"], "deuda_nueva": resumen["deuda_nueva"],
+                        "exceso": resumen["exceso"]}
+    return redirect(url_for("cliente", client_id=client_id))
 
 
 @app.get("/inventario")
