@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Gastos · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
+{% if aviso %}<div class="exito">✓ {{ aviso }}</div>{% endif %}
+<h1>Gastos operativos</h1>
+<a class="boton" style="width:100%; margin: 10px 0 12px" href="{{ url_for('gasto') }}">＋ Nuevo gasto</a>
+
+<div class="navdia">
+  <a href="{{ url_for('gastos', mes=anterior) }}">‹ Anterior</a>
+  <b>{{ titulo|capitalize }}</b>
+  {% if siguiente %}<a href="{{ url_for('gastos', mes=siguiente) }}">Siguiente ›</a>{% else %}<span></span>{% endif %}
+</div>
+<div class="tarjeta kpi" style="margin-bottom:12px"><b>{{ total|pesos }}</b><span>{{ gastos|length }} gasto{{ '' if gastos|length == 1 else 's' }}</span></div>
+
+{% if gastos %}
+<ul class="lista">
+  {% for g in gastos %}
+  <li><a class="fila" href="{{ url_for('gasto', expense_id=g['id']) }}">
+    <div class="izq"><b>{{ g['description'] }}</b><span>{{ g['date']|fecha(false) }}</span></div>
+    <div class="der">{{ g['amount']|pesos }}</div>
+  </a></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">No hay gastos este mes.</p>
+{% endif %}
+{% endblock %}

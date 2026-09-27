@@ -1,9 +1,30 @@
 {% extends "base.html" %}
-{% block titulo %}Clientes · Charcutería HYE{% endblock %}
+{% block titulo %}Clientes · Charcutería HYE<script>
+// El mismo informe HTML interactivo del PC ("Enviar al celular"), listo para
+// mandar por WhatsApp. Si el teléfono no puede compartir archivos, se descarga.
+document.getElementById("informe").addEventListener("click", async function (e) {
+  if (!navigator.canShare) return;
+  e.preventDefault();
+  var b = this, texto = b.textContent;
+  b.textContent = "Preparando…";
+  try {
+    var r = await fetch(b.href);
+    var nombre = (r.headers.get("Content-Disposition") || "").match(/filename="?([^";]+)/);
+    var archivo = new File([await r.blob()], nombre ? nombre[1] : "pendientes.html", { type: "text/html" });
+    if (navigator.canShare({ files: [archivo] })) await navigator.share({ files: [archivo], title: "Pendientes por cobrar" });
+    else window.location = b.href;
+  } catch (err) {
+    if (err.name !== "AbortError") window.location = b.href;
+  } finally { b.textContent = texto; }
+});
+</script>
+{% endblock %}
 {% block contenido %}
 <a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
 <h1>Clientes</h1>
 <p class="sub">Primero los que deben · <a href="{{ url_for('cliente_nuevo') }}">+ Nuevo cliente</a></p>
+
+<a class="boton secundario" id="informe" style="width:100%; margin-bottom:12px" href="{{ url_for('pendientes_informe') }}">📤 Compartir informe de pendientes</a>
 
 <form class="buscar" method="get">
   <input type="search" name="q" value="{{ q }}" placeholder="Buscar cliente…" autocomplete="off">

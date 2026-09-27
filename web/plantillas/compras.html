@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}Compras · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
+{% if aviso %}<div class="exito">✓ {{ aviso }}</div>{% endif %}
+<h1>Compras</h1>
+<a class="boton" style="width:100%; margin: 10px 0 12px" href="{{ url_for('compra_nueva') }}">＋ Nueva compra</a>
+
+<div class="navdia">
+  <a href="{{ url_for('compras', mes=anterior) }}">‹ Anterior</a>
+  <b>{{ titulo|capitalize }}</b>
+  {% if siguiente %}<a href="{{ url_for('compras', mes=siguiente) }}">Siguiente ›</a>{% else %}<span></span>{% endif %}
+</div>
+<div class="tarjeta kpi" style="margin-bottom:12px"><b>{{ total|pesos }}</b><span>{{ lotes|length }} compra{{ '' if lotes|length == 1 else 's' }} (con IVA y flete)</span></div>
+
+{% if lotes %}
+<ul class="lista">
+  {% for l in lotes %}
+  <li><details>
+    <summary class="fila">
+      <div class="izq"><b>{{ l['items']|map(attribute='producto')|join(', ') }}</b>
+        <span>{{ l['fecha']|fecha }}{% if l['factura'] %} · Factura {{ l['factura'] }}{% endif %}</span></div>
+      <div class="der">{{ l['total']|pesos }}</div>
+    </summary>
+    <div class="detalle">
+      {% for i in l['items'] %}
+      <div><a href="{{ url_for('compra', purchase_id=i['id']) }}">{{ i['quantity']|cantidad }} × {{ i['producto'] }} a {{ i['unit_price']|pesos }}</a>
+        <span>{{ i['total']|pesos }}</span></div>
+      {% endfor %}
+      <div style="margin-top:6px">Toque un producto para editar o eliminar su compra.</div>
+    </div>
+  </details></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">No hay compras este mes.</p>
+{% endif %}
+{% endblock %}

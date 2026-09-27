@@ -3,7 +3,13 @@
 {% block contenido %}
 <a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
 <h1>Inventario</h1>
-<p class="sub">Primero los agotados</p>
+<p class="sub">Primero los agotados · <a href="{{ url_for('producto_nuevo') }}">+ Nuevo producto</a></p>
+
+<div class="kpis" style="margin-bottom:12px">
+  <div class="tarjeta kpi"><b>{{ resumen['valor']|pesos }}</b><span>Valor a precio de venta</span></div>
+  <div class="tarjeta kpi"><b>{{ resumen['productos'] }}</b><span>Productos</span>
+    <small>{{ resumen['bajo'] }} con stock bajo (≤5) · {{ resumen['agotados'] }} agotados</small></div>
+</div>
 
 <form class="buscar" method="get">
   <input type="search" name="q" value="{{ q }}" placeholder="Buscar producto…" autocomplete="off">
@@ -12,13 +18,14 @@
 {% if productos %}
 <ul class="lista">
   {% for p in productos %}
-  <li><div class="fila">
+  <li><a class="fila" href="{{ url_for('producto_editar', product_id=p['id']) }}">
     <div class="izq"><b>{{ p['name'] }}</b><span>{{ p['price']|pesos }}</span></div>
     <div class="der">
       {% if p['stock'] <= 0 %}<span class="etiqueta debe">Agotado</span>
+      {% elif p['stock'] <= 5 %}<span class="etiqueta fiado">{{ p['stock']|cantidad }} en stock</span>
       {% else %}{{ p['stock']|cantidad }} <span class="sub" style="font-size:.8rem">en stock</span>{% endif %}
     </div>
-  </div></li>
+  </a></li>
   {% endfor %}
 </ul>
 {% else %}

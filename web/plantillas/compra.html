@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}Compra #{{ c['id'] }} · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('compras', mes=c['date'][:7]) }}">‹ Compras</a>
+<h1>Compra #{{ c['id'] }}</h1>
+<p class="sub">{{ c['date']|fecha }} · {{ c['quantity']|cantidad }} × {{ c['producto'] }} a {{ c['unit_price']|pesos }} = {{ c['subtotal']|pesos }}</p>
+
+<form method="post" class="tarjeta">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <label class="campo">Total (productos + IVA + flete)
+    <input type="text" name="total" class="dinero" value="{{ c['total']|round|int }}" inputmode="numeric" required>
+  </label>
+  <div class="dos">
+    <label class="campo">IVA
+      <input type="text" name="iva" class="dinero" value="{{ (c['iva'] or 0)|round|int }}" inputmode="numeric">
+    </label>
+    <label class="campo">Flete
+      <input type="text" name="flete" class="dinero" value="{{ (c['shipping'] or 0)|round|int }}" inputmode="numeric">
+    </label>
+  </div>
+  <label class="campo">N° de factura
+    <input type="text" name="factura" value="{{ c['invoice_number'] or '' }}" maxlength="40">
+  </label>
+  <p class="sub" style="margin:8px 0 0">Como en el PC, aquí se corrigen el total, el IVA, el flete y la factura. La cantidad y el producto no cambian.</p>
+  <button class="boton" style="width:100%; margin-top: 14px">Guardar cambios</button>
+</form>
+
+<form method="post" action="{{ url_for('compra_eliminar', purchase_id=c['id']) }}" id="eliminar" style="margin-top:18px">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <button class="boton secundario" style="width:100%; color: var(--alerta)">Eliminar esta compra</button>
+</form>
+<style>.dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }</style>
+<script>
+document.getElementById("eliminar").addEventListener("submit", function (e) {
+  if (!confirm("¿Eliminar la compra? Se restarán {{ c['quantity']|cantidad }} de " + {{ c['producto']|tojson }} + " del stock.")) e.preventDefault();
+});
+document.querySelectorAll(".dinero").forEach(function (c) {
+  function f() { var d = c.value.replace(/\D/g, ""); c.value = d ? "$" + d.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ""; }
+  c.addEventListener("input", f); f();
+});
+</script>
+{% endblock %}

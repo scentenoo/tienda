@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block titulo %}Pérdidas · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
+{% if aviso %}<div class="exito">{{ aviso }}</div>{% endif %}
+<h1>Pérdidas y mermas</h1>
+<a class="boton" style="width:100%; margin: 10px 0 12px" href="{{ url_for('perdida_nueva') }}">＋ Registrar pérdida</a>
+
+<div class="navdia">
+  <a href="{{ url_for('perdidas', mes=anterior) }}">‹ Anterior</a>
+  <b>{{ titulo|capitalize }}</b>
+  {% if siguiente %}<a href="{{ url_for('perdidas', mes=siguiente) }}">Siguiente ›</a>{% else %}<span></span>{% endif %}
+</div>
+<div class="tarjeta kpi" style="margin-bottom:12px"><b>{{ total|pesos }}</b><span>{{ perdidas|length }} pérdida{{ '' if perdidas|length == 1 else 's' }} (a costo)</span>
+  {% if por_tipo %}<small>{% for t, v in por_tipo|dictsort %}{{ t }} {{ v|pesos }}{{ ' · ' if not loop.last }}{% endfor %}</small>{% endif %}</div>
+
+{% if perdidas %}
+<ul class="lista">
+  {% for p in perdidas %}
+  <li><details>
+    <summary class="fila">
+      <div class="izq"><b>{{ p['quantity']|cantidad }} × {{ p['producto'] }}</b><span>{{ p['loss_date']|fecha(false) }} · {{ p['loss_type'] }}</span></div>
+      <div class="der">{{ p['total_cost']|pesos }}</div>
+    </summary>
+    <div class="detalle">
+      <div><span>Motivo</span><span>{{ p['reason'] }}</span></div>
+      <div><span>Costo unitario</span><span>{{ p['unit_cost']|pesos }}</span></div>
+      {% if p['notes'] %}<div><span>Notas</span><span>{{ p['notes'] }}</span></div>{% endif %}
+      <form method="post" action="{{ url_for('perdida_eliminar', loss_id=p['id']) }}" class="eliminar" style="margin-top:8px">
+        <input type="hidden" name="csrf" value="{{ csrf() }}">
+        <input type="hidden" name="mes" value="{{ p['loss_date'][:7] }}">
+        <button class="boton secundario chico" style="color: var(--alerta)">Eliminar (devuelve {{ p['quantity']|cantidad }} al stock)</button>
+      </form>
+    </div>
+  </details></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">No hay pérdidas este mes.</p>
+{% endif %}
+<script>
+document.querySelectorAll("form.eliminar").forEach(function (f) {
+  f.addEventListener("submit", function (e) { if (!confirm("¿Eliminar esta pérdida?")) e.preventDefault(); });
+});
+</script>
+{% endblock %}

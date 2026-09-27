@@ -173,7 +173,8 @@ def cantidad(q):
 def fecha(texto, con_hora=True):
     if not texto:
         return ""
-    f = datetime.strptime(str(texto)[:19], "%Y-%m-%d %H:%M:%S" if len(str(texto)) >= 19 else "%Y-%m-%d")
+    texto = str(texto).replace("T", " ")      # los gastos se guardan como 2026-09-21T00:00:00
+    f = datetime.strptime(texto[:19], "%Y-%m-%d %H:%M:%S" if len(texto) >= 19 else "%Y-%m-%d")
     base = f"{f.day} {MESES_ES[f.month - 1][:3]}"
     if f.year != date.today().year:
         base += f" {f.year}"
@@ -220,6 +221,17 @@ def pendientes():
     enlaces = {n: url_for("cliente", client_id=i) for n, i in ids.items()}
     return html_pendientes(deudores(conn), telefonos_clientes(conn), enlaces,
                            f'<a class="volver" href="{url_for("inicio")}">‹ Inicio</a>')
+
+
+@app.get("/pendientes/informe.html")
+@requiere_ingreso
+def pendientes_informe():
+    """El mismo archivo HTML interactivo que "Enviar al celular" en el PC, para
+    compartirlo por WhatsApp desde el teléfono."""
+    conn = db()
+    html = html_pendientes(deudores(conn), telefonos_clientes(conn))
+    return app.response_class(html, mimetype="text/html", headers={
+        "Content-Disposition": f'attachment; filename="pendientes_{date.today().isoformat()}.html"'})
 
 
 @app.get("/clientes")
@@ -635,8 +647,15 @@ def inventario():
     if q:
         sql += " WHERE name LIKE ?"
         params = (f"%{q}%",)
-    filas = db().execute(sql + " ORDER BY stock > 0, name COLLATE NOCASE", params).fetchall()
-    return render_template("inventario.html", productos=filas, q=q)
+    conn = db()
+    filas = conn.execute(sql + " ORDER BY stock > 0, name COLLATE NOCASE", params).fetchall()
+    # Mismo resumen que la ventana de inventario del PC
+    r = conn.execute("""
+        SELECT COUNT(*), COALESCE(SUM(price * stock), 0),
+               SUM(CASE WHEN stock > 0 AND stock <= 5 THEN 1 ELSE 0 END),
+               SUM(CASE WHEN stock <= 0 THEN 1 ELSE 0 END) FROM products""").fetchone()
+    resumen = {"productos": r[0], "valor": r[1], "bajo": r[2] or 0, "agotados": r[3] or 0}
+    return render_template("inventario.html", productos=filas, q=q, resumen=resumen)
 
 
 @app.get("/ventas")
@@ -684,6 +703,13 @@ def _no_existe(_e):
     return render_template("aviso.html", titulo="No existe", mensaje="Esa página no existe."), 404
 
 
+# Inventario, compras, gastos, pérdidas y caja
+import web.operaciones  # noqa: E402,F401
+
+
 if __name__ == "__main__":
+    # Con "python -m web.app" este archivo corre como __main__ y
+    # web.operaciones se engancha a web.app (otra copia): se usa esa.
+    from web.app import app
     app.run(host="0.0.0.0" if os.environ.get("TIENDA_EN_RED") else "127.0.0.1",
             port=int(os.environ.get("PORT", 8080)), debug=DESARROLLO)

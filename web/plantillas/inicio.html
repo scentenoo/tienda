@@ -27,6 +27,10 @@
   <a href="{{ url_for('clientes') }}"><b>Clientes</b><span>Buscar y estado de cuenta</span></a>
   <a href="{{ url_for('ventas') }}"><b>Ventas</b><span>Las de hoy y días anteriores</span></a>
   <a href="{{ url_for('inventario') }}"><b>Inventario</b><span>{% if agotados %}{{ agotados }} agotado{{ '' if agotados == 1 else 's' }}{% else %}Stock y precios{% endif %}</span></a>
+  <a href="{{ url_for('compras') }}"><b>Compras</b><span>Lo que llega del proveedor</span></a>
+  <a href="{{ url_for('caja') }}"><b>Caja</b><span>Efectivo del día</span></a>
+  <a href="{{ url_for('gastos') }}"><b>Gastos</b><span>Arriendo, servicios, etc.</span></a>
+  <a href="{{ url_for('perdidas') }}"><b>Pérdidas</b><span>Mermas y vencidos</span></a>
 </nav>
 
 <div class="pie">

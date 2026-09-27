@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block titulo %}Registrar pérdida · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('perdidas') }}">‹ Pérdidas</a>
+<h1>Registrar pérdida</h1>
+<p class="sub">Se descuenta del stock al guardar.</p>
+
+<form method="post" class="tarjeta" id="formulario">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <input type="hidden" name="codigo" value="{{ codigo }}">
+  <input type="hidden" name="producto" id="producto" value="{{ d.get('producto', '') }}">
+  <label class="campo">Producto
+    <input type="search" id="buscar" placeholder="Buscar producto…" autocomplete="off">
+  </label>
+  <ul class="lista resultados" id="resultados"></ul>
+  <div class="tarjeta elegido" id="elegido" hidden></div>
+
+  <div class="dos">
+    <label class="campo">Cantidad
+      <input type="text" name="cantidad" id="cantidad" value="{{ d.get('cantidad', '') }}" inputmode="decimal" required>
+    </label>
+    <label class="campo">Costo unitario
+      <input type="text" name="costo" id="costo" class="dinero" value="{{ d.get('costo', '') }}" inputmode="numeric" required>
+    </label>
+  </div>
+  <p class="sub" id="totalPerdida" style="margin:8px 0 0"></p>
+  <div class="dos">
+    <label class="campo">Tipo
+      <select name="tipo">{% for t in tipos %}<option {{ 'selected' if d.get('tipo') == t }}>{{ t }}</option>{% endfor %}</select>
+    </label>
+    <label class="campo">Fecha
+      <input type="date" name="fecha" value="{{ d.get('fecha', '') }}">
+    </label>
+  </div>
+  <label class="campo">Motivo
+    <input type="text" name="motivo" value="{{ d.get('motivo', '') }}" maxlength="120" required placeholder="Ej: se venció, se cayó">
+  </label>
+  <label class="campo">Notas (opcional)
+    <input type="text" name="notas" value="{{ d.get('notas', '') }}" maxlength="200">
+  </label>
+  <button class="boton" style="width:100%; margin-top: 14px" id="guardar">Registrar pérdida</button>
+</form>
+<style>
+.resultados:empty { display: none; } .resultados { margin-top: 6px; } .resultados .fila { cursor: pointer; }
+.dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.elegido { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
+input[type=date] { width: 100%; font: inherit; font-size: 16px; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); margin-top: 4px; }
+</style>
+<script>
+var PRODUCTOS = {{ productos|safe }};
+function $(id) { return document.getElementById(id); }
+function pesos(v) { return "$" + Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+function num(t) { return parseFloat(String(t || "").replace(",", ".")) || 0; }
+function dinero(t) { return parseInt(String(t || "").replace(/\D/g, ""), 10) || 0; }
+function sinTildes(s) { return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) {
+  return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+function formatear(c) { var d = c.value.replace(/\D/g, ""); c.value = d ? "$" + d.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ""; }
+$("costo").addEventListener("input", function () { formatear(this); total(); });
+$("cantidad").addEventListener("input", total);
+formatear($("costo"));
+function total() {
+  var t = num($("cantidad").value) * dinero($("costo").value);
+  $("totalPerdida").textContent = t > 0 ? "Pérdida total: " + pesos(t) : "";
+}
+function mostrar() {
+  var p = PRODUCTOS.find(function (x) { return x.id === +$("producto").value; });
+  $("elegido").hidden = !p; $("buscar").parentElement.hidden = !!p;
+  if (p) $("elegido").innerHTML = '<div><b>' + esc(p.n) + '</b><br><span class="sub" style="margin:0">Stock ' +
+    String(Math.round(p.s * 1000) / 1000).replace(".", ",") + '</span></div><button type="button" class="boton secundario chico" id="cambiar">Cambiar</button>';
+  $("guardar").disabled = !p;
+}
+$("buscar").addEventListener("input", function () {
+  var q = sinTildes(this.value.trim());
+  $("resultados").innerHTML = !q ? "" : PRODUCTOS.filter(function (p) { return sinTildes(p.n).indexOf(q) !== -1; })
+    .slice(0, 8).map(function (p) {
+      return '<li><div class="fila" data-id="' + p.id + '"><div class="izq"><b>' + esc(p.n) + '</b></div></div></li>';
+    }).join("") || '<li><div class="fila"><span class="sub" style="margin:0">Sin resultados (solo productos con stock)</span></div></li>';
+});
+$("resultados").addEventListener("click", function (e) {
+  var f = e.target.closest("[data-id]"); if (!f) return;
+  var p = PRODUCTOS.find(function (x) { return x.id === +f.dataset.id; });
+  $("producto").value = p.id; $("resultados").innerHTML = ""; $("buscar").value = "";
+  if (p.c && !$("costo").value) { $("costo").value = String(Math.round(p.c)); formatear($("costo")); }
+  mostrar(); total(); $("cantidad").focus();
+});
+$("elegido").addEventListener("click", function (e) {
+  if (e.target.id === "cambiar") { $("producto").value = ""; mostrar(); $("buscar").focus(); }
+});
+$("formulario").addEventListener("submit", function () {
+  var b = $("guardar"); setTimeout(function () { b.disabled = true; b.textContent = "Guardando…"; }, 0);
+});
+mostrar(); total();
+</script>
+{% endblock %}

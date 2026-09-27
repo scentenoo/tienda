@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titulo %}Caja · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
+<h1>Caja</h1>
+<p class="sub">Efectivo que entró: ventas de contado y abonos de clientes.</p>
+
+<div class="navdia">
+  <a href="{{ url_for('caja', dia=anterior) }}">‹ Anterior</a>
+  <b>{{ 'Hoy, ' if es_hoy }}{{ dia }}</b>
+  {% if siguiente %}<a href="{{ url_for('caja', dia=siguiente) }}">Siguiente ›</a>{% else %}<span></span>{% endif %}
+</div>
+
+<div class="tarjeta resumen-abono" style="margin-bottom:12px">
+  <div><span>Ventas de contado</span><b>{{ contado|pesos }}</b></div>
+  <div><span>Abonos de clientes</span><b>{{ abonos|pesos }}</b></div>
+  <div class="total"><span>Total en caja</span><b>{{ (contado + abonos)|pesos }}</b></div>
+</div>
+
+{% if movimientos %}
+<ul class="lista">
+  {% for m in movimientos %}
+  {% set enlace = url_for('venta', sale_id=m['venta']) if m.get('venta') else (url_for('cliente', client_id=m['cliente']) if m.get('cliente') else '') %}
+  <li><{{ 'a href=' ~ enlace if enlace else 'div' }} class="fila">
+    <div class="izq"><b>{{ m['tipo'] }}</b><span>{{ m['hora']|fecha }} · {{ m['texto'] }}</span></div>
+    <div class="der positivo">{{ m['monto']|pesos }}</div>
+  </{{ 'a' if enlace else 'div' }}></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">No hubo movimientos de caja este día.</p>
+{% endif %}
+
+<h2>Últimos 30 días</h2>
+{% if historial %}
+<ul class="lista">
+  {% for h in historial %}
+  <li><a class="fila" href="{{ url_for('caja', dia=h['fecha']) }}">
+    <div class="izq"><b>{{ h['fecha']|fecha(false) }}</b><span>Contado {{ h['contado']|pesos }} · Abonos {{ h['abonos']|pesos }}</span></div>
+    <div class="der">{{ h['total']|pesos }}</div>
+  </a></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">Sin movimientos en los últimos 30 días.</p>
+{% endif %}
+{% endblock %}

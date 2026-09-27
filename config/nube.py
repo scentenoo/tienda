@@ -21,7 +21,7 @@ import os
 import re
 import sqlite3
 import time
-from datetime import datetime
+from datetime import date, datetime
 
 # Cada cuánto traer de la nube lo que se anotó desde otro lado (el celular)
 SEGUNDOS_ENTRE_SINCRONIZACIONES = 15
@@ -46,14 +46,27 @@ def _traducir_error(e):
     return sqlite3.OperationalError(mensaje)
 
 
+def _valor(v):
+    """sqlite3 convierte solo las fechas de Python a texto; libsql las
+    rechaza ("Unsupported parameter type"). Se convierten igual que sqlite3:
+    datetime → '2026-09-26 12:30:05', date → '2026-09-26'."""
+    if isinstance(v, datetime):
+        return v.isoformat(" ")
+    if isinstance(v, date):
+        return v.isoformat()
+    if isinstance(v, bool):
+        return int(v)
+    return v
+
+
 def _parametros(params):
     if params is None:
         return ()
     if isinstance(params, (list, tuple)):
-        return tuple(params)
+        return tuple(_valor(v) for v in params)
     if isinstance(params, dict):
         raise sqlite3.ProgrammingError("La base en la nube no admite parámetros con nombre")
-    return (params,)
+    return (_valor(params),)
 
 
 _AHORA_LOCAL = re.compile(r"'now'\s*,\s*'localtime'", re.IGNORECASE)

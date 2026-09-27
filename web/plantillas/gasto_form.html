@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titulo %}{{ 'Editar gasto' if g else 'Nuevo gasto' }} · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('gastos') }}">‹ Gastos</a>
+<h1>{{ 'Editar gasto' if g else 'Nuevo gasto' }}</h1>
+
+<form method="post" class="tarjeta" style="margin-top:12px" id="formulario">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <input type="hidden" name="codigo" value="{{ codigo }}">
+  <label class="campo">Descripción
+    <input type="text" name="descripcion" value="{{ d.get('descripcion', '') }}" required maxlength="120" placeholder="Ej: arriendo, luz, bolsas">
+  </label>
+  <label class="campo">Monto
+    <input type="text" name="monto" class="dinero" value="{{ d.get('monto', '') }}" inputmode="numeric" placeholder="$0" required>
+  </label>
+  <label class="campo">Fecha
+    <input type="date" name="fecha" value="{{ d.get('fecha', '') }}" required>
+  </label>
+  <button class="boton" style="width:100%; margin-top: 14px">{{ 'Guardar cambios' if g else 'Guardar gasto' }}</button>
+</form>
+
+{% if g %}
+<form method="post" id="eliminar" style="margin-top:18px">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <input type="hidden" name="eliminar" value="1">
+  <button class="boton secundario" style="width:100%; color: var(--alerta)">Eliminar gasto</button>
+</form>
+{% endif %}
+<style>input[type=date] { width: 100%; font: inherit; font-size: 16px; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); margin-top: 4px; }</style>
+<script>
+document.querySelectorAll(".dinero").forEach(function (c) {
+  function f() { var d = c.value.replace(/\D/g, ""); c.value = d ? "$" + d.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ""; }
+  c.addEventListener("input", f); f();
+});
+document.getElementById("eliminar")?.addEventListener("submit", function (e) {
+  if (!confirm("¿Eliminar este gasto? No se puede deshacer.")) e.preventDefault();
+});
+document.getElementById("formulario").addEventListener("submit", function () {
+  var b = this.querySelector("button"); setTimeout(function () { b.disabled = true; b.textContent = "Guardando…"; }, 0);
+});
+</script>
+{% endblock %}

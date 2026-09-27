@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% set editando = p and p.get('id') %}
+{% block titulo %}{{ 'Editar producto' if editando else 'Nuevo producto' }} · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inventario') }}">‹ Inventario</a>
+<h1>{{ 'Editar producto' if editando else 'Nuevo producto' }}</h1>
+{% if editando and p.get('costo') %}<p class="sub">Último costo de compra: {{ p['costo']|pesos }}</p>{% endif %}
+
+<form method="post" class="tarjeta" style="margin-top:12px">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <label class="campo">Nombre *
+    <input type="text" name="nombre" value="{{ p.get('nombre', '') if p else '' }}" required maxlength="80" {{ '' if editando else 'autofocus' }}>
+  </label>
+  <label class="campo">Precio de venta *
+    <input type="text" name="precio" class="dinero" value="{{ p.get('precio', '') if p else '' }}" inputmode="numeric" placeholder="$0" required>
+  </label>
+  <label class="campo">{{ 'Stock' if editando else 'Stock inicial' }}
+    <input type="text" name="stock" value="{{ p.get('stock', '') if p else '' }}" inputmode="decimal" placeholder="0">
+  </label>
+  {% if editando %}<p class="sub" style="margin:4px 0 0">Déjelo vacío para no cambiarlo. Lo normal es que el stock suba con las compras y baje con las ventas.</p>{% endif %}
+  <button class="boton" style="width:100%; margin-top: 14px">{{ 'Guardar cambios' if editando else 'Crear producto' }}</button>
+</form>
+
+{% if editando %}
+<form method="post" action="{{ url_for('producto_eliminar', product_id=p['id']) }}" id="eliminar" style="margin-top:22px">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  {% if usos and (usos['ventas'] or usos['compras'] or usos['perdidas']) %}
+  <p class="sub">Tiene {{ usos['ventas'] }} venta(s), {{ usos['compras'] }} compra(s) y {{ usos['perdidas'] }} pérdida(s).
+    Si lo elimina, esos registros quedarán como "Producto" sin nombre.</p>
+  {% endif %}
+  <button class="boton secundario" style="width:100%; color: var(--alerta)">Eliminar producto</button>
+</form>
+<script>
+document.getElementById("eliminar").addEventListener("submit", function (e) {
+  if (!confirm("¿Eliminar este producto? No se puede deshacer.")) e.preventDefault();
+});
+</script>
+{% endif %}
+<script>
+document.querySelectorAll(".dinero").forEach(function (c) {
+  function f() { var d = c.value.replace(/\D/g, ""); c.value = d ? "$" + d.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ""; }
+  c.addEventListener("input", f); f();
+});
+</script>
+{% endblock %}
