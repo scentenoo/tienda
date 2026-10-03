@@ -4,3 +4,4 @@ ttkbootstrap
 reportlab
 matplotlib
 libsql
+flask

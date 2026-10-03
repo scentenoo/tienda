@@ -26,7 +26,7 @@ from flask import (Flask, abort, g, redirect, render_template, request,
                    send_file, session, url_for)
 
 from config.nube import conexion_directa
-from utils import estado_cuenta
+from utils import estado_cuenta, perfil_clientes
 from utils.conciliacion import MESES_ES, deudores, telefonos_clientes
 from utils.informe_movil import html_pendientes
 from servicios.abonos import registrar_abono
@@ -322,7 +322,25 @@ def cliente(client_id):
     hay_mas = not todo and len(movimientos) > 25
     return render_template("cliente.html", c=c, movimientos=movimientos[:None if todo else 25],
                            hay_mas=hay_mas, aviso=session.pop("aviso", None),
-                           aviso_cliente=session.pop("aviso_cliente", None))
+                           aviso_cliente=session.pop("aviso_cliente", None),
+                           perfil=perfil_clientes.perfil(conn, client_id))
+
+
+@app.get("/clientes/por-pedir")
+@requiere_ingreso
+def clientes_por_pedir():
+    """A quién escribirle antes de la ruta: suelen pedir y no han pedido."""
+    hoy = date.today()
+    lista = perfil_clientes.perfiles(db(), hoy)
+    toca = [p for p in lista if p["estado"] == "toca"]
+    lejos = [p for p in lista if p["estado"] == "lejos"]
+    ruta = perfil_clientes.proxima_ruta(hoy)
+    return render_template(
+        "por_pedir.html", toca=toca, lejos=lejos, ruta=ruta.isoformat(),
+        ruta_texto="hoy" if ruta == hoy else _dia_largo(ruta),
+        al_dia=sum(p["estado"] == "normal" for p in lista),
+        pocas=sum(p["estado"] == "pocas" for p in lista),
+        si_todos=sum(p["tipica"] for p in toca))
 
 
 @app.get("/cliente/<int:client_id>/estado-de-cuenta.pdf")

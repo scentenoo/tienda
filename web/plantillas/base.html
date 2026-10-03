@@ -71,7 +71,9 @@ input[type=search], input[type=password], input[type=text], input[type=number] {
   border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); }
 .boton { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0;
   border-radius: 10px; padding: 12px 16px; font-size: 1rem; font-weight: 600; cursor: pointer;
-  text-decoration: none; background: var(--acento); color: var(--sobre-acento); }
+  text-decoration: none; background: var(--acento); color: var(--sobre-acento);
+  transition: transform 120ms ease-out; }
+.boton:active { transform: scale(0.97); }
 .boton.secundario { background: var(--chip); color: var(--texto); }
 .botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
 .error { background: var(--alerta-fondo); color: var(--alerta); padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; }
@@ -102,7 +104,8 @@ main.con-barra { padding-bottom: 96px; }
   grid-template-columns: repeat(5, 1fr); background: var(--tarjeta); border-top: 1px solid var(--borde);
   padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
 .barra a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0;
-  color: var(--suave); text-decoration: none; font-size: .72rem; }
+  color: var(--suave); text-decoration: none; font-size: .72rem; transition: transform 120ms ease-out; }
+.barra a:active { transform: scale(0.94); }
 .barra a.on { color: var(--acento); font-weight: 700; }
 .barra a.vender { color: var(--acento); font-weight: 700; }
 .icono { flex: none; }
@@ -111,7 +114,9 @@ main.con-barra { padding-bottom: 96px; }
 .accesos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
 .accesos a { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px;
   border-radius: 12px; background: var(--tarjeta); border: 1px solid var(--borde); color: var(--texto);
-  text-decoration: none; font-size: .85rem; font-weight: 600; text-align: center; }
+  text-decoration: none; font-size: .85rem; font-weight: 600; text-align: center;
+  transition: transform 120ms ease-out; }
+.accesos a:active { transform: scale(0.97); }
 .accesos a.principal { background: var(--acento); color: var(--sobre-acento); border-color: var(--acento); }
 .lista .fila .ico { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
   background: var(--chip); color: var(--acento); margin-right: 12px; flex: none; }

@@ -26,6 +26,27 @@
   {% endif %}
 </div>
 
+{% if perfil %}
+<div class="tarjeta" style="margin-top:12px">
+  <div class="kpis">
+    <div class="kpi"><b>{{ perfil['tipica']|pesos }}</b><span>Compra típica</span>
+      <small>Promedio {{ perfil['promedio']|pesos }}</small></div>
+    <div class="kpi"><b>{% if perfil['ritmo'] %}Cada {{ perfil['ritmo'] }} d{% else %}—{% endif %}</b><span>Cada cuánto compra</span>
+      <small>Última hace {{ perfil['dias_sin_venir'] }} día{{ '' if perfil['dias_sin_venir'] == 1 else 's' }}</small></div>
+  </div>
+  {% if perfil['de_siempre'] or perfil['sugerencia'] %}
+  <div class="detalle" style="padding:10px 0 0">
+    {% if perfil['de_siempre'] %}
+    <div><span>Lleva siempre</span><span style="text-align:right">{% for nombre, q in perfil['de_siempre'] %}{{ q|cantidad }} {{ nombre }}{{ '' if loop.last else ', ' }}{% endfor %}</span></div>
+    {% endif %}
+    {% if perfil['sugerencia'] %}
+    <div style="color:var(--texto)"><span>Ofrécele</span><span style="text-align:right"><b>{{ perfil['sugerencia']['producto'] }}</b> ({{ perfil['sugerencia']['precio']|pesos }})</span></div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
 <a class="boton" style="width:100%; margin-top: 12px" href="{{ url_for('abono', client_id=c['id']) }}">Registrar abono</a>
 
 {% if c['total_debt'] > 0 %}

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block titulo %}Por pedir · Charcutería HYE{% endblock %}
+{% macro cliente_fila(p) -%}
+  <li data-id="{{ p['id'] }}"><details>
+    <summary class="fila">
+      <div class="izq"><b>{{ p['nombre'] }}</b>
+        <span>Compra típica {{ p['tipica']|pesos }} · cada {{ p['ritmo'] }} día{{ '' if p['ritmo'] == 1 else 's' }}</span></div>
+      <div class="der"><span class="etiqueta {{ 'debe' if p['estado'] == 'lejos' else 'fiado' }}">hace {{ p['dias_sin_venir'] }} d</span></div>
+    </summary>
+    <div class="detalle">
+      <div><span>Última compra</span><span>{{ p['ultima']|fecha(False) }} · {{ p['ultima_total']|pesos }}</span></div>
+      <div><span>Promedio</span><span>{{ p['promedio']|pesos }} · {{ p['visitas'] }} compras en 4 meses</span></div>
+      {% if p['de_siempre'] %}
+      <div><span>Lleva siempre</span><span style="text-align:right">{% for nombre, q in p['de_siempre'] %}{{ q|cantidad }} {{ nombre }}{{ '' if loop.last else ', ' }}{% endfor %}</span></div>
+      {% endif %}
+      {% if p['sugerencia'] %}
+      <div class="ofrecer"><span>Ofrécele</span><span style="text-align:right"><b>{{ p['sugerencia']['producto'] }}</b> ({{ p['sugerencia']['precio']|pesos }})<br>su compra sería de {{ p['con_sugerencia']|pesos }}</span></div>
+      {% endif %}
+      <p class="mensaje">{{ p['mensaje'] }}</p>
+      <div class="botones" style="margin:8px 0 0">
+        {% if p['whatsapp'] %}
+        <a class="boton chico" style="margin:0; width:100%" href="{{ p['whatsapp'] }}?text={{ p['mensaje']|urlencode }}" target="_blank" rel="noopener">WhatsApp</a>
+        {% else %}
+        <button type="button" class="boton chico copiar" style="margin:0; width:100%" data-texto="{{ p['mensaje'] }}">Copiar mensaje</button>
+        {% endif %}
+        <button type="button" class="boton chico secundario ya" style="margin:0; width:100%">Ya pidió</button>
+      </div>
+      <a class="sub" style="display:block; margin:10px 0 0" href="{{ url_for('cliente', client_id=p['id']) }}">Ver cliente ›</a>
+    </div>
+  </details></li>
+{%- endmacro %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
+<h1>Por pedir</h1>
+<p class="sub">Clientes que suelen pedir y no han comprado para la ruta del {{ ruta_texto }}.
+  Toque uno para ver qué lleva y qué ofrecerle.</p>
+
+{% if toca %}
+<div class="tarjeta kpi" style="margin-bottom:14px">
+  <b>{{ si_todos|pesos }}</b><span>Si todos piden su compra típica ({{ toca|length }} cliente{{ '' if toca|length == 1 else 's' }})</span>
+</div>
+{% endif %}
+
+<p class="seccion">Les toca esta semana</p>
+{% if toca %}
+<ul class="lista" id="toca">{% for p in toca %}{{ cliente_fila(p) }}{% endfor %}</ul>
+{% else %}
+<p class="vacio">Nadie pendiente: todos los que suelen pedir ya compraron.</p>
+{% endif %}
+
+{% if lejos %}
+<p class="seccion">Hace rato no piden</p>
+<ul class="lista" id="lejos">{% for p in lejos %}{{ cliente_fila(p) }}{% endfor %}</ul>
+{% endif %}
+
+<p class="sub" id="ocultos" hidden style="margin-top:14px"><a href="#" id="mostrar"></a></p>
+
+<p class="sub" style="margin-top:18px">
+  {{ al_dia }} cliente{{ '' if al_dia == 1 else 's' }} al día · {{ pocas }} con muy pocas compras para saber cada cuánto piden.
+  Se miran los últimos 4 meses; la compra típica es la del medio (mediana), no el promedio.
+</p>
+
+<style>
+.lista summary.fila { cursor: pointer; }
+.detalle div { padding: 3px 0; }
+.detalle .ofrecer { color: var(--texto); }
+.mensaje { background: var(--chip); color: var(--texto); border-radius: 10px; padding: 10px 12px; margin: 10px 0 0; font-size: .9rem; }
+li.pidio { display: none; }
+.ver-todos li.pidio { display: block; opacity: .55; }
+</style>
+<script>
+// "Ya pidió" se recuerda en este teléfono hasta que pase la ruta.
+(function () {
+  var clave = "ya-pidio-{{ ruta }}", marcados;
+  try { marcados = JSON.parse(localStorage.getItem(clave) || "[]"); } catch (e) { marcados = []; }
+  function guardar() { try { localStorage.setItem(clave, JSON.stringify(marcados)); } catch (e) {} }
+  function pintar() {
+    document.querySelectorAll("li[data-id]").forEach(function (li) {
+      var esta = marcados.indexOf(li.dataset.id) >= 0;
+      li.classList.toggle("pidio", esta);
+      li.querySelector(".ya").textContent = esta ? "Desmarcar" : "Ya pidió";
+    });
+    var p = document.getElementById("ocultos"), a = document.getElementById("mostrar");
+    p.hidden = !marcados.length;
+    a.textContent = (document.body.classList.contains("ver-todos") ? "Ocultar" : "Mostrar") +
+      " los que ya pidieron (" + document.querySelectorAll("li.pidio").length + ")";
+  }
+  document.querySelectorAll(".ya").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var id = b.closest("li").dataset.id, i = marcados.indexOf(id);
+      if (i >= 0) marcados.splice(i, 1); else marcados.push(id);
+      guardar(); pintar();
+    });
+  });
+  document.getElementById("mostrar").addEventListener("click", function (e) {
+    e.preventDefault(); document.body.classList.toggle("ver-todos"); pintar();
+  });
+  document.querySelectorAll(".copiar").forEach(function (b) {
+    b.addEventListener("click", async function () {
+      try { await navigator.clipboard.writeText(b.dataset.texto); b.textContent = "Copiado ✓"; }
+      catch (e) { b.textContent = "No se pudo copiar"; }
+      setTimeout(function () { b.textContent = "Copiar mensaje"; }, 2000);
+    });
+  });
+  pintar();
+})();
+</script>
+{% endblock %}

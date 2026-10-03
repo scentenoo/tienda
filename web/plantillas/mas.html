@@ -11,10 +11,14 @@
 {% block contenido %}
 <h1>Más</h1>
 
+<p class="seccion">Vender más</p>
+<ul class="lista">
+  {{ enlace(url_for('clientes_por_pedir'), 'pedir', 'Por pedir', 'Suelen pedir y no han pedido esta semana') }}
+</ul>
+
 <p class="seccion">Cobrar</p>
 <ul class="lista">
-  {{ enlace(url_for('pendientes'), 'pendientes', 'Pendientes', 'Quién debe y desde cuándo') }}
-  {{ enlace(url_for('clientes'), 'clientes', 'Clientes', 'Abonos, estado de cuenta, historial') }}
+  {{ enlace(url_for('clientes'), 'clientes', 'Clientes', 'Quién debe, abonos y estado de cuenta') }}
 </ul>
 
 <p class="seccion">Ventas y caja</p>
