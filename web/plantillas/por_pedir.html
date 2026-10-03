@@ -36,8 +36,9 @@
   Toque uno para ver qué lleva y qué ofrecerle.</p>
 
 {% if toca %}
-<div class="tarjeta kpi" style="margin-bottom:14px">
-  <b>{{ si_todos|pesos }}</b><span>Si todos piden su compra típica ({{ toca|length }} cliente{{ '' if toca|length == 1 else 's' }})</span>
+<div class="hero-pedir">
+  <b>{{ si_todos|pesos }}</b>
+  <span>si todos piden su compra típica ({{ toca|length }} cliente{{ '' if toca|length == 1 else 's' }})</span>
 </div>
 {% endif %}
 
@@ -61,12 +62,24 @@
 </p>
 
 <style>
+.hero-pedir { background: var(--acento); color: var(--sobre-acento); border-radius: 22px;
+  padding: 18px 20px; margin-bottom: 14px; }
+.hero-pedir b { display: block; font: 800 2.1rem/1 var(--rd); font-variant-numeric: tabular-nums;
+  letter-spacing: -1px; }
+.hero-pedir span { display: block; margin-top: 6px; font: 600 .92rem system-ui; }
 .lista summary.fila { cursor: pointer; }
 .detalle div { padding: 3px 0; }
 .detalle .ofrecer { color: var(--texto); }
 .mensaje { background: var(--chip); color: var(--texto); border-radius: 10px; padding: 10px 12px; margin: 10px 0 0; font-size: .9rem; }
 li.pidio { display: none; }
 .ver-todos li.pidio { display: block; opacity: .55; }
+/* El detalle se abre como hoja inferior, no empujando la lista hacia abajo */
+li[data-id]:has(details[open])::before { content: ""; position: fixed; inset: 0;
+  background: rgba(20,12,4,.45); z-index: 19; }
+li[data-id] details[open] > .detalle { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  background: var(--tarjeta); border-radius: 24px 24px 0 0; max-height: 82vh; overflow-y: auto;
+  box-shadow: 0 -10px 30px rgba(20,12,4,.25);
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); }
 </style>
 <script>
 // "Ya pidió" se recuerda en este teléfono hasta que pase la ruta.
@@ -103,6 +116,22 @@ li.pidio { display: none; }
     });
   });
   pintar();
+
+  // El detalle abre como hoja inferior: un solo cliente abierto a la vez, y
+  // tocar fuera (el fondo oscurecido) lo cierra.
+  document.querySelectorAll("li[data-id] > details").forEach(function (det) {
+    det.addEventListener("toggle", function () {
+      if (!det.open) return;
+      document.querySelectorAll("li[data-id] > details[open]").forEach(function (otro) {
+        if (otro !== det) otro.open = false;
+      });
+    });
+  });
+  document.querySelectorAll("li[data-id]").forEach(function (li) {
+    li.addEventListener("click", function (e) {
+      if (e.target === li) { var det = li.querySelector("details[open]"); if (det) det.open = false; }
+    });
+  });
 })();
 </script>
 {% endblock %}

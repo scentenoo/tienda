@@ -233,6 +233,11 @@ def _dia_largo(d: date) -> str:
     return f"{dias[d.weekday()]} {d.day} de {MESES_ES[d.month - 1]}"
 
 
+def _saludo() -> str:
+    h = datetime.now().hour
+    return "Buenos días" if h < 12 else "Buenas tardes" if h < 19 else "Buenas noches"
+
+
 # ── Pantallas ────────────────────────────────────────────────────────────────
 @app.get("/")
 @requiere_ingreso
@@ -257,11 +262,13 @@ def inicio():
         "SELECT COALESCE(SUM(total), 0) FROM sales WHERE strftime('%Y-%m', created_at) = ?",
         (mes,)).fetchone()[0]
     agotados = conn.execute("SELECT COUNT(*) FROM products WHERE stock <= 0").fetchone()[0]
+    toca = [p for p in perfil_clientes.perfiles(conn, date.today()) if p["estado"] == "toca"]
     return render_template(
-        "inicio.html", hoy=_dia_largo(date.today()), mes=MESES_ES[int(mes[5:]) - 1],
+        "inicio.html", hoy=_dia_largo(date.today()), saludo=_saludo(), mes=MESES_ES[int(mes[5:]) - 1],
         clientes_deben=cobrar[0], por_cobrar=cobrar[1],
         ventas_hoy=ventas_hoy[0], vendido_hoy=ventas_hoy[1], fiado_hoy=ventas_hoy[2],
-        abonos_hoy=abonos_hoy, contado_hoy=contado_hoy, vendido_mes=ventas_mes, agotados=agotados)
+        abonos_hoy=abonos_hoy, contado_hoy=contado_hoy, vendido_mes=ventas_mes, agotados=agotados,
+        por_pedir_clientes=len(toca), por_pedir_total=sum(p["tipica"] for p in toca))
 
 
 @app.get("/mas")

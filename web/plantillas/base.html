@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#2c3e50">
+<meta name="theme-color" content="#f8f3ea">
 <link rel="manifest" href="{{ url_for('manifiesto') }}">
 <link rel="icon" href="{{ url_for('static', filename='icono-192.png') }}">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icono-192.png') }}">
@@ -15,17 +15,22 @@
 <title>{% block titulo %}Charcutería HYE{% endblock %}</title>
 <style>
 :root {
-  --fondo: #f4f5f7; --tarjeta: #ffffff; --texto: #1f2933; --suave: #6b7580;
-  --borde: #e2e5e9; --acento: #2c3e50; --sobre-acento: #ffffff; --chip: #e9ecef;
-  --bien: #1e7a46; --bien-fondo: #d4edda; --alerta: #a3242f; --alerta-fondo: #f8d7da;
-  --aviso-fondo: #fff3cd; --aviso: #7a5a0c;
+  --fondo: #f8f3ea; --tarjeta: #fffdf8; --texto: #2b2118; --suave: #6c5e4f;
+  --borde: #eadfcd; --acento: #f4b41a; --sobre-acento: #2b1a05; --naranja: #b9470b;
+  --marca-fondo: #fde7bd; --chip: #f1e7d6;
+  --bien: #1c7443; --bien-fondo: #d8efde; --alerta: #b3261e; --alerta-fondo: #fbe0dc;
+  --aviso: #7f5300; --aviso-fondo: #fcefc9;
+  --sombra: 0 1px 2px rgba(80,50,10,.06), 0 4px 14px rgba(80,50,10,.06);
+  --rd: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --fondo: #14171a; --tarjeta: #1d2126; --texto: #e6e8ea; --suave: #9aa3ad;
-    --borde: #2e343b; --acento: #8fb3d9; --sobre-acento: #14171a; --chip: #2a3036;
-    --bien: #7fd3a1; --bien-fondo: #17301f; --alerta: #f19a9f; --alerta-fondo: #43201f;
-    --aviso-fondo: #3a3113; --aviso: #f1d27a;
+    --fondo: #16110d; --tarjeta: #211a14; --texto: #f5ede2; --suave: #b9aa98;
+    --borde: #3a2e23; --acento: #f6bd30; --sobre-acento: #2b1a05; --naranja: #ff9a52;
+    --marca-fondo: #3a2a12; --chip: #2f251c;
+    --bien: #84d6a4; --bien-fondo: #163021; --alerta: #ff9d92; --alerta-fondo: #47201b;
+    --aviso: #f3d27a; --aviso-fondo: #3a2e10;
+    --sombra: 0 1px 2px rgba(0,0,0,.3);
   }
 }
 * { box-sizing: border-box; }
@@ -34,14 +39,15 @@ button, input { font-family: inherit; }
 body { margin: 0; background: var(--fondo); color: var(--texto);
   font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 main { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
-a { color: var(--acento); }
-h1 { font-size: 1.35rem; margin: 0 0 2px; }
-h2 { font-size: 1.05rem; margin: 22px 0 8px; }
+a { color: var(--naranja); }
+h1 { font: 800 1.75rem/1.1 var(--rd); letter-spacing: -.3px; margin: 0 0 2px; color: var(--texto); }
+h2 { font: 800 1.15rem/1.2 var(--rd); margin: 22px 0 8px; color: var(--texto); }
 .sub { color: var(--suave); font-size: .88rem; margin: 0 0 14px; }
 .volver { display: inline-block; margin-bottom: 10px; text-decoration: none; font-weight: 600; }
-.tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px 14px; }
+.tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 18px; padding: 14px 16px;
+  box-shadow: var(--sombra); }
 .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.kpi b { display: block; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.kpi b { display: block; font: 800 1.4rem/1.15 var(--rd); font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
 .kpi span { color: var(--suave); font-size: .82rem; }
 .kpi small { display: block; color: var(--suave); font-size: .78rem; margin-top: 2px; }
 .menu { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
@@ -50,7 +56,7 @@ h2 { font-size: 1.05rem; margin: 22px 0 8px; }
 .menu a b { font-size: 1.02rem; }
 .menu a span { color: var(--suave); font-size: .82rem; }
 .lista { list-style: none; margin: 0; padding: 0; background: var(--tarjeta);
-  border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; }
+  border: 1px solid var(--borde); border-radius: 18px; overflow: hidden; }
 .lista > li { border-top: 1px solid var(--borde); }
 .lista > li:first-child { border-top: 0; }
 .fila { display: flex; justify-content: space-between; align-items: center; gap: 12px;
@@ -67,14 +73,14 @@ h2 { font-size: 1.05rem; margin: 22px 0 8px; }
 .negativo { color: var(--alerta); }
 form.buscar { display: flex; gap: 8px; margin-bottom: 12px; }
 input[type=search], input[type=password], input[type=text], input[type=number] {
-  width: 100%; font-size: 16px; padding: 11px 14px; border-radius: 10px;
-  border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); }
+  width: 100%; font-size: 16px; padding: 13px 14px; border-radius: 14px;
+  border: 1.5px solid var(--borde); background: var(--tarjeta); color: var(--texto); }
 .boton { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0;
-  border-radius: 10px; padding: 12px 16px; font-size: 1rem; font-weight: 600; cursor: pointer;
+  border-radius: 16px; min-height: 56px; padding: 12px 20px; font: 800 1.05rem var(--rd); cursor: pointer;
   text-decoration: none; background: var(--acento); color: var(--sobre-acento);
   transition: transform 120ms ease-out; }
 .boton:active { transform: scale(0.97); }
-.boton.secundario { background: var(--chip); color: var(--texto); }
+.boton.secundario { background: var(--chip); color: var(--texto); font: 700 1rem system-ui; }
 .botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
 .error { background: var(--alerta-fondo); color: var(--alerta); padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; }
 .vacio { text-align: center; color: var(--suave); padding: 24px; }
@@ -85,19 +91,20 @@ details summary::-webkit-details-marker { display: none; }
 .navdia { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 12px; }
 .pie { display: flex; justify-content: space-between; align-items: center; margin-top: 28px;
   color: var(--suave); font-size: .82rem; }
-.pie button { background: none; border: 0; color: var(--acento); font: inherit; cursor: pointer; padding: 0; }
+.pie button { background: none; border: 0; color: var(--naranja); font: inherit; cursor: pointer; padding: 0; }
 .campo { display: block; font-size: .88rem; color: var(--suave); margin-top: 12px; }
 .campo:first-of-type { margin-top: 0; }
 .campo input { margin-top: 4px; color: var(--texto); }
-.boton.chico { padding: 8px 12px; font-size: .88rem; margin-top: 8px; }
+.boton.chico { min-height: 0; padding: 8px 12px; font: 700 .88rem system-ui; margin-top: 8px; }
 .boton:disabled { opacity: .6; }
 .resumen-abono div { display: flex; justify-content: space-between; padding: 6px 0; font-variant-numeric: tabular-nums; }
 .resumen-abono div span { color: var(--suave); }
-.resumen-abono .total { border-top: 1px solid var(--borde); margin-top: 4px; padding-top: 10px; font-size: 1.1rem; }
+.resumen-abono .total { border-top: 1px solid var(--borde); margin-top: 4px; padding-top: 10px; }
+.resumen-abono .total b { font: 800 1.6rem var(--rd); }
 .resumen-abono .aviso-exceso { display: block; background: var(--aviso-fondo); color: var(--aviso); border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: .88rem; }
-select, textarea { width: 100%; font: inherit; font-size: 16px; padding: 11px 14px; border-radius: 10px;
-  border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); margin-top: 4px; }
-.boton.peligro { background: var(--alerta); color: #fff; }
+select, textarea { width: 100%; font: inherit; font-size: 16px; padding: 13px 14px; border-radius: 14px;
+  border: 1.5px solid var(--borde); background: var(--tarjeta); color: var(--texto); margin-top: 4px; }
+.boton.peligro { background: transparent; border: 1.5px solid var(--alerta); color: var(--alerta); min-height: 52px; }
 a.fila:active { background: var(--chip); }
 main.con-barra { padding-bottom: 96px; }
 .barra { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: grid;
@@ -106,20 +113,22 @@ main.con-barra { padding-bottom: 96px; }
 .barra a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0;
   color: var(--suave); text-decoration: none; font-size: .72rem; transition: transform 120ms ease-out; }
 .barra a:active { transform: scale(0.94); }
-.barra a.on { color: var(--acento); font-weight: 700; }
-.barra a.vender { color: var(--acento); font-weight: 700; }
+.barra a.on { color: var(--naranja); font-weight: 800; }
+.barra a.vender { color: var(--texto); font-weight: 800; }
+.barra a.vender svg.icono { box-sizing: content-box; width: 26px; height: 26px; padding: 18px;
+  margin-top: -28px; background: var(--acento); color: var(--sobre-acento); border-radius: 50%;
+  border: 4px solid var(--tarjeta); box-shadow: 0 6px 16px rgba(120,70,0,.28); }
 .icono { flex: none; }
-.seccion { margin: 22px 0 8px; font-size: .78rem; font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--suave); }
+.seccion { margin: 22px 4px -4px; font: 700 .94rem system-ui; color: var(--suave); }
 .accesos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
 .accesos a { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px;
-  border-radius: 12px; background: var(--tarjeta); border: 1px solid var(--borde); color: var(--texto);
+  border-radius: 18px; background: var(--tarjeta); border: 1px solid var(--borde); color: var(--texto);
   text-decoration: none; font-size: .85rem; font-weight: 600; text-align: center;
   transition: transform 120ms ease-out; }
 .accesos a:active { transform: scale(0.97); }
 .accesos a.principal { background: var(--acento); color: var(--sobre-acento); border-color: var(--acento); }
-.lista .fila .ico { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
-  background: var(--chip); color: var(--acento); margin-right: 12px; flex: none; }
+.lista .fila .ico { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 14px;
+  background: var(--chip); color: var(--naranja); margin-right: 12px; flex: none; }
 .lista .fila .izq.con-ico { display: flex; align-items: center; }
 .exito { background: var(--bien-fondo); color: var(--bien); padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; }
 </style>

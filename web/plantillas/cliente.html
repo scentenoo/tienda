@@ -18,12 +18,13 @@
 </div>
 {% endif %}
 
-<div class="tarjeta kpi">
-  {% if c['total_debt'] > 0 %}
-  <b class="negativo">{{ c['total_debt']|pesos }}</b><span>Saldo pendiente</span>
-  {% else %}
-  <b class="positivo">Al día</b><span>No tiene saldo pendiente</span>
-  {% endif %}
+<div class="tarjeta saldo {{ 'debe' if c['total_debt'] > 0 else 'pagado' }}">
+  <div class="fila-saldo">
+    <span>{{ 'Saldo pendiente' if c['total_debt'] > 0 else 'Al día' }}</span>
+    <span class="etiqueta {{ 'debe' if c['total_debt'] > 0 else 'pagado' }}">{{ 'Debe' if c['total_debt'] > 0 else 'Al día' }}</span>
+  </div>
+  <b>{{ c['total_debt']|pesos if c['total_debt'] > 0 else 'Sin saldo pendiente' }}</b>
+  <a class="boton" style="width:100%" href="{{ url_for('abono', client_id=c['id']) }}">Registrar abono</a>
 </div>
 
 {% if perfil %}
@@ -47,10 +48,8 @@
 </div>
 {% endif %}
 
-<a class="boton" style="width:100%; margin-top: 12px" href="{{ url_for('abono', client_id=c['id']) }}">Registrar abono</a>
-
 {% if c['total_debt'] > 0 %}
-<div class="botones">
+<div class="botones" style="margin-top:12px">
   <a class="boton secundario" id="compartir" href="{{ url_for('estado_de_cuenta', client_id=c['id']) }}">Compartir estado de cuenta</a>
   <a class="boton secundario" href="{{ url_for('estado_de_cuenta', client_id=c['id']) }}" target="_blank">Ver PDF</a>
 </div>
@@ -107,4 +106,16 @@ document.getElementById("compartir")?.addEventListener("click", async function (
   }
 });
 </script>
+<style>
+.saldo { display: flex; flex-direction: column; gap: 10px; border: 0; }
+.saldo.debe { background: var(--alerta-fondo); }
+.saldo.pagado { background: var(--bien-fondo); }
+.saldo .fila-saldo { display: flex; justify-content: space-between; align-items: center;
+  font: 700 1rem system-ui; }
+.saldo.debe .fila-saldo { color: var(--alerta); }
+.saldo.pagado .fila-saldo { color: var(--bien); }
+.saldo b { font: 800 2.3rem/1 var(--rd); font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+.saldo.debe b { color: var(--alerta); }
+.saldo.pagado b { color: var(--bien); }
+</style>
 {% endblock %}

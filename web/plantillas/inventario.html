@@ -4,11 +4,23 @@
 <h1>Inventario</h1>
 <p class="sub">Primero los agotados · <a href="{{ url_for('producto_nuevo') }}">+ Nuevo producto</a></p>
 
-<div class="kpis" style="margin-bottom:12px">
-  <div class="tarjeta kpi"><b>{{ resumen['valor']|pesos }}</b><span>Valor a precio de venta</span></div>
-  <div class="tarjeta kpi"><b>{{ resumen['productos'] }}</b><span>Productos</span>
-    <small>{{ resumen['bajo'] }} con stock bajo (≤5) · {{ resumen['agotados'] }} agotados</small></div>
+<div class="mini-kpis">
+  <div class="mini"><b>{{ resumen['productos'] }}</b><span>productos</span></div>
+  <div class="mini"><b style="font-size:.86rem">{{ resumen['valor']|pesos }}</b><span>valor</span></div>
+  <div class="mini aviso"><b>{{ resumen['bajo'] }}</b><span>poco stock</span></div>
+  <div class="mini alerta"><b>{{ resumen['agotados'] }}</b><span>agotados</span></div>
 </div>
+<style>
+.mini-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px;
+  font-variant-numeric: tabular-nums; }
+.mini { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 10px 8px; }
+.mini b { display: block; font: 800 1.1rem var(--rd); }
+.mini span { display: block; font-size: .72rem; color: var(--suave); margin-top: 2px; }
+.mini.aviso { background: var(--aviso-fondo); border-color: transparent; }
+.mini.aviso b, .mini.aviso span { color: var(--aviso); }
+.mini.alerta { background: var(--alerta-fondo); border-color: transparent; }
+.mini.alerta b, .mini.alerta span { color: var(--alerta); }
+</style>
 
 <form class="buscar" method="get">
   <input type="search" name="q" value="{{ q }}" placeholder="Buscar producto…" autocomplete="off">

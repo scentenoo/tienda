@@ -20,10 +20,15 @@ document.getElementById("informe").addEventListener("click", async function (e) 
 </script>
 {% endblock %}
 {% block contenido %}
-<h1>Clientes</h1>
-<p class="sub">Primero los que deben · <a href="{{ url_for('cliente_nuevo') }}">+ Nuevo cliente</a></p>
+<div style="display:flex; align-items:center; justify-content:space-between; gap:10px">
+  <h1 style="margin:0">Clientes</h1>
+  <a class="boton" style="min-height:42px; padding:0 18px; font-size:.92rem; border-radius:999px"
+     href="{{ url_for('cliente_nuevo') }}">+ Nuevo cliente</a>
+</div>
+<p class="sub" style="margin-top:4px">Primero los que deben</p>
 
-<a class="boton secundario" id="informe" style="width:100%; margin-bottom:12px" href="{{ url_for('pendientes_informe') }}">📤 Compartir informe de pendientes</a>
+<a class="boton" id="informe" style="width:100%; margin-bottom:12px; background:var(--bien); color:var(--tarjeta)"
+   href="{{ url_for('pendientes_informe') }}">📤 Compartir informe de pendientes</a>
 
 <form class="buscar" method="get">
   <input type="search" name="q" value="{{ q }}" placeholder="Buscar cliente…" autocomplete="off">

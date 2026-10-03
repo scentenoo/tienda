@@ -8,8 +8,10 @@
   </a></li>
 {%- endmacro %}
 {% block contenido %}
-<h1>Charcutería HYE</h1>
-<p class="sub">Hoy, {{ hoy }}</p>
+<div class="cabecera">
+  <img src="{{ url_for('static', filename='logo-he.png') }}" alt="Charcutería H&amp;E">
+  <div><h1>{{ saludo }}</h1><p class="sub" style="margin:2px 0 0">Hoy, {{ hoy }}</p></div>
+</div>
 
 <div class="kpis">
   <a class="tarjeta kpi" href="{{ url_for('ventas') }}">
@@ -17,11 +19,11 @@
     <small>{{ ventas_hoy }} venta{{ '' if ventas_hoy == 1 else 's' }}{% if fiado_hoy %} · {{ fiado_hoy|pesos }} fiado{% endif %}</small>
   </a>
   <a class="tarjeta kpi" href="{{ url_for('caja') }}">
-    <b>{{ (contado_hoy + abonos_hoy)|pesos }}</b><span>En caja hoy</span>
+    <b class="positivo">{{ (contado_hoy + abonos_hoy)|pesos }}</b><span>En caja hoy</span>
     <small>Contado {{ contado_hoy|pesos }} · abonos {{ abonos_hoy|pesos }}</small>
   </a>
   <a class="tarjeta kpi" href="{{ url_for('clientes') }}">
-    <b>{{ por_cobrar|pesos }}</b><span>Por cobrar</span>
+    <b class="negativo">{{ por_cobrar|pesos }}</b><span>Por cobrar</span>
     <small>{{ clientes_deben }} cliente{{ '' if clientes_deben == 1 else 's' }}</small>
   </a>
   <div class="tarjeta kpi">
@@ -37,10 +39,19 @@
   {% endif %}
 </div>
 
+{% if por_pedir_clientes %}
+<a class="destacado" href="{{ url_for('clientes_por_pedir') }}">
+  <span class="ico">{{ icono('pedir', 26) }}</span>
+  <div><b>Por pedir · {{ por_pedir_clientes }} cliente{{ '' if por_pedir_clientes == 1 else 's' }}</b>
+    <span>Posibles <b>{{ por_pedir_total|pesos }}</b> para el domingo</span></div>
+  {{ icono('flecha', 20) }}
+</a>
+{% else %}
 <p class="seccion">Vender más</p>
 <ul class="lista">
   {{ enlace(url_for('clientes_por_pedir'), 'pedir', 'Por pedir', 'Suelen pedir y no han pedido esta semana') }}
 </ul>
+{% endif %}
 
 <p class="seccion">Cobrar</p>
 <ul class="lista">
@@ -63,5 +74,22 @@
   {% endif %}
   {{ enlace(url_for('perdidas'), 'perdidas', 'Pérdidas', 'Mermas y vencidos') }}
 </ul>
-<style>a.kpi { color: inherit; text-decoration: none; }</style>
+<style>
+a.kpi { color: inherit; text-decoration: none; }
+.cabecera { display: flex; align-items: center; gap: 14px; background: var(--marca-fondo);
+  margin: -16px -16px 16px; padding: 14px 16px 20px; border-radius: 0 0 24px 24px; }
+.cabecera img { width: 52px; height: 52px; object-fit: contain; background: #fff;
+  border-radius: 14px; padding: 3px; flex: none; }
+.cabecera h1 { margin: 0; }
+.destacado { display: flex; align-items: center; gap: 14px; text-decoration: none; color: inherit;
+  background: var(--tarjeta); border: 2px solid var(--acento); border-radius: 18px; padding: 14px 16px;
+  margin-top: 14px; transition: transform 120ms ease-out; }
+.destacado:active { transform: scale(0.98); }
+.destacado .ico { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px;
+  background: var(--marca-fondo); color: var(--naranja); flex: none; }
+.destacado div { flex: 1; min-width: 0; }
+.destacado div b { display: block; font: 800 1.02rem var(--rd); }
+.destacado div span { display: block; margin-top: 2px; color: var(--suave); font-size: .85rem; }
+.destacado div span b { display: inline; font: 700 .85rem system-ui; color: var(--naranja); }
+</style>
 {% endblock %}
