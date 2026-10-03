@@ -1,5 +1,38 @@
 {% extends "base.html" %}
-{% block titulo %}Clientes · Charcutería HYE<script>
+{% block titulo %}Clientes · Charcutería HYE{% endblock %}
+{% block contenido %}
+<div style="display:flex; align-items:center; justify-content:space-between; gap:10px">
+  <h1 style="margin:0">Clientes</h1>
+  <a class="boton" style="min-height:42px; padding:0 18px; font-size:.92rem; border-radius:999px"
+     href="{{ url_for('cliente_nuevo') }}">+ Nuevo cliente</a>
+</div>
+<p class="sub" style="margin-top:4px">Primero los que deben</p>
+
+<a class="boton" id="informe" style="width:100%; margin-bottom:12px; background:var(--bien); color:var(--tarjeta)"
+   href="{{ url_for('pendientes_informe') }}">📤 Compartir informe de pendientes</a>
+
+<form class="buscar" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="Buscar cliente…" autocomplete="off">
+</form>
+
+{% if clientes %}
+<ul class="lista" id="lista">
+  {% for c in clientes %}
+  <li data-nombre="{{ c['name'] }}"><a class="fila" href="{{ url_for('cliente', client_id=c['id']) }}">
+    <div class="izq"><b>{{ c['name'] }}</b>{% if c['phone'] %}<span>{{ c['phone'] }}</span>{% endif %}</div>
+    <div class="der">
+      {% if c['total_debt'] > 0 %}<span class="etiqueta debe">{{ c['total_debt']|pesos }}</span>
+      {% else %}<span class="etiqueta pagado">Al día</span>{% endif %}
+    </div>
+  </a></li>
+  {% endfor %}
+</ul>
+<p class="vacio" id="ninguno" hidden>No hay clientes con ese nombre.</p>
+{% else %}
+<p class="vacio">No hay clientes con ese nombre.</p>
+{% endif %}
+
+<script>
 // El mismo informe HTML interactivo del PC ("Enviar al celular"), listo para
 // mandar por WhatsApp. Si el teléfono no puede compartir archivos, se descarga.
 document.getElementById("informe").addEventListener("click", async function (e) {
@@ -18,35 +51,29 @@ document.getElementById("informe").addEventListener("click", async function (e) 
   } finally { b.textContent = texto; }
 });
 </script>
-{% endblock %}
-{% block contenido %}
-<div style="display:flex; align-items:center; justify-content:space-between; gap:10px">
-  <h1 style="margin:0">Clientes</h1>
-  <a class="boton" style="min-height:42px; padding:0 18px; font-size:.92rem; border-radius:999px"
-     href="{{ url_for('cliente_nuevo') }}">+ Nuevo cliente</a>
-</div>
-<p class="sub" style="margin-top:4px">Primero los que deben</p>
-
-<a class="boton" id="informe" style="width:100%; margin-bottom:12px; background:var(--bien); color:var(--tarjeta)"
-   href="{{ url_for('pendientes_informe') }}">📤 Compartir informe de pendientes</a>
-
-<form class="buscar" method="get">
-  <input type="search" name="q" value="{{ q }}" placeholder="Buscar cliente…" autocomplete="off">
-</form>
-
-{% if clientes %}
-<ul class="lista">
-  {% for c in clientes %}
-  <li><a class="fila" href="{{ url_for('cliente', client_id=c['id']) }}">
-    <div class="izq"><b>{{ c['name'] }}</b>{% if c['phone'] %}<span>{{ c['phone'] }}</span>{% endif %}</div>
-    <div class="der">
-      {% if c['total_debt'] > 0 %}<span class="etiqueta debe">{{ c['total_debt']|pesos }}</span>
-      {% else %}<span class="etiqueta pagado">Al día</span>{% endif %}
-    </div>
-  </a></li>
-  {% endfor %}
-</ul>
-{% else %}
-<p class="vacio">No hay clientes con ese nombre.</p>
-{% endif %}
+<script>
+// Filtra mientras se escribe, sin importar tildes ni mayúsculas. Sin
+// JavaScript el formulario sigue buscando al dar Enter.
+(function () {
+  var campo = document.querySelector("form.buscar input"), lista = document.getElementById("lista");
+  if (!campo || !lista) return;
+  function sinTildes(t) { return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); }
+  var filas = Array.prototype.map.call(lista.children, function (li) {
+    return { li: li, nombre: sinTildes(li.dataset.nombre || "") };
+  });
+  function filtrar() {
+    var q = sinTildes(campo.value.trim()), hay = 0;
+    filas.forEach(function (f) {
+      var ver = !q || f.nombre.indexOf(q) >= 0;
+      f.li.hidden = !ver;
+      if (ver) hay++;
+    });
+    lista.hidden = !hay;
+    document.getElementById("ninguno").hidden = hay > 0;
+  }
+  campo.addEventListener("input", filtrar);
+  campo.form.addEventListener("submit", function (e) { e.preventDefault(); campo.blur(); });
+  filtrar();
+})();
+</script>
 {% endblock %}
