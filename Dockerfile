@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r web/requirements.txt
 
 # Solo lo que usa la página: nada de datos ni de la app de escritorio
 COPY config/__init__.py config/nube.py config/
-COPY utils/__init__.py utils/conciliacion.py utils/pdf.py utils/estado_cuenta.py utils/informe_movil.py utils/
+COPY utils/__init__.py utils/conciliacion.py utils/pdf.py utils/estado_cuenta.py utils/informe_movil.py utils/perfil_clientes.py utils/
 COPY servicios/ servicios/
 COPY web/ web/
 
