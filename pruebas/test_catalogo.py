@@ -223,7 +223,12 @@ class Pagina(unittest.TestCase):
         producto(conn, "Anis", stock=9)
         with tempfile.TemporaryDirectory() as carpeta:
             generar.generar(carpeta, conn, "3137013735", ahora=self.AHORA)
-            self.assertEqual(sorted(os.listdir(carpeta)), ["icono-192.png", "index.html", "logo-he.png"])
+            archivos = set(os.listdir(carpeta))
+            self.assertEqual(archivos - {"fotos"}, {"icono-192.png", "index.html", "logo-he.png"})
+            # A la página van las fotos, no las notas que hay junto a ellas
+            esperadas = set(generar.fotos_disponibles(generar.AQUI / "fotos").values())
+            publicadas = set(os.listdir(Path(carpeta) / "fotos")) if "fotos" in archivos else set()
+            self.assertEqual(publicadas, esperadas)
 
     def test_solo_cuentan_las_fotos_con_el_id_como_nombre(self):
         with tempfile.TemporaryDirectory() as carpeta:

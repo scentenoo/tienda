@@ -3,5 +3,9 @@ Aquí van las fotos de los productos del catálogo.
 El nombre del archivo es el id del producto (el número de la columna ID en
 la ventana de inventario): 29.jpg, 42.webp, 1.png…
 
-Cuadradas o casi, de unos 600 px de lado y que no pesen más de 150 KB cada
-una, para que el catálogo abra rápido con datos del celular.
+Van recortadas, sin fondo (WebP o PNG transparente): así toman el tono claro
+u oscuro de la tarjeta según el teléfono del cliente. De unos 800 px en el
+lado más largo y que no pesen más de 150 KB cada una, para que el catálogo
+abra rápido con datos del celular.
+
+De dónde salió cada imagen está en FUENTES.md.

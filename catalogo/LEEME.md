@@ -76,7 +76,14 @@ producto; el stock que baja con las ventas se refleja en la siguiente media hora
 ## Fotos
 
 En `catalogo/fotos/`, con el id del producto como nombre: `29.jpg`, `42.webp`.
-Mientras no haya ninguna, las tarjetas salen sin recuadro de foto.
+Van recortadas, sin fondo. El producto que no tenga foto sale con su inicial
+(y si no hay ninguna foto, las tarjetas salen sin recuadro).
+
+Las de productos empacados de marca son las imágenes oficiales del
+fabricante, de la misma presentación que se vende; `catalogo/fotos/FUENTES.md`
+dice de dónde salió cada una. Si una marca pide retirar la suya, se borra el
+archivo y el producto vuelve a salir con su inicial. Lo que no tiene empaque
+(quesos, chuleta, mortadela, bandejas) lleva foto propia.
 
 ## Probarlo en el PC
 
