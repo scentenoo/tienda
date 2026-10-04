@@ -141,7 +141,7 @@ main.con-barra { padding-bottom: 96px; }
 {% set con_barra = session.get('ingreso') and ep not in ('ingresar', 'venta_nueva', 'compra_nueva') %}
 {% set pestana = 'inicio' if ep == 'inicio'
    else 'ventas' if ep.startswith('venta')
-   else 'clientes' if ep.startswith('cliente') or ep in ('abono', 'abono_confirmar')
+   else 'clientes' if ep.startswith('cliente') or ep in ('abono', 'abono_confirmar', 'pendientes')
    else 'mas' %}
 <main{% if con_barra %} class="con-barra"{% endif %}>
 {% block contenido %}{% endblock %}

@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block titulo %}Pendientes · Charcutería HYE{% endblock %}
+{% macro nivel(dias) -%}
+  {{ 'alta' if (dias or 0) >= 60 else 'media' if (dias or 0) >= 30 else 'baja' if (dias or 0) >= 15 else '' }}
+{%- endmacro %}
+{% block contenido %}
+<style>
+  .filtros { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .filtros a { padding: 6px 12px; border-radius: 999px; background: var(--chip); color: var(--texto);
+    text-decoration: none; font-size: .85rem; }
+  .filtros a.on { background: var(--acento); color: var(--sobre-acento); font-weight: 600; }
+  .filtros .titulo { align-self: center; color: var(--suave); font-size: .8rem; margin-right: 2px; }
+  .dias { font-size: .78rem; color: var(--suave); }
+  li.baja .dias { color: var(--aviso); font-weight: 600; }
+  li.media .dias { color: var(--naranja); font-weight: 700; }
+  li.alta .dias { color: var(--alerta); font-weight: 700; }
+  li.media, li.alta { box-shadow: inset 4px 0 0 var(--naranja); }
+  li.alta { box-shadow: inset 4px 0 0 var(--alerta); }
+  .fila-pend { display: flex; align-items: center; }
+  .fila-pend > a.fila { flex: 1; min-width: 0; }
+  .llamar { display: grid; place-items: center; width: 44px; align-self: stretch; text-decoration: none;
+    border-left: 1px solid var(--borde); font-size: 1.1rem; }
+</style>
+
+<a class="volver" href="{{ url_for('inicio') }}">‹ Inicio</a>
+<h1>Pendientes</h1>
+<p class="sub">Quién debe y desde cuándo</p>
+
+<div class="kpis" style="margin-bottom:12px">
+  <div class="tarjeta kpi"><b class="negativo">{{ total|pesos }}</b><span>Total por cobrar</span></div>
+  <div class="tarjeta kpi"><b>{{ clientes }}</b><span>Cliente{{ '' if clientes == 1 else 's' }} deben</span></div>
+</div>
+
+<form class="buscar" method="get">
+  <input type="search" id="buscar" placeholder="Buscar cliente…" autocomplete="off" aria-label="Buscar cliente">
+</form>
+
+<div class="filtros">
+  <span class="titulo">Debe hace</span>
+  {% for m, texto in ((0, 'Todos'), (15, '15+ días'), (30, '30+ días'), (60, '60+ días')) %}
+  <a class="{{ 'on' if minimo == m }}" href="{{ url_for('pendientes', min=m, orden=orden) }}">{{ texto }}</a>
+  {% endfor %}
+</div>
+<div class="filtros">
+  <span class="titulo">Ordenar por</span>
+  {% for o, texto in (('deuda', 'Deuda'), ('dias', 'Días'), ('nombre', 'Nombre')) %}
+  <a class="{{ 'on' if orden == o }}" href="{{ url_for('pendientes', min=minimo, orden=o) }}">{{ texto }}</a>
+  {% endfor %}
+</div>
+
+{% if filas %}
+<ul class="lista" id="lista">
+  {% for f in filas %}
+  <li class="{{ nivel(f['dias']) }}" data-nombre="{{ f['nombre'] }}" data-deuda="{{ f['deuda'] }}">
+    <div class="fila-pend">
+      <a class="fila" href="{{ url_for('cliente', client_id=f['id']) if f['id'] else '#' }}">
+        <div class="izq"><b>{{ f['nombre'] }}</b>
+          <span class="dias">{% if f['desde'] %}Debe desde el {{ f['desde'] }} · {{ f['dias'] }} día{{ '' if f['dias'] == 1 else 's' }}{% else %}Deuda agregada a mano{% endif %}</span></div>
+        <div class="der"><span class="etiqueta debe">{{ f['deuda']|pesos }}</span></div>
+      </a>
+      {% if f['telefono'] %}<a class="llamar" href="tel:{{ f['telefono'] }}" aria-label="Llamar a {{ f['nombre'] }}">📞</a>{% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+<p class="vacio" id="ninguno" hidden>No hay clientes con ese nombre.</p>
+<p class="sub" style="margin-top:10px">Total de esta lista: <b id="totalVista">{{ total_vista|pesos }}</b>
+  (<span id="cuantos">{{ filas|length }}</span>)</p>
+{% else %}
+<p class="vacio">{{ 'Nadie debe. ¡Todo al día!' if not clientes else 'No hay clientes con ese filtro.' }}</p>
+{% endif %}
+
+<a class="boton secundario" id="informe" style="width:100%; margin-top:16px"
+   href="{{ url_for('pendientes_informe') }}">📤 Compartir informe de pendientes</a>
+<p class="sub" style="margin-top:10px">Amarillo: 15+ días · naranja: 30+ · rojo: 60+.</p>
+
+<script>
+// Filtra mientras se escribe, sin importar tildes ni mayúsculas.
+(function () {
+  var campo = document.getElementById("buscar"), lista = document.getElementById("lista");
+  if (!lista) { campo.closest("form").hidden = true; return; }
+  function sinTildes(t) { return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); }
+  function pesos(v) { return "$" + Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+  var filas = Array.prototype.map.call(lista.children, function (li) {
+    return { li: li, nombre: sinTildes(li.dataset.nombre || ""), deuda: +li.dataset.deuda };
+  });
+  function filtrar() {
+    var q = sinTildes(campo.value.trim()), hay = 0, total = 0;
+    filas.forEach(function (f) {
+      var ver = !q || f.nombre.indexOf(q) >= 0;
+      f.li.hidden = !ver;
+      if (ver) { hay++; total += f.deuda; }
+    });
+    lista.hidden = !hay;
+    document.getElementById("ninguno").hidden = hay > 0;
+    document.getElementById("totalVista").textContent = pesos(total);
+    document.getElementById("cuantos").textContent = hay;
+  }
+  campo.addEventListener("input", filtrar);
+  campo.form.addEventListener("submit", function (e) { e.preventDefault(); campo.blur(); });
+})();
+
+// El informe en un archivo, listo para WhatsApp. Si el teléfono no puede
+// compartir archivos, se descarga.
+document.getElementById("informe").addEventListener("click", async function (e) {
+  if (!navigator.canShare) return;
+  e.preventDefault();
+  var b = this, texto = b.textContent;
+  b.textContent = "Preparando…";
+  try {
+    var r = await fetch(b.href);
+    var nombre = (r.headers.get("Content-Disposition") || "").match(/filename="?([^";]+)/);
+    var archivo = new File([await r.blob()], nombre ? nombre[1] : "pendientes.html", { type: "text/html" });
+    if (navigator.canShare({ files: [archivo] })) await navigator.share({ files: [archivo], title: "Pendientes por cobrar" });
+    else window.location = b.href;
+  } catch (err) {
+    if (err.name !== "AbortError") window.location = b.href;
+  } finally { b.textContent = texto; }
+});
+</script>
+{% endblock %}

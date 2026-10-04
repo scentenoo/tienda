@@ -280,11 +280,30 @@ def mas():
 @app.get("/pendientes")
 @requiere_ingreso
 def pendientes():
+    """Quién debe y desde cuándo, con el diseño de la página. El archivo que
+    se manda por WhatsApp (pendientes_informe) sigue siendo el HTML aparte."""
     conn = db()
     ids = {n: i for i, n in conn.execute("SELECT id, name FROM clients WHERE total_debt > 0")}
-    enlaces = {n: url_for("cliente", client_id=i) for n, i in ids.items()}
-    return html_pendientes(deudores(conn), telefonos_clientes(conn), enlaces,
-                           f'<a class="volver" href="{url_for("inicio")}">‹ Inicio</a>')
+    telefonos = telefonos_clientes(conn)
+    filas = [{"nombre": n, "deuda": d, "desde": desde, "dias": dias, "id": ids.get(n),
+              "telefono": telefonos.get(n)}
+             for n, d, desde, dias in deudores(conn)]
+    try:
+        minimo = int(request.args.get("min", 0))
+    except ValueError:
+        minimo = 0
+    orden = request.args.get("orden", "deuda")
+    if orden not in ("deuda", "dias", "nombre"):
+        orden = "deuda"
+    vista = [f for f in filas if (f["dias"] or 0) >= minimo]
+    if orden == "nombre":
+        vista.sort(key=lambda f: f["nombre"].lower())
+    else:
+        vista.sort(key=lambda f: -(f[orden] or 0))
+    return render_template(
+        "pendientes.html", filas=vista, minimo=minimo, orden=orden,
+        total=sum(f["deuda"] for f in filas), clientes=len(filas),
+        total_vista=sum(f["deuda"] for f in vista))
 
 
 @app.get("/pendientes/informe.html")
