@@ -38,3 +38,6 @@ nube.json
 data/nube_prueba.json
 data/clave_web.txt
 error_log.txt
+
+# El catálogo generado (lo publica la tarea de GitHub; no se guarda en el repositorio)
+sitio/

@@ -7,12 +7,14 @@ from datetime import date, timedelta
 
 from flask import abort, redirect, render_template, request, session, url_for
 
+from servicios import catalogo as reglas_catalogo
 from servicios.compras import editar_compra, eliminar_compra, registrar_lote
 from servicios.gastos import (TIPOS_PERDIDA, crear_gasto, editar_gasto, eliminar_gasto,
                               eliminar_perdida, registrar_perdida)
 from servicios.inventario import (crear_producto, editar_producto, eliminar_producto,
                                   usos_del_producto)
 from utils.conciliacion import MESES_ES
+from web.aviso_catalogo import avisar as avisar_catalogo
 from web.app import (_dia_largo, _json_seguro, _leer_decimal, _leer_monto, _revisar_csrf,
                      _usuario_admin, app, db, pesos, requiere_gastos, requiere_ingreso)
 
@@ -51,20 +53,43 @@ def _navegacion_mes(inicio):
 
 
 # ── Inventario ───────────────────────────────────────────────────────────────
+def _campos_catalogo(conn):
+    """Las listas para los campos del catálogo en el formulario de producto;
+    None si la base todavía no tiene esas columnas (el formulario queda como
+    antes)."""
+    if not reglas_catalogo.tiene_columnas(conn):
+        return None
+    return {"categorias": reglas_catalogo.CATEGORIAS, "modos": reglas_catalogo.MODOS}
+
+
+def _catalogo_del_formulario(conn):
+    """La categoría y el modo que llegaron en el formulario. Si no llegaron
+    o la base aún no tiene las columnas, no se toca nada."""
+    f = request.form
+    if f.get("categoria") is None and f.get("catalogo") is None:
+        return {}
+    if not reglas_catalogo.tiene_columnas(conn):
+        return {}
+    return {"categoria": f.get("categoria", ""), "catalogo": f.get("catalogo", "")}
+
+
 @app.route("/producto/nuevo", methods=["GET", "POST"])
 @requiere_ingreso
 def producto_nuevo():
-    if request.method == "GET":
-        return render_template("producto_form.html", p=None, error=None, usos=None)
-    _revisar_csrf()
     conn = db()
+    if request.method == "GET":
+        return render_template("producto_form.html", p=None, error=None, usos=None,
+                               cat=_campos_catalogo(conn))
+    _revisar_csrf()
     try:
         crear_producto(conn, request.form.get("nombre"), _leer_monto(request.form.get("precio")),
-                       _leer_decimal(request.form.get("stock")))
+                       _leer_decimal(request.form.get("stock")), **_catalogo_del_formulario(conn))
         conn.commit()
     except ValueError as e:
         conn.rollback()
-        return render_template("producto_form.html", p=request.form, error=str(e), usos=None)
+        return render_template("producto_form.html", p=request.form, error=str(e), usos=None,
+                               cat=_campos_catalogo(conn))
+    avisar_catalogo()
     return redirect(url_for("inventario", q=request.form.get("nombre", "").strip()))
 
 
@@ -79,19 +104,24 @@ def producto_editar(product_id):
     usos = usos_del_producto(conn, product_id)
     if request.method == "GET":
         datos = {"id": p["id"], "nombre": p["name"], "precio": round(p["price"] or 0),
-                 "stock": f"{p['stock']:g}".replace(".", ","), "costo": p["cost_price"]}
-        return render_template("producto_form.html", p=datos, error=None, usos=usos)
+                 "stock": f"{p['stock']:g}".replace(".", ","), "costo": p["cost_price"],
+                 **(reglas_catalogo.opciones_del_producto(conn, product_id) or {})}
+        return render_template("producto_form.html", p=datos, error=None, usos=usos,
+                               cat=_campos_catalogo(conn))
     _revisar_csrf()
     texto_stock = request.form.get("stock", "").strip()
     try:
         editar_producto(conn, product_id, request.form.get("nombre"),
                         _leer_monto(request.form.get("precio")),
-                        _leer_decimal(texto_stock) if texto_stock else None)
+                        _leer_decimal(texto_stock) if texto_stock else None,
+                        **_catalogo_del_formulario(conn))
         conn.commit()
     except ValueError as e:
         conn.rollback()
         return render_template("producto_form.html", p={**request.form, "id": product_id,
-                               "costo": p["cost_price"]}, error=str(e), usos=usos)
+                               "costo": p["cost_price"]}, error=str(e), usos=usos,
+                               cat=_campos_catalogo(conn))
+    avisar_catalogo()
     return redirect(url_for("inventario", q=request.form.get("nombre", "").strip()))
 
 
@@ -103,6 +133,7 @@ def producto_eliminar(product_id):
     try:
         eliminar_producto(conn, product_id)
         conn.commit()
+        avisar_catalogo()
     except ValueError:
         conn.rollback()
     return redirect(url_for("inventario"))

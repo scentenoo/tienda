@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f8f3ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16110d" media="(prefers-color-scheme: dark)">
+<title>Catálogo · Charcutería HYE</title>
+<meta name="description" content="Productos venezolanos con precios y disponibilidad al día. Arma tu pedido y envíalo por WhatsApp.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Catálogo · Charcutería HYE">
+<meta property="og:description" content="Productos venezolanos con precios y disponibilidad al día. Arma tu pedido y envíalo por WhatsApp.">
+{% if url_publica %}
+<meta property="og:url" content="{{ url_publica }}/">
+<meta property="og:image" content="{{ url_publica }}/logo-he.png">
+{% endif %}
+<link rel="icon" href="icono-192.png">
+<link rel="apple-touch-icon" href="icono-192.png">
+<style>
+/* Los mismos colores de la página del celular (web/plantillas/base.html) */
+:root {
+  --fondo: #f8f3ea; --tarjeta: #fffdf8; --texto: #2b2118; --suave: #6c5e4f;
+  --borde: #eadfcd; --acento: #f4b41a; --sobre-acento: #2b1a05; --naranja: #b9470b;
+  --chip: #f1e7d6; --logo-fondo: #ffffff;
+  --bien: #1c7443; --bien-fondo: #d8efde; --sobre-bien: #ffffff;
+  --aviso: #7f5300; --aviso-fondo: #fcefc9;
+  --velo: rgba(43, 33, 24, .5);
+  --rd: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #16110d; --tarjeta: #211a14; --texto: #f5ede2; --suave: #b9aa98;
+    --borde: #3a2e23; --acento: #f6bd30; --sobre-acento: #2b1a05; --naranja: #ff9a52;
+    --chip: #2f251c; --logo-fondo: #ffffff;
+    --bien: #84d6a4; --bien-fondo: #163021; --sobre-bien: #0d2416;
+    --aviso: #f3d27a; --aviso-fondo: #3a2e10;
+    --velo: rgba(0, 0, 0, .6);
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--fondo); color: var(--texto);
+  font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, input { font-family: inherit; }
+button { cursor: pointer; }
+.ancho { max-width: 760px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+
+/* Arriba, siempre a la vista: la marca, cuándo se actualizó y las categorías */
+.cabecera { position: sticky; top: 0; z-index: 5; background: var(--fondo);
+  border-bottom: 1px solid var(--borde); padding-top: 12px; }
+.marca { display: flex; align-items: center; gap: 12px; }
+.logo { flex: none; width: 56px; height: 56px; padding: 2px; object-fit: contain;
+  background: var(--logo-fondo); border: 1px solid var(--borde); border-radius: 16px; }
+.marca h1 { margin: 0; font: 800 1.5rem/1.1 var(--rd); letter-spacing: -.3px; }
+.lema, .actualizado { margin: 2px 0 0; font-size: .82rem; }
+.lema { color: var(--suave); }
+.actualizado { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--bien); }
+.actualizado .punto { flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.actualizado.viejo { color: var(--aviso); }
+.chips { display: flex; gap: 8px; overflow-x: auto; margin: 10px -16px 0; padding: 0 16px 10px;
+  scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; min-height: 44px; padding: 0 16px; border: 1.5px solid var(--borde);
+  border-radius: 999px; background: var(--tarjeta); color: var(--texto); font-size: .88rem; font-weight: 600; }
+.chip[aria-pressed="true"] { background: var(--texto); border-color: var(--texto); color: var(--fondo); }
+
+main { padding-top: 14px; padding-bottom: 120px; }
+.buscar { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 14px;
+  background: var(--tarjeta); border: 1.5px solid var(--borde); border-radius: 14px; color: var(--suave); }
+.buscar input { flex: 1 1 0; min-width: 0; height: 44px; border: 0; background: transparent;
+  color: var(--texto); font-size: 16px; }
+.seccion { margin-top: 20px; scroll-margin-top: 150px; }
+.seccion h2 { margin: 0 0 10px; font: 800 1.15rem/1.2 var(--rd); }
+.rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 10px; }
+.producto { display: flex; flex-direction: column; background: var(--tarjeta);
+  border: 1px solid var(--borde); border-radius: 16px; overflow: hidden; }
+.foto { aspect-ratio: 4 / 3; display: grid; place-items: center; background: var(--chip); color: var(--suave);
+  font: 800 2.4rem var(--rd); }
+.foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cuerpo { flex-grow: 1; display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.cuerpo h3 { margin: 0; min-height: 2.6em; font-size: .88rem; font-weight: 600; line-height: 1.3; }
+.precio { margin: 0; font: 800 1.2rem/1.1 var(--rd); font-variant-numeric: tabular-nums; }
+.estado { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+.estado.disponible { background: var(--bien-fondo); color: var(--bien); }
+.estado.pocas { background: var(--aviso-fondo); color: var(--aviso); }
+.estado.encargo { background: var(--chip); color: var(--suave); }
+.cuerpo p { margin: 0; }
+.accion { margin-top: auto; padding-top: 4px; }
+.boton { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 0 10px; border: 0; border-radius: 12px; background: var(--acento); color: var(--sobre-acento);
+  font: 800 .94rem var(--rd); transition: transform 120ms ease-out; }
+.boton:active { transform: scale(.97); }
+.boton.encargar { background: var(--tarjeta); border: 1.5px solid var(--texto); color: var(--texto); }
+.contador { display: flex; align-items: center; justify-content: space-between; background: var(--chip);
+  border-radius: 12px; }
+.contador b { min-width: 28px; text-align: center; font-variant-numeric: tabular-nums; }
+.contador button { flex: none; width: 44px; height: 44px; display: grid; place-items: center; padding: 0;
+  border: 0; border-radius: 12px; background: transparent; color: var(--texto); }
+.contador button.mas { background: var(--acento); color: var(--sobre-acento); }
+.leyenda { margin: 10px 0 0; font-size: .75rem; line-height: 1.4; color: var(--suave); }
+.vacio { margin: 28px 0; text-align: center; color: var(--suave); }
+.pie { margin: 28px 0 0; text-align: center; font-size: .88rem; color: var(--suave); }
+.pie a, .vacio a { color: var(--naranja); font-weight: 600; }
+
+/* El pedido: la barra de abajo y la hoja que sube */
+.barra { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--tarjeta);
+  border-top: 1px solid var(--borde); padding-top: 10px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+.barra .ancho { display: flex; align-items: center; gap: 12px; }
+.barra .resumen { flex: 1 1 0; min-width: 0; }
+.barra .resumen span { display: block; font-size: .82rem; color: var(--suave); }
+.barra .resumen b { display: block; font: 800 1.3rem/1.15 var(--rd); font-variant-numeric: tabular-nums; }
+.barra .boton { width: auto; min-height: 52px; padding: 0 24px; border-radius: 16px; font-size: 1.05rem; }
+dialog.hoja { width: 100%; max-width: 560px; max-height: 88dvh; margin: auto auto 0; padding: 0; border: 0;
+  border-radius: 24px 24px 0 0; background: var(--fondo); color: var(--texto); overflow-y: auto; }
+dialog.hoja::backdrop { background: var(--velo); }
+@media (min-width: 600px) { dialog.hoja { margin: auto; border-radius: 24px; } }
+.hoja-cuerpo { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px calc(18px + env(safe-area-inset-bottom)); }
+.hoja-titulo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hoja-titulo h2 { margin: 0; font: 800 1.4rem/1.2 var(--rd); }
+.cerrar { flex: none; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0;
+  border-radius: 50%; background: var(--chip); color: var(--texto); }
+.lineas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.linea { display: flex; flex-direction: column; gap: 6px; padding: 12px; background: var(--tarjeta);
+  border: 1px solid var(--borde); border-radius: 16px; }
+.linea > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.linea .nombre { min-width: 0; font-size: .94rem; font-weight: 600; line-height: 1.3; }
+.linea .subtotal { flex: none; font: 800 1.05rem var(--rd); font-variant-numeric: tabular-nums; }
+.linea .unitario { font-size: .82rem; color: var(--suave); }
+.linea .contador { flex: none; gap: 6px; }
+.total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 4px 4px 0; }
+.total span { font-weight: 600; }
+.total b { font: 800 1.75rem/1.1 var(--rd); font-variant-numeric: tabular-nums; }
+a.enviar { min-height: 56px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px;
+  border-radius: 16px; background: var(--bien); color: var(--sobre-bien); font: 800 1.05rem var(--rd);
+  text-decoration: none; }
+.nota { margin: 0; text-align: center; font-size: .82rem; color: var(--suave); }
+.vaciar { align-self: center; min-height: 44px; padding: 0 12px; border: 0; background: none;
+  color: var(--naranja); font-size: .88rem; font-weight: 600; }
+</style>
+</head>
+<body data-whatsapp="{{ whatsapp }}">
+
+<header class="cabecera">
+  <div class="ancho">
+    <div class="marca">
+      <img class="logo" src="logo-he.png" alt="" width="56" height="56">
+      <div>
+        <h1>Charcutería HYE</h1>
+        <p class="lema">Productos venezolanos</p>
+        <p class="actualizado" id="actualizado" data-generado="{{ generado_iso }}">
+          <span class="punto"></span><span id="actualizado-texto">Actualizado el {{ generado_texto }}</span>
+        </p>
+      </div>
+    </div>
+    <nav class="chips" aria-label="Categorías">
+      <button type="button" class="chip" data-categoria="" aria-pressed="true">Todos</button>
+      {% for s in secciones %}
+      <button type="button" class="chip" data-categoria="{{ s.clave }}" aria-pressed="false">{{ s.nombre }}</button>
+      {% endfor %}
+    </nav>
+  </div>
+</header>
+
+<main class="ancho">
+  <label class="buscar">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input type="search" id="buscar" placeholder="Buscar producto…" aria-label="Buscar producto" autocomplete="off">
+  </label>
+
+  {% for s in secciones %}
+  <section class="seccion" data-categoria="{{ s.clave }}">
+    <h2>{{ s.nombre }}</h2>
+    <div class="rejilla">
+      {% for p in s.productos %}
+      <article class="producto" data-id="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.precio }}" data-estado="{{ p.estado }}">
+        {# Mientras no haya ninguna foto, las tarjetas salen sin el recuadro #}
+        {% if hay_fotos %}
+        <div class="foto">
+          {% if p.foto %}<img src="{{ p.foto }}" alt="" loading="lazy">{% else %}<span aria-hidden="true">{{ p.inicial }}</span>{% endif %}
+        </div>
+        {% endif %}
+        <div class="cuerpo">
+          <h3>{{ p.nombre }}</h3>
+          <p class="precio">{{ p.precio_texto }}</p>
+          <p><span class="estado {{ p.estado }}">{{ p.etiqueta }}</span></p>
+          <div class="accion"></div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% if s.leyenda_licor %}
+    <p class="leyenda">Prohíbese el expendio de bebidas embriagantes a menores de edad. El exceso de alcohol es perjudicial para la salud.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  <p class="vacio" id="sin-resultados" hidden>No encontramos ese producto. <a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener">Escríbenos por WhatsApp</a> y te confirmamos si lo podemos conseguir.</p>
+  <p class="pie">¿No encuentras algo? <a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener">Escríbenos por WhatsApp</a></p>
+</main>
+
+<div class="barra" id="barra" hidden>
+  <div class="ancho">
+    <div class="resumen"><span id="barra-cantidad"></span><b id="barra-total"></b></div>
+    <button type="button" class="boton" id="ver-pedido">Ver pedido</button>
+  </div>
+</div>
+
+<dialog class="hoja" id="hoja" aria-labelledby="hoja-titulo">
+  <div class="hoja-cuerpo">
+    <div class="hoja-titulo">
+      <h2 id="hoja-titulo">Tu pedido</h2>
+      <button type="button" class="cerrar" id="cerrar" aria-label="Cerrar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <ul class="lineas" id="lineas"></ul>
+    <div class="total" id="total-fila"><span>Total</span><b id="total"></b></div>
+    <a class="enviar" id="enviar" href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4 18-7z"/></svg>
+      <span>Enviar pedido por WhatsApp</span>
+    </a>
+    <p class="nota" id="nota"></p>
+    <button type="button" class="vaciar" id="vaciar">Vaciar el pedido</button>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  "use strict";
+  var WHATSAPP = document.body.dataset.whatsapp;
+  var CLAVE = "pedido-hye";
+  var MAS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+  var MENOS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>';
+
+  // Los productos salen del HTML: lo que se ve es lo que se puede pedir
+  var productos = {}, orden = [];
+  document.querySelectorAll(".producto").forEach(function (nodo) {
+    var id = nodo.dataset.id;
+    productos[id] = { nombre: nodo.dataset.nombre, precio: Number(nodo.dataset.precio),
+                      encargo: nodo.dataset.estado === "encargo", nodo: nodo,
+                      busqueda: simple(nodo.dataset.nombre) };
+    orden.push(id);
+  });
+
+  function simple(texto) {
+    return String(texto).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  }
+  function pesos(n) {
+    return "$" + String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+
+  // ── El pedido se guarda en el teléfono, para no perderlo si se recarga
+  var pedido = {};
+  try {
+    var guardado = JSON.parse(localStorage.getItem(CLAVE) || "{}");
+    Object.keys(guardado).forEach(function (id) {
+      var n = Math.floor(Number(guardado[id]));
+      if (productos[id] && n > 0) pedido[id] = Math.min(n, 99);
+    });
+  } catch (e) { pedido = {}; }
+  function guardar() {
+    try { localStorage.setItem(CLAVE, JSON.stringify(pedido)); } catch (e) { /* sin almacenamiento: sigue igual */ }
+  }
+  function cambiar(id, delta) {
+    var n = Math.min((pedido[id] || 0) + delta, 99);
+    if (n > 0) pedido[id] = n; else delete pedido[id];
+    guardar();
+    pintar();
+  }
+
+  function boton(clase, html, etiqueta, alTocar) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = clase;
+    b.innerHTML = html;
+    if (etiqueta) b.setAttribute("aria-label", etiqueta);
+    b.addEventListener("click", alTocar);
+    return b;
+  }
+  function contador(id) {
+    var p = productos[id], caja = document.createElement("div");
+    caja.className = "contador";
+    var cuenta = document.createElement("b");
+    cuenta.textContent = pedido[id];
+    caja.appendChild(boton("menos", MENOS, "Quitar uno de " + p.nombre, function () { cambiar(id, -1); }));
+    caja.appendChild(cuenta);
+    caja.appendChild(boton("mas", MAS, "Agregar uno más de " + p.nombre, function () { cambiar(id, 1); }));
+    return caja;
+  }
+
+  var barra = document.getElementById("barra"), hoja = document.getElementById("hoja");
+  function pintar() {
+    var unidades = 0, suma = 0, hayEncargo = false, renglones = [];
+    var lineas = document.getElementById("lineas");
+    lineas.textContent = "";
+
+    orden.forEach(function (id) {
+      var p = productos[id], cant = pedido[id] || 0;
+      var accion = p.nodo.querySelector(".accion");
+      accion.textContent = "";
+      if (cant > 0) {
+        accion.appendChild(contador(id));
+      } else if (p.encargo) {
+        accion.appendChild(boton("boton encargar", MAS + "<span>Encargar</span>", null, function () { cambiar(id, 1); }));
+      } else {
+        accion.appendChild(boton("boton", MAS + "<span>Agregar</span>", null, function () { cambiar(id, 1); }));
+      }
+      if (!cant) return;
+
+      unidades += cant;
+      suma += cant * p.precio;
+      if (p.encargo) hayEncargo = true;
+      renglones.push("• " + cant + " × " + p.nombre + " — " + pesos(cant * p.precio) + (p.encargo ? " (por encargo)" : ""));
+
+      var li = document.createElement("li"), arriba = document.createElement("div"), abajo = document.createElement("div");
+      li.className = "linea";
+      var nombre = document.createElement("span"), subtotal = document.createElement("span"), unitario = document.createElement("span");
+      nombre.className = "nombre"; nombre.textContent = p.nombre;
+      subtotal.className = "subtotal"; subtotal.textContent = pesos(cant * p.precio);
+      unitario.className = "unitario"; unitario.textContent = pesos(p.precio) + " cada uno" + (p.encargo ? " · por encargo" : "");
+      arriba.appendChild(nombre); arriba.appendChild(subtotal);
+      abajo.appendChild(unitario); abajo.appendChild(contador(id));
+      li.appendChild(arriba); li.appendChild(abajo);
+      lineas.appendChild(li);
+    });
+
+    barra.hidden = unidades === 0;
+    document.getElementById("barra-cantidad").textContent = unidades === 1 ? "1 producto" : unidades + " productos";
+    document.getElementById("barra-total").textContent = pesos(suma);
+    document.getElementById("total").textContent = pesos(suma);
+
+    var vacio = unidades === 0;
+    document.getElementById("total-fila").hidden = vacio;
+    document.getElementById("enviar").hidden = vacio;
+    document.getElementById("vaciar").hidden = vacio;
+    document.getElementById("nota").textContent = vacio
+      ? "Tu pedido está vacío. Agrega productos desde el catálogo."
+      : hayEncargo
+        ? "Lo que va por encargo lo traemos esta semana. Te confirmamos el precio y el día de entrega por el chat."
+        : "Te confirmamos el pedido y el día de entrega por el chat.";
+    var mensaje = "Hola, quiero hacer este pedido:\n" + renglones.join("\n") + "\nTotal: " + pesos(suma);
+    document.getElementById("enviar").href = "https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(mensaje);
+  }
+
+  document.getElementById("ver-pedido").addEventListener("click", function () {
+    if (hoja.showModal) hoja.showModal(); else hoja.setAttribute("open", "");
+  });
+  function cerrar() { if (hoja.close) hoja.close(); else hoja.removeAttribute("open"); }
+  document.getElementById("cerrar").addEventListener("click", cerrar);
+  hoja.addEventListener("click", function (e) { if (e.target === hoja) cerrar(); });   // tocar fuera
+  document.getElementById("vaciar").addEventListener("click", function () {
+    pedido = {};
+    guardar();
+    pintar();
+  });
+
+  // ── Buscar y filtrar por categoría
+  var categoria = "", buscado = "";
+  function filtrar() {
+    var alguno = false;
+    document.querySelectorAll(".seccion").forEach(function (seccion) {
+      var visibles = 0;
+      var deLaCategoria = !categoria || seccion.dataset.categoria === categoria;
+      seccion.querySelectorAll(".producto").forEach(function (nodo) {
+        var ver = deLaCategoria && (!buscado || productos[nodo.dataset.id].busqueda.indexOf(buscado) !== -1);
+        nodo.hidden = !ver;
+        if (ver) visibles += 1;
+      });
+      seccion.hidden = visibles === 0;
+      if (visibles) alguno = true;
+    });
+    document.getElementById("sin-resultados").hidden = alguno;
+  }
+  document.querySelectorAll(".chip").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      categoria = chip.dataset.categoria;
+      document.querySelectorAll(".chip").forEach(function (otro) {
+        otro.setAttribute("aria-pressed", otro === chip ? "true" : "false");
+      });
+      filtrar();
+      window.scrollTo({ top: 0 });
+    });
+  });
+  document.getElementById("buscar").addEventListener("input", function (e) {
+    buscado = simple(e.target.value.trim());
+    filtrar();
+  });
+
+  // ── "Actualizado hoy a las 11:30 a. m.", en hora de Colombia
+  (function () {
+    var caja = document.getElementById("actualizado"), generado = new Date(caja.dataset.generado);
+    if (isNaN(generado)) return;
+    try {
+      var zona = "America/Bogota";
+      var dia = new Intl.DateTimeFormat("es-CO", { timeZone: zona, year: "numeric", month: "2-digit", day: "2-digit" });
+      var hora = new Intl.DateTimeFormat("es-CO", { timeZone: zona, hour: "numeric", minute: "2-digit", hour12: true }).format(generado);
+      var aLas = (hora.indexOf("1:") === 0 ? "a la " : "a las ") + hora;
+      var texto;
+      if (dia.format(generado) === dia.format(new Date())) texto = "Actualizado hoy " + aLas;
+      else if (dia.format(generado) === dia.format(new Date(Date.now() - 864e5))) texto = "Actualizado ayer " + aLas;
+      else texto = "Actualizado el " + new Intl.DateTimeFormat("es-CO", { timeZone: zona, day: "numeric", month: "long" }).format(generado);
+      document.getElementById("actualizado-texto").textContent = texto;
+    } catch (e) { /* se queda el texto que ya venía en la página */ }
+    // Se actualiza cada media hora: si lleva más de 3 horas, algo falló y se avisa con el color
+    if (Date.now() - generado.getTime() > 3 * 3600e3) caja.classList.add("viejo");
+  })();
+
+  pintar();
+})();
+</script>
+</body>
+</html>

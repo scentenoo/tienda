@@ -355,6 +355,9 @@ def init_database():
             ('purchases', 'subtotal', 'TEXT'),
             ('purchases', 'lote_id', 'TEXT'),
             ('purchases', 'shipping_total', 'REAL DEFAULT 0.0'),
+            # Catálogo para clientes (ver servicios/catalogo.py)
+            ('products', 'categoria', 'TEXT'),
+            ('products', 'catalogo', "TEXT DEFAULT 'auto'"),
         ]
         
         for table, column, definition in safe_add_columns:

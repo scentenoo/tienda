@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 import ttkbootstrap as ttk
 from config.database import get_connection
+from servicios import catalogo as reglas_catalogo
 from utils.ExcelImportWindow import ExcelImportWindow
 from views.users_window import UsersWindow
 from utils.theme import FONT_TITLE, FONT_BOLD, FONT_NORMAL, FONT_SMALL, ROW_COLORS
@@ -319,8 +320,8 @@ class ProductFormWindow:
         self.window.transient(parent)
         hacer_modal(self.window)
 
-        # Centrar ventana
-        centrar_ventana(self.window, 500, 400)
+        # Centrar ventana (con los campos del catálogo necesita más alto)
+        centrar_ventana(self.window, 540, 720)
 
         # Configurar UI
         self.setup_ui()
@@ -371,6 +372,23 @@ class ProductFormWindow:
 
         ttk.Label(form_frame, text=note_text, font=FONT_SMALL, bootstyle="secondary").pack(anchor=tk.W)
 
+        # Catálogo para clientes: en qué sección sale y si se muestra
+        self._claves_categoria = [clave for clave, _ in reglas_catalogo.CATEGORIAS]
+        ttk.Label(form_frame, text="Categoría en el catálogo:", font=FONT_BOLD).pack(anchor=tk.W, pady=(15, 5))
+        self.category_combo = ttk.Combobox(
+            form_frame, state="readonly", font=FONT_NORMAL,
+            values=[nombre for _, nombre in reglas_catalogo.CATEGORIAS])
+        self.category_combo.current(self._claves_categoria.index(reglas_catalogo.CATEGORIA_POR_DEFECTO))
+        self.category_combo.pack(fill=tk.X, pady=(0, 15))
+
+        ttk.Label(form_frame, text="¿Aparece en el catálogo?", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
+        self.catalog_var = tk.StringVar(value=reglas_catalogo.MODO_POR_DEFECTO)
+        for clave, nombre, descripcion in reglas_catalogo.MODOS:
+            ttk.Radiobutton(form_frame, text=nombre, value=clave,
+                            variable=self.catalog_var).pack(anchor=tk.W)
+            ttk.Label(form_frame, text=descripcion, font=FONT_SMALL, bootstyle="secondary",
+                      wraplength=460, justify=tk.LEFT).pack(anchor=tk.W, padx=(24, 0), pady=(0, 8))
+
         # Botones
         buttons_frame = ttk.Frame(main_frame)
         buttons_frame.pack(side=tk.BOTTOM, fill=tk.X)
@@ -393,6 +411,16 @@ class ProductFormWindow:
             price_str = str(self.product['price']).replace('$', '').replace(',', '')
             self.price_entry.insert(0, price_str)
             self.stock_entry.insert(0, str(self.product['stock']))
+            # La categoría y el modo no están en la tabla de la ventana: se leen de la base
+            try:
+                conn = get_connection()
+                opciones = reglas_catalogo.opciones_del_producto(conn, self.product['id'])
+                conn.close()
+            except Exception:
+                opciones = None
+            if opciones:
+                self.category_combo.current(self._claves_categoria.index(opciones["categoria"]))
+                self.catalog_var.set(opciones["catalogo"])
     
     def save(self):
         """Guarda o actualiza el producto"""
@@ -432,6 +460,9 @@ class ProductFormWindow:
                 self.stock_entry.focus()
                 return
         
+        categoria = self._claves_categoria[self.category_combo.current()]
+        catalogo = reglas_catalogo.normalizar_modo(self.catalog_var.get())
+
         try:
             conn = get_connection()
             cursor = conn.cursor()
@@ -446,9 +477,9 @@ class ProductFormWindow:
                 
                 # Insertar nuevo producto
                 cursor.execute('''
-                    INSERT INTO products (name, price, stock) 
-                    VALUES (?, ?, ?)
-                ''', (name, price, stock))
+                    INSERT INTO products (name, price, stock, categoria, catalogo)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (name, price, stock, categoria, catalogo))
                 
                 messagebox.showinfo("Éxito", "Producto agregado correctamente")
                 
@@ -468,15 +499,15 @@ class ProductFormWindow:
                 if stock_str:  # Si se especificó stock, actualizarlo
                     cursor.execute('''
                         UPDATE products 
-                        SET name = ?, price = ?, stock = ? 
+                        SET name = ?, price = ?, stock = ?, categoria = ?, catalogo = ?
                         WHERE id = ?
-                    ''', (name, price, stock, self.product['id']))
+                    ''', (name, price, stock, categoria, catalogo, self.product['id']))
                 else:  # Si no se especificó stock, mantener el actual
                     cursor.execute('''
                         UPDATE products 
-                        SET name = ?, price = ? 
+                        SET name = ?, price = ?, categoria = ?, catalogo = ?
                         WHERE id = ?
-                    ''', (name, price, self.product['id']))
+                    ''', (name, price, categoria, catalogo, self.product['id']))
                 
                 messagebox.showinfo("Éxito", "Producto actualizado correctamente")
             

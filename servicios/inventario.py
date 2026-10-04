@@ -1,5 +1,10 @@
 """Productos: crear, editar y eliminar, con las reglas de la pantalla de
-inventario del PC. Ninguna función hace commit."""
+inventario del PC. Ninguna función hace commit.
+
+La categoría y el modo del catálogo (ver servicios/catalogo.py) son
+opcionales: si no se pasan, no se tocan, y así nada de esto falla en una base
+que todavía no tenga esas columnas."""
+from servicios.catalogo import normalizar_categoria, normalizar_modo
 
 
 def _validar(conn, nombre, precio, stock, excluir_id=None):
@@ -23,23 +28,36 @@ def _validar(conn, nombre, precio, stock, excluir_id=None):
     return nombre
 
 
-def crear_producto(conn, nombre, precio, stock=0):
+def _campos_catalogo(categoria, catalogo):
+    """Las columnas del catálogo que hay que escribir, con su valor."""
+    campos = {}
+    if categoria is not None:
+        campos["categoria"] = normalizar_categoria(categoria)
+    if catalogo is not None:
+        campos["catalogo"] = normalizar_modo(catalogo)
+    return campos
+
+
+def crear_producto(conn, nombre, precio, stock=0, categoria=None, catalogo=None):
     nombre = _validar(conn, nombre, precio, stock or 0)
+    campos = {"name": nombre, "price": precio, "stock": stock or 0,
+              **_campos_catalogo(categoria, catalogo)}
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO products (name, price, stock) VALUES (?, ?, ?)",
-                   (nombre, precio, stock or 0))
+    cursor.execute(f"INSERT INTO products ({', '.join(campos)}) "
+                   f"VALUES ({', '.join('?' * len(campos))})", tuple(campos.values()))
     return cursor.lastrowid
 
 
-def editar_producto(conn, product_id, nombre, precio, stock=None):
-    """Sin stock (None) se conserva el que tiene, como en el PC."""
+def editar_producto(conn, product_id, nombre, precio, stock=None, categoria=None, catalogo=None):
+    """Sin stock (None) se conserva el que tiene, como en el PC. Lo mismo la
+    categoría y el modo del catálogo."""
     nombre = _validar(conn, nombre, precio, stock, excluir_id=product_id)
-    if stock is None:
-        conn.execute("UPDATE products SET name = ?, price = ? WHERE id = ?",
-                     (nombre, precio, product_id))
-    else:
-        conn.execute("UPDATE products SET name = ?, price = ?, stock = ? WHERE id = ?",
-                     (nombre, precio, stock, product_id))
+    campos = {"name": nombre, "price": precio}
+    if stock is not None:
+        campos["stock"] = stock
+    campos.update(_campos_catalogo(categoria, catalogo))
+    conn.execute(f"UPDATE products SET {', '.join(c + ' = ?' for c in campos)} WHERE id = ?",
+                 (*campos.values(), product_id))
 
 
 def usos_del_producto(conn, product_id):
