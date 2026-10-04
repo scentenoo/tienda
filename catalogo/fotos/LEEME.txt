@@ -1,0 +1,7 @@
+Aquí van las fotos de los productos del catálogo.
+
+El nombre del archivo es el id del producto (el número de la columna ID en
+la ventana de inventario): 29.jpg, 42.webp, 1.png…
+
+Cuadradas o casi, de unos 600 px de lado y que no pesen más de 150 KB cada
+una, para que el catálogo abra rápido con datos del celular.

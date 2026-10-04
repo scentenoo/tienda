@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta
 
 from flask import g, render_template, request, session, template_rendered
 
+from servicios import catalogo as reglas_catalogo
 from web.app import (_dia_largo, _leer_decimal, _leer_monto, app, cantidad, db, fecha,
                      pesos, requiere_gastos, requiere_ingreso)
 
@@ -87,8 +88,15 @@ def _foto_venta(conn, i):
 def _foto_producto(conn, i):
     p = conn.execute("SELECT name, price, stock, cost_price FROM products WHERE id = ?",
                      (i,)).fetchone()
-    return p and {"Nombre": p["name"], "Precio": pesos(p["price"]), "Stock": cantidad(p["stock"]),
-                  "Costo": pesos(p["cost_price"])}
+    if p is None:
+        return None
+    foto = {"Nombre": p["name"], "Precio": pesos(p["price"]), "Stock": cantidad(p["stock"]),
+            "Costo": pesos(p["cost_price"])}
+    opciones = reglas_catalogo.opciones_del_producto(conn, i)
+    if opciones:
+        foto["Categoría"] = dict(reglas_catalogo.CATEGORIAS)[opciones["categoria"]]
+        foto["Catálogo"] = {clave: nombre for clave, nombre, _ in reglas_catalogo.MODOS}[opciones["catalogo"]]
+    return foto
 
 
 def _foto_compra(conn, i):

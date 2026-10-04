@@ -19,6 +19,37 @@
     <input type="text" name="stock" value="{{ p.get('stock', '') if p else '' }}" inputmode="decimal" placeholder="0">
   </label>
   {% if editando %}<p class="sub" style="margin:4px 0 0">Déjelo vacío para no cambiarlo. Lo normal es que el stock suba con las compras y baje con las ventas.</p>{% endif %}
+  {% if cat %}
+  {% set elegida = p.get('categoria', '') if p else '' %}
+  {% set modo = (p.get('catalogo') if p else '') or 'auto' %}
+  <label class="campo">Categoría en el catálogo
+    <select name="categoria">
+      {% if not editando %}<option value="">Elegir… (si no, sale en «Otros»)</option>{% endif %}
+      {% for clave, nombre in cat.categorias %}
+      <option value="{{ clave }}"{{ ' selected' if elegida == clave }}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <fieldset class="modos">
+    <legend>¿Aparece en el catálogo?</legend>
+    {% for clave, nombre, descripcion in cat.modos %}
+    <label class="modo">
+      <input type="radio" name="catalogo" value="{{ clave }}"{{ ' checked' if modo == clave }}>
+      <span><b>{{ nombre }}</b><small>{{ descripcion }}</small></span>
+    </label>
+    {% endfor %}
+  </fieldset>
+  <style>
+  .modos { border: 0; margin: 14px 0 0; padding: 0; min-width: 0; display: grid; gap: 8px; }
+  .modos legend { padding: 0; margin-bottom: 6px; font-size: .88rem; color: var(--suave); }
+  .modo { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1.5px solid var(--borde);
+    border-radius: 14px; cursor: pointer; }
+  .modo:has(input:checked) { border-color: var(--naranja); background: var(--marca-fondo); }
+  .modo input { flex: none; width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--naranja); }
+  .modo b { display: block; }
+  .modo small { display: block; margin-top: 2px; font-size: .88rem; line-height: 1.4; color: var(--suave); }
+  </style>
+  {% endif %}
   <button class="boton" style="width:100%; margin-top: 14px">{{ 'Guardar cambios' if editando else 'Crear producto' }}</button>
 </form>
 

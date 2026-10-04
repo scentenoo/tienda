@@ -1,0 +1,3 @@
+# Lo que necesita la tarea de GitHub para generar el catálogo
+jinja2
+libsql
