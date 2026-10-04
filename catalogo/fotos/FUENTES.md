@@ -57,7 +57,7 @@ si alguna reclama la suya, se quita.
 | Archivo | Producto | Título de la imagen | Página de donde salió |
 |---|---|---|---|
 | 8.webp | Adobo | Adobo La Comadre 200 g | https://www.santaisabel.cl/adobo-la-comadre-200-g-2044434/p |
-| 11.webp | Cerveza Pilsen | polar beer pilsener botella 12 oz - Bodega Mi Amiga | https://bodegamiamiga.com/producto/polar-beer-pilsener-botella-12-oz/ |
+| 11.webp | Cerveza Pilsen | Lata de Polar Pilsen 355 ml, recortada de una captura del buscador de imágenes que pasó Samir (resultado «Cerveza Polar Lata Venezolana»; no se sabe de qué página salió) | — |
 | 13.webp | Queso De Año | Emporium | https://automercadosemporium.com/Products.php?cat=05CHAR&suc=02 |
 | 14.webp | Anis | Anis Cartujo Licor Botella 1 Litro Completo Cln · MercadoLibre | https://articulo.mercadolibre.com.ve/MLV-558259411-anis-cartujo-licor-botella-1-litro-completo-cln-_JM |
 | 15.webp | Ron Superior | Ron Santa Teresa Superior 0.70L - Super Fresh Market | https://superfreshmarket.com.ve/producto/ron-santa-teresa-superior-0-70l/ |
