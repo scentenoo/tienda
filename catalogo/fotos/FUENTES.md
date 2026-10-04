@@ -1,7 +1,11 @@
 # De dónde salió cada imagen
 
-Imágenes oficiales del fabricante, tomadas de su sitio el 4 de octubre de 2026 y
-recortadas al producto. Se usan para mostrar el producto original que se vende.
+Todas van recortadas al producto, sin fondo. Si alguien pide retirar una, se borra el
+archivo y el producto vuelve a salir con su inicial (o con la foto propia, si se le sube una).
+
+## Del fabricante
+
+Imágenes oficiales, tomadas del sitio de cada marca el 4 de octubre de 2026.
 
 | Archivo | Producto | Fabricante | Imagen original |
 |---|---|---|---|
@@ -19,6 +23,56 @@ recortadas al producto. Se usan para mostrar el producto original que se vende.
 | 55.webp | Toronto | Nestlé Venezuela | https://www.nestle.com.ve/sites/g/files/pydnoa526/files/Toronto%20Dummies.png |
 | 63.webp | Galk | Nestlé Venezuela | https://www.nestle.com.ve/sites/g/files/pydnoa526/files/Galak%2030%20G%20dummies.png |
 | 64.webp | Rikachicha | Nestlé Venezuela | https://www.nestle.com.ve/sites/g/files/pydnoa526/files/RICA%20CHICHA%C2%AE-400%20g.png |
+| 65.webp | Mantequilla 1 kilo | Empresas Polar | https://empresaspolar.com/wp-content/uploads/2026/02/Group-1731.webp (la misma imagen de 6.webp) |
 | 67.webp | Cerelac Kilo | Nestlé Venezuela | https://www.nestle.com.ve/sites/g/files/pydnoa526/files/CERELAC%C2%AE%20900g%20.png |
 | 70.webp | Riquesa pote | Empresas Polar | https://empresaspolar.com/wp-content/uploads/2025/06/Group-1714.webp |
 | 77.webp | Caja Toronto | Nestlé Venezuela | https://www.nestle.com.ve/sites/g/files/pydnoa526/files/Toronto%2024x324g.png |
+
+## Del catálogo del proveedor
+
+Del catálogo que comparte el proveedor (Rinconcito De Mi Tierra,
+https://catalogo.treinta.co/lamejor-070e11), el 4 de octubre de 2026. Solo las que no
+traían su logo.
+
+| Archivo | Producto | Como aparece en el catálogo del proveedor | Imagen original |
+|---|---|---|---|
+| 4.webp | Diablito Grande | Diablito 115g | https://us-east-1-prod-treinta-assets-bucket.s3.amazonaws.com/704d90a0-788b-5179-958f-1b04b6379f8c.jpeg |
+| 24.webp | Chicha 500gr | Chicha El Chichero 500g | https://us-east-1-prod-treinta-assets-bucket.s3.amazonaws.com/a2b6418c-4090-54c8-a60b-d12b8bbf8d41.jpeg |
+| 27.webp | Suero | Suero litro | https://cdn.treinta.co/new-products/1111626e-f117-59a7-bccc-4424eb0b1949.jpeg |
+| 32.webp | Masa Facil | Masa fácil para pastelitos | https://us-east-1-prod-treinta-assets-bucket.s3.amazonaws.com/bb7ef835-e0ad-5acd-95be-4025588e2eea.jpeg |
+| 34.webp | Salsa China Grande | Salsa china grande | https://cdn.treinta.co/new-products/b8cc1dfc-171c-562d-9d63-23399bf4c48f.jpeg |
+| 38.webp | Bandeja de jamon | Jamón ahumado 250g | https://cdn.treinta.co/new-products/7cfd357f-1519-588b-846d-7ffe035f9c12.jpeg |
+| 54.webp | Leche Condensada | Leche condensada 397g | https://cdn.treinta.co/new-products/21d85677-f2ce-583b-a909-1d4f3ece89f2.jpeg |
+| 58.webp | Chicha litro | Chicha liq lt | https://cdn.treinta.co/new-products/83248ee2-fd59-5d80-8d4b-ee83770d8a53.jpeg |
+| 60.webp | Harina de trigo | Harina trigo todo uso | https://cdn.treinta.co/new-products/1ec3d9fb-b891-5011-830b-87aaedf75723.jpeg |
+| 71.webp | Tip-Top | Tip-Top Coco | https://cdn.treinta.co/new-products/012f774e-8604-579b-be65-f9cfae67f1fc.jpeg |
+| 72.webp | Frescolita 2L | Frescolita 2 litros | https://cdn.treinta.co/new-products/5b13fc97-e568-54d3-a967-f9c7db22fda6.jpeg |
+| 74.webp | Salsa de Tomate | S tomate heinz 397 | https://us-east-1-prod-treinta-assets-bucket.s3.amazonaws.com/9b85fa68-8fa0-5e46-9dfd-39dba94735e5.jpeg |
+| 75.webp | Sobre de Pirulin | Pirulin 200g | https://cdn.treinta.co/new-products/b0eba08c-b513-5820-9912-e2d00d55e1fb.jpeg |
+
+## De otras tiendas en internet
+
+Encontradas con el buscador de imágenes el 4 de octubre de 2026, para productos de marca
+que el proveedor solo tenía con su logo encima. Son fotos de producto de otras tiendas:
+si alguna reclama la suya, se quita.
+
+| Archivo | Producto | Título de la imagen | Página de donde salió |
+|---|---|---|---|
+| 8.webp | Adobo | Adobo La Comadre 200 g | https://www.santaisabel.cl/adobo-la-comadre-200-g-2044434/p |
+| 11.webp | Cerveza Pilsen | polar beer pilsener botella 12 oz - Bodega Mi Amiga | https://bodegamiamiga.com/producto/polar-beer-pilsener-botella-12-oz/ |
+| 14.webp | Anis | Anis Cartujo Licor Botella 1 Litro Completo Cln · MercadoLibre | https://articulo.mercadolibre.com.ve/MLV-558259411-anis-cartujo-licor-botella-1-litro-completo-cln-_JM |
+| 16.webp | Cinco Estrellas | Ron Cinco Estrellas El Five Stars Ron Venezolano Ven8 · Envío gratis | https://articulo.mercadolibre.com.mx/MLM-3621548618-ron-cinco-estrellas-el-five-stars-ron-venezolano-ven8-_JM |
+| 17.webp | Crema De Arroz 900gr | PRIMOR CREMA DE ARROZ BOLSA 900GR · Limpiatodo | https://limpiatodo.net/producto/primor-crema-de-arroz-bolsa-900gr/ |
+| 19.webp | Salsa China Pequeña | Salsa De Soya La China 150Ml - Super Fresh Market | https://superfreshmarket.com.ve/producto/salsa-de-soya-la-china-150ml/ |
+| 25.webp | Cacique | ron añejo superior de Venezuela botella 70 cl · CACIQUE · Supermercado ... | https://www.hipercor.es/supermercado/B001018733300083-cacique-ron-anejo-superior-de-venezuela-botella-70-cl/ |
+| 40.webp | Salsa 57 | SALSA 57 194GR HEINZ - Mi Bodega Express | https://mibodega.com.ve/producto/heinz-57-salsa-194gr/ |
+| 48.webp | Caroreña Sangria | Licores :: Vinos y Espumantes :: Sangrías :: Sangría Original Caroreña ... | https://vivaenlinea.com/licores/vinos-y-espumantes/sangrias/sangria-original-carorena-1-75-lt/ |
+| 51.webp | Ovomaltina | Ovomaltina Tubo, 35gr - Walmart.com | https://www.walmart.com/ip/Ovomaltina-Tubo-35gr/5619620076 |
+| 56.webp | Pirulin | Pirulin Barquilla Rellena 16g - Farmadon - La Farmacia de la Esquina | https://www.farmadon.com.ve/producto/pirulin-barquilla-rellena-16g/ |
+| 59.webp | Leche en polvo | LECHE EN POLVO CAMPIÑA 900GR – Bistecca | https://www.bistecca.com.ve/producto/leche-en-polvo-campia-900gr/ |
+| 61.webp | Raketi | Snack Raquety Queso x 18 gr | https://www.farmatodo.com.ve/producto/115259485-snack-raquety-queso-x-18-gr |
+| 62.webp | Palitos de Chocolate | Palitos de chocolate danibisk 30 gr · Gama en Línea | https://gamaenlinea.com/es/palitos-chocolate-danibisk-30-gr/p/10033651 |
+| 66.webp | Bajo Cero | VODKA DE FRUTOS SALVAJES 0.70LT BAJO CERO - Mi Bodega Express | https://mibodega.com.ve/producto/vodka-de-frutos-salvajes-0-70lt-bajo-cero/ |
+| 68.webp | Santa Teresa | SANTA TERESA GRAN RESERVA 750 ML · Botilleria Los Arcos | https://www.botillerialosarcos.cl/product/santa-teresa-gran-reserva-750-ml |
+| 69.webp | Marilu | Galletas Marilu Vainilla Puig 216gr | https://instamarketca.com/product/galletas-marilu-vainilla-puig-216gr/ |
+| 73.webp | Chicha Medio litro | Chicha El Chichero 500ml Parmalat · Grupo San Anselmo | https://farmanselmo.com.ve/producto/principal/unica/chicha-el-chichero-500ml-parmalat |

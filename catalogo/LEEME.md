@@ -84,14 +84,15 @@ listo. El teléfono la recorta en 4:3 y la achica (unos 100 KB); la página la
 guarda en GitHub y ese cambio publica el catálogo solo, en un par de minutos.
 Ahí mismo se cambia o se quita. Llenan todo el recuadro de la tarjeta.
 
-**Imágenes oficiales del fabricante (`<id>.webp`).** Para los productos
-empacados de marca, de la misma presentación que se vende. Van recortadas, sin
-fondo, y se muestran completas sobre el tono de la tarjeta (claro u oscuro
-según el teléfono). `catalogo/fotos/FUENTES.md` dice de dónde salió cada una.
-Si una marca pide retirar la suya, se borra el archivo.
+**Imágenes recortadas (`<id>.webp`).** Para los productos empacados de
+marca, de la misma presentación que se vende. Salen del sitio del fabricante,
+del catálogo del proveedor o de otras tiendas en internet;
+`catalogo/fotos/FUENTES.md` dice de dónde salió cada una. Van sin fondo y se
+muestran completas sobre el tono de la tarjeta (claro u oscuro según el
+teléfono). Si alguien pide retirar la suya, se borra el archivo.
 
 Si un producto tiene las dos, sale la propia: la que se sube desde el
-formulario le gana a la oficial. El formulario solo muestra y quita la propia.
+formulario le gana a la recortada. El formulario solo muestra y quita la propia.
 
 Lo de subir fotos desde el formulario necesita las dos variables de Render de
 arriba (sin ellas, la sección no aparece). Y como cada foto es un cambio en el
