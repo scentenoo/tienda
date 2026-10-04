@@ -81,6 +81,7 @@ main { padding-top: 14px; padding-bottom: 120px; }
 .cuerpo { flex-grow: 1; display: flex; flex-direction: column; gap: 6px; padding: 10px; }
 .cuerpo h3 { margin: 0; min-height: 2.6em; font-size: .88rem; font-weight: 600; line-height: 1.3; }
 .precio { margin: 0; font: 800 1.2rem/1.1 var(--rd); font-variant-numeric: tabular-nums; }
+.por-kilo { margin: 2px 0 0; font-size: .75rem; line-height: 1.3; color: var(--suave); }
 .estado { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .75rem; font-weight: 600; }
 .estado.disponible { background: var(--bien-fondo); color: var(--bien); }
 .estado.pocas { background: var(--aviso-fondo); color: var(--aviso); }
@@ -173,7 +174,7 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
     <h2>{{ s.nombre }}</h2>
     <div class="rejilla">
       {% for p in s.productos %}
-      <article class="producto" data-id="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.precio }}" data-estado="{{ p.estado }}">
+      <article class="producto" data-id="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.precio }}" data-estado="{{ p.estado }}"{% if p.medio_kilo %} data-medio-kilo{% endif %}>
         {# Mientras no haya ninguna foto, las tarjetas salen sin el recuadro #}
         {% if hay_fotos %}
         <div class="foto">
@@ -183,6 +184,7 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
         <div class="cuerpo">
           <h3>{{ p.nombre }}</h3>
           <p class="precio">{{ p.precio_texto }}</p>
+          {% if p.medio_kilo %}<p class="por-kilo">El kilo · también por medio kilo</p>{% endif %}
           <p><span class="estado {{ p.estado }}">{{ p.etiqueta }}</span></p>
           <div class="accion"></div>
         </div>
@@ -239,12 +241,20 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
     var id = nodo.dataset.id;
     productos[id] = { nombre: nodo.dataset.nombre, precio: Number(nodo.dataset.precio),
                       encargo: nodo.dataset.estado === "encargo", nodo: nodo,
+                      // por kilo: se pide de medio en medio
+                      paso: "medioKilo" in nodo.dataset ? 0.5 : 1,
                       busqueda: simple(nodo.dataset.nombre) };
     orden.push(id);
   });
 
   function simple(texto) {
     return String(texto).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  }
+  // 0.5 → "½ kg", 1.5 → "1½ kg"; lo demás, el número tal cual
+  function cantidad(p, n) {
+    if (p.paso === 1) return String(n);
+    var enteros = Math.floor(n);
+    return (enteros ? enteros : "") + (n % 1 ? "½" : "") + " kg";
   }
   function pesos(n) {
     return "$" + String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -255,8 +265,9 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
   try {
     var guardado = JSON.parse(localStorage.getItem(CLAVE) || "{}");
     Object.keys(guardado).forEach(function (id) {
-      var n = Math.floor(Number(guardado[id]));
-      if (productos[id] && n > 0) pedido[id] = Math.min(n, 99);
+      if (!productos[id]) return;
+      var paso = productos[id].paso, n = Math.floor(Number(guardado[id]) / paso) * paso;
+      if (n > 0) pedido[id] = Math.min(n, 99);
     });
   } catch (e) { pedido = {}; }
   function guardar() {
@@ -282,10 +293,11 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
     var p = productos[id], caja = document.createElement("div");
     caja.className = "contador";
     var cuenta = document.createElement("b");
-    cuenta.textContent = pedido[id];
-    caja.appendChild(boton("menos", MENOS, "Quitar uno de " + p.nombre, function () { cambiar(id, -1); }));
+    cuenta.textContent = cantidad(p, pedido[id]);
+    var de = p.paso === 1 ? "uno" : "medio kilo";
+    caja.appendChild(boton("menos", MENOS, "Quitar " + de + " de " + p.nombre, function () { cambiar(id, -p.paso); }));
     caja.appendChild(cuenta);
-    caja.appendChild(boton("mas", MAS, "Agregar uno más de " + p.nombre, function () { cambiar(id, 1); }));
+    caja.appendChild(boton("mas", MAS, "Agregar " + de + " más de " + p.nombre, function () { cambiar(id, p.paso); }));
     return caja;
   }
 
@@ -308,17 +320,17 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
       }
       if (!cant) return;
 
-      unidades += cant;
+      unidades += p.paso === 1 ? cant : 1;    // el queso por kilos cuenta como un producto
       suma += cant * p.precio;
       if (p.encargo) hayEncargo = true;
-      renglones.push("• " + cant + " × " + p.nombre + " — " + pesos(cant * p.precio) + (p.encargo ? " (por encargo)" : ""));
+      renglones.push("• " + (p.paso === 1 ? cant + " × " : cantidad(p, cant) + " de ") + p.nombre + " — " + pesos(cant * p.precio) + (p.encargo ? " (por encargo)" : ""));
 
       var li = document.createElement("li"), arriba = document.createElement("div"), abajo = document.createElement("div");
       li.className = "linea";
       var nombre = document.createElement("span"), subtotal = document.createElement("span"), unitario = document.createElement("span");
       nombre.className = "nombre"; nombre.textContent = p.nombre;
       subtotal.className = "subtotal"; subtotal.textContent = pesos(cant * p.precio);
-      unitario.className = "unitario"; unitario.textContent = pesos(p.precio) + " cada uno" + (p.encargo ? " · por encargo" : "");
+      unitario.className = "unitario"; unitario.textContent = pesos(p.precio) + (p.paso === 1 ? " cada uno" : " el kilo") + (p.encargo ? " · por encargo" : "");
       arriba.appendChild(nombre); arriba.appendChild(subtotal);
       abajo.appendChild(unitario); abajo.appendChild(contador(id));
       li.appendChild(arriba); li.appendChild(abajo);

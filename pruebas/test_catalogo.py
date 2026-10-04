@@ -111,7 +111,14 @@ class ReglaDeVisibilidad(unittest.TestCase):
         conn = base()
         producto(conn, "Queso", precio=30000, stock=14, costo=21000)
         (p,) = reglas.productos_visibles(conn, HOY)
-        self.assertEqual(set(p), {"id", "nombre", "precio", "categoria", "estado"})
+        self.assertEqual(set(p), {"id", "nombre", "precio", "categoria", "estado", "medio_kilo"})
+
+    def test_solo_el_queso_costeno_se_pide_por_medio_kilo(self):
+        conn = base()
+        for i in range(1, 30):      # el Queso Costeño es el id 29
+            producto(conn, f"Producto {i}", stock=10)
+        medio = {p["id"] for p in reglas.productos_visibles(conn, HOY) if p["medio_kilo"]}
+        self.assertEqual(medio, {29})
 
 
 class Secciones(unittest.TestCase):

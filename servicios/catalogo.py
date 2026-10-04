@@ -42,6 +42,9 @@ MODO_POR_DEFECTO = "auto"
 
 MESES_SIN_COMPRA = 2      # agotado y sin comprarse en este tiempo: se oculta
 POCAS_UNIDADES = 5        # con este stock o menos: "Últimas unidades"
+# Los que se venden por kilo y también por medio kilo (por id: 29 es el
+# Queso Costeño). En el catálogo se piden de medio en medio kilo.
+POR_MEDIO_KILO = {29}
 
 _CLAVES_CATEGORIA = {clave for clave, _ in CATEGORIAS}
 _CLAVES_MODO = {clave for clave, _, _ in MODOS}
@@ -88,7 +91,8 @@ def estado_del_producto(stock):
 
 def productos_visibles(conn, hoy=None):
     """Los productos del catálogo, en orden alfabético: dicts con id, nombre,
-    precio, categoria (clave) y estado ('disponible', 'pocas' o 'encargo')."""
+    precio, categoria (clave), estado ('disponible', 'pocas' o 'encargo') y
+    medio_kilo (si también se vende por medio kilo)."""
     hoy = (hoy or date.today()).isoformat()
     filas = conn.execute(f"""
         SELECT p.id, p.name, p.price, p.stock, p.categoria
@@ -103,7 +107,8 @@ def productos_visibles(conn, hoy=None):
                               AND date(pu.date) >= date(?, '-{int(MESES_SIN_COMPRA)} months')))
          ORDER BY p.name COLLATE NOCASE""", (hoy,)).fetchall()
     return [{"id": f[0], "nombre": f[1], "precio": round(f[2] or 0),
-             "categoria": normalizar_categoria(f[4]), "estado": estado_del_producto(f[3])}
+             "categoria": normalizar_categoria(f[4]), "estado": estado_del_producto(f[3]),
+             "medio_kilo": f[0] in POR_MEDIO_KILO}
             for f in filas]
 
 
