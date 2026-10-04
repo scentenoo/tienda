@@ -66,6 +66,7 @@ si alguna reclama la suya, se quita.
 | 19.webp | Salsa China Pequeña | Salsa De Soya La China 150Ml - Super Fresh Market | https://superfreshmarket.com.ve/producto/salsa-de-soya-la-china-150ml/ |
 | 25.webp | Cacique | ron añejo superior de Venezuela botella 70 cl · CACIQUE · Supermercado ... | https://www.hipercor.es/supermercado/B001018733300083-cacique-ron-anejo-superior-de-venezuela-botella-70-cl/ |
 | 26.webp | Fororo | TuZonaMarket | https://tuzonamarket.com/carabobo/producto/fororo-kel-900g |
+| 29.webp | Queso Costeño 1k | Miniatura del buscador de imágenes de Google (enlace que pasó Samir; no se sabe de qué página salió) | https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTY4ZwA4oNtfNLrsvM4oJ7FoKD2jUa7W8Sd2yCG-iEVBRpSbXTIYSDNc6A&s=10 |
 | 30.webp | Mortadela Vnzla 1k | Las dos marcas que se manejan (Caracas y del Corral) juntadas en una imagen | https://www.eltunal.com/portfolio/alimex-productos/ · https://instamarketca.com/product/mortadela-de-pollo-del-corral-1-kg/ |
 | 37.webp | Wampol | Producto Wampole Emulsión Tutti Fruti 360cc de Farmacia FarmaGO | https://tantovital.com/Farmacias/Producto?farmacia=farmago&producto=wampole-emulsión-tutti-fruti-360cc |
 | 38.webp | Bandeja de jamon | Jumbo | https://cl-jumboweb-render-prod.ecomm.cencosud.com/jamon-pierna-pf-granel-2/p |
