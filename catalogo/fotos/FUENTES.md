@@ -23,7 +23,6 @@ Imágenes oficiales, tomadas del sitio de cada marca el 4 de octubre de 2026.
 | 55.webp | Toronto | Nestlé Venezuela | https://www.nestle.com.ve/sites/g/files/pydnoa526/files/Toronto%20Dummies.png |
 | 63.webp | Galk | Nestlé Venezuela | https://www.nestle.com.ve/sites/g/files/pydnoa526/files/Galak%2030%20G%20dummies.png |
 | 64.webp | Rikachicha | Nestlé Venezuela | https://www.nestle.com.ve/sites/g/files/pydnoa526/files/RICA%20CHICHA%C2%AE-400%20g.png |
-| 65.webp | Mantequilla 1 kilo | Empresas Polar | https://empresaspolar.com/wp-content/uploads/2026/02/Group-1731.webp (la misma imagen de 6.webp) |
 | 67.webp | Cerelac Kilo | Nestlé Venezuela | https://www.nestle.com.ve/sites/g/files/pydnoa526/files/CERELAC%C2%AE%20900g%20.png |
 | 70.webp | Riquesa pote | Empresas Polar | https://empresaspolar.com/wp-content/uploads/2025/06/Group-1714.webp |
 | 77.webp | Caja Toronto | Nestlé Venezuela | https://www.nestle.com.ve/sites/g/files/pydnoa526/files/Toronto%2024x324g.png |
@@ -84,6 +83,7 @@ si alguna reclama la suya, se quita.
 | 59.webp | Leche en polvo | LECHE EN POLVO CAMPIÑA 900GR – Bistecca | https://www.bistecca.com.ve/producto/leche-en-polvo-campia-900gr/ |
 | 61.webp | Raketi | Snack Raquety Queso x 18 gr | https://www.farmatodo.com.ve/producto/115259485-snack-raquety-queso-x-18-gr |
 | 62.webp | Palitos de Chocolate | Palitos de chocolate danibisk 30 gr · Gama en Línea | https://gamaenlinea.com/es/palitos-chocolate-danibisk-30-gr/p/10033651 |
+| 65.webp | Mantequilla 1 kilo | Margarina Mavesa (1kg) • Angelicas Market | https://angelicasmarket.com/producto/margarina-mavesa-1kg/ |
 | 66.webp | Bajo Cero | VODKA DE FRUTOS SALVAJES 0.70LT BAJO CERO - Mi Bodega Express | https://mibodega.com.ve/producto/vodka-de-frutos-salvajes-0-70lt-bajo-cero/ |
 | 68.webp | Santa Teresa | SANTA TERESA GRAN RESERVA 750 ML · Botilleria Los Arcos | https://www.botillerialosarcos.cl/product/santa-teresa-gran-reserva-750-ml |
 | 69.webp | Marilu | Galletas Marilu Vainilla Puig 216gr | https://instamarketca.com/product/galletas-marilu-vainilla-puig-216gr/ |
