@@ -241,9 +241,19 @@ class Pagina(unittest.TestCase):
         a = producto(conn, "Anis", stock=9, categoria="licores")
         producto(conn, "Cacique", stock=9, categoria="licores")
         html = generar.construir(conn, "3137013735", ahora=self.AHORA, fotos={a: f"{a}.webp"})
-        self.assertIn(f'<img src="fotos/{a}.webp"', html)
+        self.assertIn(f'<img src="fotos/{a}.webp" class="recorte"', html)     # sin fondo: se ve completa
         self.assertIn('<span aria-hidden="true">C</span>', html)
         self.assertIn("Prohíbese el expendio de bebidas embriagantes", html)
+
+    def test_la_foto_propia_llena_el_recuadro_y_le_gana_a_la_oficial(self):
+        conn = base()
+        a = producto(conn, "Anis", stock=9, categoria="licores")
+        html = generar.construir(conn, "3137013735", ahora=self.AHORA, fotos={a: f"{a}.jpg"})
+        self.assertIn(f'<img src="fotos/{a}.jpg" alt=""', html)                # sin la clase "recorte"
+        with tempfile.TemporaryDirectory() as carpeta:
+            for nombre in ("29.webp", "29.jpg", "42.webp"):
+                (Path(carpeta) / nombre).write_bytes(b"x")
+            self.assertEqual(generar.fotos_disponibles(Path(carpeta)), {29: "29.jpg", 42: "42.webp"})
 
     def test_sin_productos_no_se_publica_un_catalogo_vacio(self):
         with self.assertRaises(SystemExit):
@@ -260,7 +270,12 @@ class Pagina(unittest.TestCase):
         producto(conn, "Anis", stock=9)
         with tempfile.TemporaryDirectory() as carpeta:
             generar.generar(carpeta, conn, "3137013735", ahora=self.AHORA)
-            self.assertEqual(sorted(os.listdir(carpeta)), ["icono-192.png", "index.html", "logo-he.png"])
+            archivos = set(os.listdir(carpeta))
+            self.assertEqual(archivos - {"fotos"}, {"icono-192.png", "index.html", "logo-he.png"})
+            # A la página van las fotos, no las notas que hay junto a ellas
+            esperadas = set(generar.fotos_disponibles(generar.AQUI / "fotos").values())
+            publicadas = set(os.listdir(Path(carpeta) / "fotos")) if "fotos" in archivos else set()
+            self.assertEqual(publicadas, esperadas)
 
     def test_solo_cuentan_las_fotos_con_el_id_como_nombre(self):
         with tempfile.TemporaryDirectory() as carpeta:

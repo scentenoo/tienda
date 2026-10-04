@@ -38,6 +38,7 @@ AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parent
 ZONA = ZoneInfo("America/Bogota")
 EXTENSIONES_FOTO = (".webp", ".jpg", ".jpeg", ".png")
+EXTENSIONES_SIN_FONDO = (".webp", ".png")
 ETIQUETAS = {"disponible": "Disponible", "pocas": "Últimas unidades", "encargo": "Por encargo"}
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
          "septiembre", "octubre", "noviembre", "diciembre"]
@@ -66,7 +67,9 @@ def momento_en_texto(momento):
 
 
 def fotos_disponibles(carpeta):
-    """{id del producto: nombre del archivo} con las fotos que hay."""
+    """{id del producto: nombre del archivo} con las fotos que hay. Si un
+    producto tiene dos, gana la propia (.jpg) sobre la oficial (.webp): van
+    en orden alfabético y se queda la primera."""
     fotos = {}
     if carpeta.is_dir():
         for archivo in sorted(carpeta.iterdir()):
@@ -99,6 +102,9 @@ def construir(conn, whatsapp, url_publica="", ahora=None, fotos=None):
         p["etiqueta"] = ETIQUETAS[p["estado"]]
         p["inicial"] = p["nombre"].strip()[:1].upper()
         p["foto"] = f"fotos/{fotos[p['id']]}" if p["id"] in fotos else None
+        # Las oficiales van recortadas, sin fondo (webp o png): se muestran completas.
+        # Las propias (jpg, desde el formulario) llenan el recuadro.
+        p["foto_recortada"] = bool(p["foto"]) and p["foto"].lower().endswith(EXTENSIONES_SIN_FONDO)
     entorno = Environment(loader=FileSystemLoader(AQUI), autoescape=select_autoescape(["html"]),
                           trim_blocks=True, lstrip_blocks=True)
     return entorno.get_template("plantilla.html").render(
