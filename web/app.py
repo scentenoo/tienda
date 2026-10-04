@@ -160,7 +160,7 @@ def _cabeceras(resp):
     resp.headers["Referrer-Policy"] = "same-origin"
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "script-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; "
+        "script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; object-src 'none'; "
         "frame-ancestors 'none'; base-uri 'none'")
     if not request.path.startswith("/estatico"):
         resp.headers["Cache-Control"] = "no-store"

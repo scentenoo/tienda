@@ -68,15 +68,30 @@ puede avisarle a GitHub. En Render se agregan dos variables:
 
 - `CATALOGO_REPO`: `usuario/repositorio`
 - `CATALOGO_TOKEN`: un token de GitHub *fine-grained*, solo para este
-  repositorio, con el permiso **Actions: Read and write** y ninguno más.
+  repositorio, con los permisos **Actions: Read and write** (este aviso) y
+  **Contents: Read and write** (las fotos, abajo), y ningún otro.
 
 Sin esas variables no hace nada. Solo avisa al crear, editar o borrar un
 producto; el stock que baja con las ventas se refleja en la siguiente media hora.
 
 ## Fotos
 
-En `catalogo/fotos/`, con el id del producto como nombre: `29.jpg`, `42.webp`.
-Mientras no haya ninguna, las tarjetas salen sin recuadro de foto.
+Se ponen desde el formulario de producto de la página del celular, en
+«Foto para el catálogo»: se toma o se elige la foto y listo. El teléfono la
+recorta en 4:3 y la achica (unos 100 KB); la página la guarda en GitHub, en
+`catalogo/fotos/<id>.jpg`, y ese cambio publica el catálogo solo, en un par de
+minutos. Ahí mismo se cambia o se quita.
+
+Necesita las dos variables de Render de arriba (sin ellas, la sección no
+aparece). Y como cada foto es un cambio en el repositorio, en Render conviene
+poner en *Settings → Build Filters → Ignored Paths* la ruta `catalogo/fotos/**`,
+para que subir una foto no vuelva a desplegar la página de ventas.
+
+Mientras no haya ninguna foto, las tarjetas salen sin recuadro; con la
+primera, las que no tengan salen con la inicial del producto.
+
+Quien trabaje en el repositorio desde el PC tiene que hacer `git pull` antes
+de subir cambios, porque las fotos llegan a GitHub directamente.
 
 ## Probarlo en el PC
 

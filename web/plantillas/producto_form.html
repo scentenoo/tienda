@@ -53,6 +53,114 @@
   <button class="boton" style="width:100%; margin-top: 14px">{{ 'Guardar cambios' if editando else 'Crear producto' }}</button>
 </form>
 
+{% if editando and foto %}
+{# La foto vive en GitHub (ver web/fotos_catalogo.py): se sube por detrás, sin recargar #}
+<section class="tarjeta foto-catalogo" style="margin-top:14px">
+  <h2>Foto para el catálogo</h2>
+  <div class="marco" id="foto-marco">
+    {% if foto.imagen %}<img src="{{ foto.imagen }}" alt="Foto de {{ p['nombre'] }}">{% else %}<span>Sin foto</span>{% endif %}
+  </div>
+  <p class="sub" id="foto-estado" role="status">{{ foto.error or '' }}</p>
+  <label class="boton" style="width:100%">
+    <span id="foto-texto">{{ 'Cambiar foto' if foto.imagen else 'Tomar o elegir foto' }}</span>
+    <input type="file" id="foto-archivo" accept="image/*" hidden>
+  </label>
+  <button type="button" class="boton secundario" id="foto-quitar" style="width:100%; margin-top:8px"{{ '' if foto.imagen else ' hidden' }}>Quitar foto</button>
+  <style>
+  .foto-catalogo h2 { margin: 0 0 10px; font-size: 1rem; }
+  .foto-catalogo .marco { aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; display: grid; place-items: center;
+    background: var(--marca-fondo); color: var(--suave); }
+  .foto-catalogo .marco img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .foto-catalogo .marco.cargando { opacity: .55; }
+  #foto-estado:empty { display: none; }
+  </style>
+</section>
+<script>
+(function () {
+  var ANCHO = 800, ALTO = 600;      // 4:3, como el recuadro del catálogo
+  var CSRF = "{{ csrf() }}";
+  var URL_SUBIR = "{{ url_for('producto_foto', product_id=p['id']) }}";
+  var URL_QUITAR = "{{ url_for('producto_foto_quitar', product_id=p['id']) }}";
+  var marco = document.getElementById("foto-marco"), estado = document.getElementById("foto-estado");
+  var archivo = document.getElementById("foto-archivo"), quitar = document.getElementById("foto-quitar");
+  var texto = document.getElementById("foto-texto");
+
+  function avisar(mensaje) { estado.textContent = mensaje; }
+  function ocupado(si) { marco.classList.toggle("cargando", si); archivo.disabled = si; quitar.disabled = si; }
+
+  // Recorta al centro en 4:3 y la deja en 800×600: de 3-4 MB a unos 100 KB
+  function achicar(foto) {
+    return new Promise(function (listo, fallo) {
+      var img = new Image(), url = URL.createObjectURL(foto);
+      img.onload = function () {
+        var escala = Math.max(ANCHO / img.naturalWidth, ALTO / img.naturalHeight);
+        var w = ANCHO / escala, h = ALTO / escala;
+        var lienzo = document.createElement("canvas");
+        lienzo.width = ANCHO; lienzo.height = ALTO;
+        lienzo.getContext("2d").drawImage(img, (img.naturalWidth - w) / 2, (img.naturalHeight - h) / 2, w, h, 0, 0, ANCHO, ALTO);
+        URL.revokeObjectURL(url);
+        lienzo.toBlob(function (b) { b ? listo(b) : fallo(); }, "image/jpeg", 0.82);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); fallo(); };
+      img.src = url;
+    });
+  }
+
+  function enviar(url, datos) {
+    datos.append("csrf", CSRF);
+    return fetch(url, { method: "POST", body: datos, credentials: "same-origin" })
+      .then(function (r) { return r.json().catch(function () { return { error: "La página respondió algo raro. Intente de nuevo." }; }); },
+            function () { return { error: "Sin conexión. Intente de nuevo." }; });
+  }
+
+  function mostrar(blob) {
+    marco.textContent = "";
+    if (!blob) { var s = document.createElement("span"); s.textContent = "Sin foto"; marco.appendChild(s); return; }
+    var img = document.createElement("img");
+    img.alt = ""; img.src = URL.createObjectURL(blob);
+    marco.appendChild(img);
+  }
+
+  archivo.addEventListener("change", function () {
+    var elegida = archivo.files[0];
+    archivo.value = "";
+    if (!elegida) return;
+    ocupado(true); avisar("Subiendo la foto…");
+    achicar(elegida).then(function (blob) {
+      var anterior = marco.innerHTML;
+      mostrar(blob);
+      var datos = new FormData();
+      datos.append("foto", blob, "foto.jpg");
+      return enviar(URL_SUBIR, datos).then(function (r) {
+        if (r.ok) {
+          avisar("Listo. En unos minutos sale en el catálogo.");
+          texto.textContent = "Cambiar foto"; quitar.hidden = false;
+        } else {
+          marco.innerHTML = anterior; avisar(r.error);
+        }
+      });
+    }, function () {
+      avisar("No se pudo leer esa foto. Pruebe con otra.");
+    }).then(function () { ocupado(false); });
+  });
+
+  quitar.addEventListener("click", function () {
+    if (!confirm("¿Quitar la foto de este producto del catálogo?")) return;
+    ocupado(true); avisar("Quitando la foto…");
+    enviar(URL_QUITAR, new FormData()).then(function (r) {
+      if (r.ok) {
+        mostrar(null); avisar("Listo. En unos minutos deja de salir en el catálogo.");
+        texto.textContent = "Tomar o elegir foto"; quitar.hidden = true;
+      } else {
+        avisar(r.error);
+      }
+      ocupado(false);
+    });
+  });
+})();
+</script>
+{% endif %}
+
 {% if editando %}
 <form method="post" action="{{ url_for('producto_eliminar', product_id=p['id']) }}" id="eliminar" style="margin-top:22px">
   <input type="hidden" name="csrf" value="{{ csrf() }}">
