@@ -42,6 +42,7 @@ traían su logo.
 | 32.webp | Masa Facil | Masa fácil para pastelitos | https://us-east-1-prod-treinta-assets-bucket.s3.amazonaws.com/bb7ef835-e0ad-5acd-95be-4025588e2eea.jpeg |
 | 34.webp | Salsa China Grande | Salsa china grande | https://cdn.treinta.co/new-products/b8cc1dfc-171c-562d-9d63-23399bf4c48f.jpeg |
 | 38.webp | Bandeja de jamon | Jamón ahumado 250g | https://cdn.treinta.co/new-products/7cfd357f-1519-588b-846d-7ffe035f9c12.jpeg |
+| 42.webp | Chuleta Ahumada 500gr aprox | Chuleta sin hueso ahumada500g | https://catalogo.treinta.co/lamejor-070e11 |
 | 54.webp | Leche Condensada | Leche condensada 397g | https://cdn.treinta.co/new-products/21d85677-f2ce-583b-a909-1d4f3ece89f2.jpeg |
 | 58.webp | Chicha litro | Chicha liq lt | https://cdn.treinta.co/new-products/83248ee2-fd59-5d80-8d4b-ee83770d8a53.jpeg |
 | 60.webp | Harina de trigo | Harina trigo todo uso | https://cdn.treinta.co/new-products/1ec3d9fb-b891-5011-830b-87aaedf75723.jpeg |
@@ -60,6 +61,7 @@ si alguna reclama la suya, se quita.
 |---|---|---|---|
 | 8.webp | Adobo | Adobo La Comadre 200 g | https://www.santaisabel.cl/adobo-la-comadre-200-g-2044434/p |
 | 11.webp | Cerveza Pilsen | polar beer pilsener botella 12 oz - Bodega Mi Amiga | https://bodegamiamiga.com/producto/polar-beer-pilsener-botella-12-oz/ |
+| 13.webp | Queso De Año | Emporium | https://automercadosemporium.com/Products.php?cat=05CHAR&suc=02 |
 | 14.webp | Anis | Anis Cartujo Licor Botella 1 Litro Completo Cln · MercadoLibre | https://articulo.mercadolibre.com.ve/MLV-558259411-anis-cartujo-licor-botella-1-litro-completo-cln-_JM |
 | 15.webp | Ron Superior | Ron Santa Teresa Superior 0.70L - Super Fresh Market | https://superfreshmarket.com.ve/producto/ron-santa-teresa-superior-0-70l/ |
 | 16.webp | Cinco Estrellas | Ron Cinco Estrellas El Five Stars Ron Venezolano Ven8 · Envío gratis | https://articulo.mercadolibre.com.mx/MLM-3621548618-ron-cinco-estrellas-el-five-stars-ron-venezolano-ven8-_JM |
@@ -67,11 +69,14 @@ si alguna reclama la suya, se quita.
 | 19.webp | Salsa China Pequeña | Salsa De Soya La China 150Ml - Super Fresh Market | https://superfreshmarket.com.ve/producto/salsa-de-soya-la-china-150ml/ |
 | 25.webp | Cacique | ron añejo superior de Venezuela botella 70 cl · CACIQUE · Supermercado ... | https://www.hipercor.es/supermercado/B001018733300083-cacique-ron-anejo-superior-de-venezuela-botella-70-cl/ |
 | 26.webp | Fororo | TuZonaMarket | https://tuzonamarket.com/carabobo/producto/fororo-kel-900g |
+| 30.webp | Mortadela Vnzla 1k | Las dos marcas que se manejan (Caracas y del Corral) juntadas en una imagen | https://www.eltunal.com/portfolio/alimex-productos/ · https://instamarketca.com/product/mortadela-de-pollo-del-corral-1-kg/ |
 | 37.webp | Wampol | Producto Wampole Emulsión Tutti Fruti 360cc de Farmacia FarmaGO | https://tantovital.com/Farmacias/Producto?farmacia=farmago&producto=wampole-emulsión-tutti-fruti-360cc |
 | 40.webp | Salsa 57 | SALSA 57 194GR HEINZ - Mi Bodega Express | https://mibodega.com.ve/producto/heinz-57-salsa-194gr/ |
+| 44.webp | Bandeja De Queso Amarrillo | Queso Amarillo Rebanado Bandeja de 250g -Pacomela- Tienda TRIO Maracaibo | https://triomcbo.com/producto/queso-amarillo-rebanado/ |
 | 46.webp | Salsa friz sobre | Cuatro sobres Fritz (tocineta, tártara, maíz y cheddar) juntados en una imagen | https://mibodega.com.ve/categoria-producto/alimentos/salsas/ · https://mibodega.com.ve/producto/mezcla-para-salsa-tartara-45gr-fritz/ · https://saboresmarket.com/products/fritz-mezcla-para-preparar-salsa-maiz · https://tuzonamarket.com/carabobo/producto/mezcla-para-salsa-cheddar-fritz-45g |
 | 48.webp | Caroreña Sangria | Licores :: Vinos y Espumantes :: Sangrías :: Sangría Original Caroreña ... | https://vivaenlinea.com/licores/vinos-y-espumantes/sangrias/sangria-original-carorena-1-75-lt/ |
 | 49.webp | Chimu Amarillo | Tabaquería archivos - Mi Bodega Express | https://mibodega.com.ve/categoria-producto/licor-y-tabaco/tabaqueria/ |
+| 50.webp | Mortadela Tapara | Mortadela Tapara con Pistacho Ricci 250g - Tienda TRIO Maracaibo | https://triomcbo.com/producto/mortadela-tapara-con-pistacho-ricci-250g/ |
 | 51.webp | Ovomaltina | Ovomaltina Tubo, 35gr - Walmart.com | https://www.walmart.com/ip/Ovomaltina-Tubo-35gr/5619620076 |
 | 52.webp | Galletas de Guayaba | Galletera Independencia Galletas Rellenas 85g — Sabores Market | https://saboresmarket.com/products/gatterera-independencia-galletas-rellenas-85g |
 | 56.webp | Pirulin | Pirulin Barquilla Rellena 16g - Farmadon - La Farmacia de la Esquina | https://www.farmadon.com.ve/producto/pirulin-barquilla-rellena-16g/ |
