@@ -53,7 +53,7 @@ traían su logo.
 ## De otras tiendas en internet
 
 Encontradas con el buscador de imágenes el 4 de octubre de 2026, para productos de marca
-que el proveedor solo tenía con su logo encima. Son fotos de producto de otras tiendas:
+que el proveedor no tenía o solo tenía con su logo encima. Son fotos de producto de otras tiendas:
 si alguna reclama la suya, se quita.
 
 | Archivo | Producto | Título de la imagen | Página de donde salió |
@@ -61,14 +61,21 @@ si alguna reclama la suya, se quita.
 | 8.webp | Adobo | Adobo La Comadre 200 g | https://www.santaisabel.cl/adobo-la-comadre-200-g-2044434/p |
 | 11.webp | Cerveza Pilsen | polar beer pilsener botella 12 oz - Bodega Mi Amiga | https://bodegamiamiga.com/producto/polar-beer-pilsener-botella-12-oz/ |
 | 14.webp | Anis | Anis Cartujo Licor Botella 1 Litro Completo Cln · MercadoLibre | https://articulo.mercadolibre.com.ve/MLV-558259411-anis-cartujo-licor-botella-1-litro-completo-cln-_JM |
+| 15.webp | Ron Superior | Ron Santa Teresa Superior 0.70L - Super Fresh Market | https://superfreshmarket.com.ve/producto/ron-santa-teresa-superior-0-70l/ |
 | 16.webp | Cinco Estrellas | Ron Cinco Estrellas El Five Stars Ron Venezolano Ven8 · Envío gratis | https://articulo.mercadolibre.com.mx/MLM-3621548618-ron-cinco-estrellas-el-five-stars-ron-venezolano-ven8-_JM |
 | 17.webp | Crema De Arroz 900gr | PRIMOR CREMA DE ARROZ BOLSA 900GR · Limpiatodo | https://limpiatodo.net/producto/primor-crema-de-arroz-bolsa-900gr/ |
 | 19.webp | Salsa China Pequeña | Salsa De Soya La China 150Ml - Super Fresh Market | https://superfreshmarket.com.ve/producto/salsa-de-soya-la-china-150ml/ |
 | 25.webp | Cacique | ron añejo superior de Venezuela botella 70 cl · CACIQUE · Supermercado ... | https://www.hipercor.es/supermercado/B001018733300083-cacique-ron-anejo-superior-de-venezuela-botella-70-cl/ |
+| 26.webp | Fororo | TuZonaMarket | https://tuzonamarket.com/carabobo/producto/fororo-kel-900g |
+| 37.webp | Wampol | Producto Wampole Emulsión Tutti Fruti 360cc de Farmacia FarmaGO | https://tantovital.com/Farmacias/Producto?farmacia=farmago&producto=wampole-emulsión-tutti-fruti-360cc |
 | 40.webp | Salsa 57 | SALSA 57 194GR HEINZ - Mi Bodega Express | https://mibodega.com.ve/producto/heinz-57-salsa-194gr/ |
+| 46.webp | Salsa friz sobre | Cuatro sobres Fritz (tocineta, tártara, maíz y cheddar) juntados en una imagen | https://mibodega.com.ve/categoria-producto/alimentos/salsas/ · https://mibodega.com.ve/producto/mezcla-para-salsa-tartara-45gr-fritz/ · https://saboresmarket.com/products/fritz-mezcla-para-preparar-salsa-maiz · https://tuzonamarket.com/carabobo/producto/mezcla-para-salsa-cheddar-fritz-45g |
 | 48.webp | Caroreña Sangria | Licores :: Vinos y Espumantes :: Sangrías :: Sangría Original Caroreña ... | https://vivaenlinea.com/licores/vinos-y-espumantes/sangrias/sangria-original-carorena-1-75-lt/ |
+| 49.webp | Chimu Amarillo | Tabaquería archivos - Mi Bodega Express | https://mibodega.com.ve/categoria-producto/licor-y-tabaco/tabaqueria/ |
 | 51.webp | Ovomaltina | Ovomaltina Tubo, 35gr - Walmart.com | https://www.walmart.com/ip/Ovomaltina-Tubo-35gr/5619620076 |
+| 52.webp | Galletas de Guayaba | Galletera Independencia Galletas Rellenas 85g — Sabores Market | https://saboresmarket.com/products/gatterera-independencia-galletas-rellenas-85g |
 | 56.webp | Pirulin | Pirulin Barquilla Rellena 16g - Farmadon - La Farmacia de la Esquina | https://www.farmadon.com.ve/producto/pirulin-barquilla-rellena-16g/ |
+| 57.webp | Colonias | Colonia Mimadito 200Ml | https://www.farmatodo.com.ve/producto/111209200-colonia-mimadito-200ml |
 | 59.webp | Leche en polvo | LECHE EN POLVO CAMPIÑA 900GR – Bistecca | https://www.bistecca.com.ve/producto/leche-en-polvo-campia-900gr/ |
 | 61.webp | Raketi | Snack Raquety Queso x 18 gr | https://www.farmatodo.com.ve/producto/115259485-snack-raquety-queso-x-18-gr |
 | 62.webp | Palitos de Chocolate | Palitos de chocolate danibisk 30 gr · Gama en Línea | https://gamaenlinea.com/es/palitos-chocolate-danibisk-30-gr/p/10033651 |
@@ -76,3 +83,4 @@ si alguna reclama la suya, se quita.
 | 68.webp | Santa Teresa | SANTA TERESA GRAN RESERVA 750 ML · Botilleria Los Arcos | https://www.botillerialosarcos.cl/product/santa-teresa-gran-reserva-750-ml |
 | 69.webp | Marilu | Galletas Marilu Vainilla Puig 216gr | https://instamarketca.com/product/galletas-marilu-vainilla-puig-216gr/ |
 | 73.webp | Chicha Medio litro | Chicha El Chichero 500ml Parmalat · Grupo San Anselmo | https://farmanselmo.com.ve/producto/principal/unica/chicha-el-chichero-500ml-parmalat |
+| 76.webp | Caja de Palitos de Chocolate | DANIBISK Palitos Chocolate Box, Crunchy Vanilla Cookie Sticks Coated in ... | https://www.walmart.com/ip/Palitos-Chocolate-Box-5231-12-18x30gr-1-5oz/11351210826 |
