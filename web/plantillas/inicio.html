@@ -22,7 +22,7 @@
     <b class="positivo">{{ (contado_hoy + abonos_hoy)|pesos }}</b><span>En caja hoy</span>
     <small>Contado {{ contado_hoy|pesos }} · abonos {{ abonos_hoy|pesos }}</small>
   </a>
-  <a class="tarjeta kpi" href="{{ url_for('clientes') }}">
+  <a class="tarjeta kpi" href="{{ url_for('pendientes') }}">
     <b class="negativo">{{ por_cobrar|pesos }}</b><span>Por cobrar</span>
     <small>{{ clientes_deben }} cliente{{ '' if clientes_deben == 1 else 's' }}</small>
   </a>
@@ -55,7 +55,8 @@
 
 <p class="seccion">Cobrar</p>
 <ul class="lista">
-  {{ enlace(url_for('clientes'), 'clientes', 'Clientes', 'Quién debe, abonos y estado de cuenta') }}
+  {{ enlace(url_for('pendientes'), 'pendientes', 'Pendientes', 'Quién debe y desde cuándo') }}
+  {{ enlace(url_for('clientes'), 'clientes', 'Clientes', 'Abonos, estado de cuenta, historial') }}
 </ul>
 
 <p class="seccion">Ventas y caja</p>
