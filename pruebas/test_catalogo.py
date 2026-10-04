@@ -32,6 +32,10 @@ ESQUEMA_VIEJO = """
     CREATE TABLE purchase_details (id INTEGER PRIMARY KEY AUTOINCREMENT, purchase_id INTEGER NOT NULL,
         product_id INTEGER NOT NULL, quantity INTEGER NOT NULL, unit_price REAL NOT NULL,
         subtotal REAL NOT NULL);
+    CREATE TABLE sales (id INTEGER PRIMARY KEY AUTOINCREMENT, total REAL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+    CREATE TABLE sale_details (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL, quantity REAL NOT NULL);
 """
 
 
@@ -54,6 +58,15 @@ def producto(conn, nombre, precio=10000, stock=0, categoria=None, catalogo="auto
         conn.execute("INSERT INTO purchase_details (purchase_id, product_id, quantity, unit_price, subtotal) "
                      "VALUES (?, ?, 1, 1, 1)", (compra_id, cursor.lastrowid))
     return cursor.lastrowid
+
+
+def venta(conn, dia, *product_ids):
+    """Una venta del día con esos productos (uno por renglón)."""
+    sale_id = conn.execute("INSERT INTO sales (total, created_at) VALUES (1, ?)",
+                           (dia + " 10:00:00",)).lastrowid
+    for product_id in product_ids:
+        conn.execute("INSERT INTO sale_details (sale_id, product_id, quantity) VALUES (?, ?, 1)",
+                     (sale_id, product_id))
 
 
 def visibles(conn):
@@ -135,6 +148,23 @@ class Secciones(unittest.TestCase):
         self.assertEqual([p["nombre"] for p in s[2]["productos"]], ["Raro", "Sin categoría"])
         self.assertTrue(s[1]["leyenda_licor"])
         self.assertFalse(s[0]["leyenda_licor"])
+
+
+    def test_dentro_de_cada_categoria_primero_lo_que_mas_se_vende(self):
+        conn = base()
+        poco = producto(conn, "Alfa", stock=9, categoria="quesos")
+        mucho = producto(conn, "Zeta", stock=9, categoria="quesos")
+        producto(conn, "Beta sin ventas", stock=9, categoria="quesos")
+        viejo = producto(conn, "Gama", stock=9, categoria="quesos")
+        encargo = producto(conn, "Omega", stock=0, categoria="quesos", compra="2026-09-30")
+        venta(conn, "2026-09-20", mucho, poco)
+        venta(conn, "2026-09-21", mucho)
+        venta(conn, "2026-10-01", encargo)
+        for _ in range(5):                      # muchas, pero hace más de 90 días
+            venta(conn, "2026-05-01", viejo)
+        (s,) = reglas.secciones(reglas.productos_visibles(conn, HOY))
+        self.assertEqual([p["nombre"] for p in s["productos"]],
+                         ["Zeta", "Alfa", "Beta sin ventas", "Gama", "Omega"])
 
 
 class Inventario(unittest.TestCase):
