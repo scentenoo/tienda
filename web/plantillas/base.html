@@ -105,7 +105,8 @@ details summary::-webkit-details-marker { display: none; }
 select, textarea { width: 100%; font: inherit; font-size: 16px; padding: 13px 14px; border-radius: 14px;
   border: 1.5px solid var(--borde); background: var(--tarjeta); color: var(--texto); margin-top: 4px; }
 .boton.peligro { background: transparent; border: 1.5px solid var(--alerta); color: var(--alerta); min-height: 52px; }
-a.fila:active { background: var(--chip); }
+a.fila:active, button.fila:active { background: var(--chip); }
+button.fila { width: 100%; background: none; border: 0; font: inherit; text-align: left; cursor: pointer; }
 main.con-barra { padding-bottom: 96px; }
 .barra { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: grid;
   grid-template-columns: repeat(5, 1fr); background: var(--tarjeta); border-top: 1px solid var(--borde);

@@ -34,6 +34,7 @@ from servicios.abonos import registrar_abono
 from servicios.clientes import (agregar_deuda, credito_disponible, crear_cliente,
                                 editar_cliente, eliminar_cliente)
 from servicios.ventas import editar_venta, eliminar_venta, preparar_items, registrar_venta
+from web.aviso_catalogo import configurado as catalogo_configurado
 from web.clave import huella, verificar
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -281,7 +282,8 @@ def inicio():
 @app.get("/mas")
 @requiere_ingreso
 def mas():
-    return render_template("mas.html")
+    return render_template("mas.html", catalogo=catalogo_configurado(),
+                           aviso_catalogo=session.pop("aviso_catalogo", None))
 
 
 @app.get("/pendientes")

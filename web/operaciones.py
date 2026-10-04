@@ -15,6 +15,7 @@ from servicios.inventario import (crear_producto, editar_producto, eliminar_prod
                                   usos_del_producto)
 from utils.conciliacion import MESES_ES
 from web import fotos_catalogo
+from web import aviso_catalogo
 from web.aviso_catalogo import avisar as avisar_catalogo
 from web.app import (_dia_largo, _json_seguro, _leer_decimal, _leer_monto, _revisar_csrf,
                      _usuario_admin, app, db, pesos, requiere_gastos, requiere_ingreso)
@@ -182,6 +183,17 @@ def producto_foto(product_id):
 @requiere_ingreso
 def producto_foto_quitar(product_id):
     return _cambiar_foto(product_id, lambda nombre: fotos_catalogo.quitar(product_id, nombre))
+
+
+@app.post("/catalogo/actualizar")
+@requiere_ingreso
+def catalogo_actualizar():
+    """Pide a GitHub que publique el catálogo ya, sin esperar la media hora."""
+    if not aviso_catalogo.configurado():
+        abort(404)
+    _revisar_csrf()
+    session["aviso_catalogo"] = "listo" if aviso_catalogo.actualizar_ya() else "fallo"
+    return redirect(url_for("mas"))
 
 
 # ── Compras ──────────────────────────────────────────────────────────────────

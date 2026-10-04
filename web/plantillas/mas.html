@@ -10,6 +10,8 @@
 {% block titulo %}Más · Charcutería HYE{% endblock %}
 {% block contenido %}
 <h1>Más</h1>
+{% if aviso_catalogo == "listo" %}<div class="exito">✓ Listo: el catálogo se actualiza en un par de minutos.</div>
+{% elif aviso_catalogo == "fallo" %}<div class="error">No se pudo avisar al catálogo. Igual se actualiza solo en la próxima media hora.</div>{% endif %}
 
 <p class="seccion">Vender más</p>
 <ul class="lista">
@@ -38,6 +40,18 @@
   {% endif %}
   {{ enlace(url_for('perdidas'), 'perdidas', 'Pérdidas', 'Mermas y vencidos') }}
 </ul>
+
+{% if catalogo %}
+<p class="seccion">Catálogo para clientes</p>
+<form method="post" action="{{ url_for('catalogo_actualizar') }}" class="lista">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <button class="fila" onclick="this.disabled=true; this.form.submit()">
+    <div class="izq con-ico"><span class="ico">{{ icono('catalogo') }}</span>
+      <div><b>Actualizar el catálogo</b><span>Publicar ya los precios y el stock de ahora</span></div></div>
+    <div class="der sub" style="margin:0">{{ icono('flecha', 18) }}</div>
+  </button>
+</form>
+{% endif %}
 
 {% if ve_gastos() %}
 <p class="seccion">Control</p>

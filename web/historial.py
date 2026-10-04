@@ -403,6 +403,11 @@ def _accion(conn, plantillas, resp):
         return ("borrado" if conn.guardo else "fallido", "Eliminó una pérdida",
                 _como_texto(antes), resultado if conn.guardo else (session.get("aviso_perdida") or resultado))
 
+    # ── Catálogo
+    if ep == "catalogo_actualizar":
+        return ("cambio", "Pidió actualizar el catálogo", "",
+                "" if session.get("aviso_catalogo") == "listo" else "GitHub no recibió el aviso")
+
     # ── Audios
     if ep == "audios_subir":
         nombres = [a.filename for a in request.files.getlist("audios") if a.filename]
