@@ -83,7 +83,7 @@ def conectar(db=None):
         raise SystemExit("Faltan TURSO_URL y TURSO_TOKEN_LECTURA (un token de solo lectura: "
                          "turso db tokens create <base> --read-only).")
     from config.nube import conexion_directa
-    return conexion_directa(url, token)
+    return conexion_directa(url, token, solo_lectura=True)
 
 
 def construir(conn, whatsapp, url_publica="", ahora=None, fotos=None):

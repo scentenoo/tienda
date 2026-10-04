@@ -402,11 +402,15 @@ def conexion(ruta_local, url=None, token=None):
     return Manija(_compartida)
 
 
-def conexion_directa(url, token):
+def conexion_directa(url, token, solo_lectura=False):
     """Una conexión propia, solo a la nube y sin copia local, para el servidor
     de la página del celular: está en la misma región que la base, así que
-    cada consulta tarda milisegundos. Quien la abre la cierra."""
+    cada consulta tarda milisegundos. Quien la abre la cierra.
+
+    solo_lectura: para un token de solo lectura (el catálogo), que Turso
+    no deja ni cambiar las llaves foráneas; tampoco hace falta, si no escribe."""
     import libsql
     conn = libsql.connect(url, auth_token=token)
-    conn.execute("PRAGMA foreign_keys=OFF")
+    if not solo_lectura:
+        conn.execute("PRAGMA foreign_keys=OFF")
     return Conexion(conn, None)
