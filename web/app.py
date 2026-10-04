@@ -18,6 +18,7 @@ import json
 import os
 import secrets
 import time
+import unicodedata
 from datetime import date, datetime, timedelta
 from functools import wraps
 from pathlib import Path
@@ -160,11 +161,17 @@ def _cabeceras(resp):
     resp.headers["Referrer-Policy"] = "same-origin"
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "script-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; "
+        "script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; object-src 'none'; "
         "frame-ancestors 'none'; base-uri 'none'")
     if not request.path.startswith("/estatico"):
         resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+def _sin_tildes(texto):
+    """'Queso Costeño' → 'queso costeno', para buscar como en la página."""
+    return "".join(c for c in unicodedata.normalize("NFD", texto or "")
+                   if unicodedata.category(c) != "Mn").lower()
 
 
 @app.route("/ingresar", methods=["GET", "POST"])
@@ -792,20 +799,22 @@ def venta_eliminar(sale_id):
 @requiere_ingreso
 def inventario():
     q = request.args.get("q", "").strip()
-    sql = "SELECT id, name, price, stock FROM products"
-    params = ()
-    if q:
-        sql += " WHERE name LIKE ?"
-        params = (f"%{q}%",)
     conn = db()
-    filas = conn.execute(sql + " ORDER BY stock > 0, name COLLATE NOCASE", params).fetchall()
+    # Van todos: la página filtra mientras se escribe, y si llega con ?q= (al
+    # volver de guardar un producto) al borrar la búsqueda tienen que estar
+    # los demás. Los que no coinciden salen escondidos, por si no hay JavaScript.
+    filas = conn.execute("SELECT id, name, price, stock FROM products "
+                         "ORDER BY stock > 0, name COLLATE NOCASE").fetchall()
+    buscado = _sin_tildes(q)
+    ocultos = {f["id"] for f in filas if buscado not in _sin_tildes(f["name"])}
     # Mismo resumen que la ventana de inventario del PC
     r = conn.execute("""
         SELECT COUNT(*), COALESCE(SUM(price * stock), 0),
                SUM(CASE WHEN stock > 0 AND stock <= 5 THEN 1 ELSE 0 END),
                SUM(CASE WHEN stock <= 0 THEN 1 ELSE 0 END) FROM products""").fetchone()
     resumen = {"productos": r[0], "valor": r[1], "bajo": r[2] or 0, "agotados": r[3] or 0}
-    return render_template("inventario.html", productos=filas, q=q, resumen=resumen)
+    return render_template("inventario.html", productos=filas, q=q, resumen=resumen,
+                           ocultos=ocultos)
 
 
 @app.get("/ventas")

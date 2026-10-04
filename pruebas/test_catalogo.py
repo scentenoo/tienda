@@ -32,6 +32,10 @@ ESQUEMA_VIEJO = """
     CREATE TABLE purchase_details (id INTEGER PRIMARY KEY AUTOINCREMENT, purchase_id INTEGER NOT NULL,
         product_id INTEGER NOT NULL, quantity INTEGER NOT NULL, unit_price REAL NOT NULL,
         subtotal REAL NOT NULL);
+    CREATE TABLE sales (id INTEGER PRIMARY KEY AUTOINCREMENT, total REAL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+    CREATE TABLE sale_details (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL, quantity REAL NOT NULL);
 """
 
 
@@ -54,6 +58,15 @@ def producto(conn, nombre, precio=10000, stock=0, categoria=None, catalogo="auto
         conn.execute("INSERT INTO purchase_details (purchase_id, product_id, quantity, unit_price, subtotal) "
                      "VALUES (?, ?, 1, 1, 1)", (compra_id, cursor.lastrowid))
     return cursor.lastrowid
+
+
+def venta(conn, dia, *product_ids):
+    """Una venta del día con esos productos (uno por renglón)."""
+    sale_id = conn.execute("INSERT INTO sales (total, created_at) VALUES (1, ?)",
+                           (dia + " 10:00:00",)).lastrowid
+    for product_id in product_ids:
+        conn.execute("INSERT INTO sale_details (sale_id, product_id, quantity) VALUES (?, ?, 1)",
+                     (sale_id, product_id))
 
 
 def visibles(conn):
@@ -111,7 +124,14 @@ class ReglaDeVisibilidad(unittest.TestCase):
         conn = base()
         producto(conn, "Queso", precio=30000, stock=14, costo=21000)
         (p,) = reglas.productos_visibles(conn, HOY)
-        self.assertEqual(set(p), {"id", "nombre", "precio", "categoria", "estado"})
+        self.assertEqual(set(p), {"id", "nombre", "precio", "categoria", "estado", "medio_kilo"})
+
+    def test_solo_el_queso_costeno_se_pide_por_medio_kilo(self):
+        conn = base()
+        for i in range(1, 30):      # el Queso Costeño es el id 29
+            producto(conn, f"Producto {i}", stock=10)
+        medio = {p["id"] for p in reglas.productos_visibles(conn, HOY) if p["medio_kilo"]}
+        self.assertEqual(medio, {29})
 
 
 class Secciones(unittest.TestCase):
@@ -128,6 +148,23 @@ class Secciones(unittest.TestCase):
         self.assertEqual([p["nombre"] for p in s[2]["productos"]], ["Raro", "Sin categoría"])
         self.assertTrue(s[1]["leyenda_licor"])
         self.assertFalse(s[0]["leyenda_licor"])
+
+
+    def test_dentro_de_cada_categoria_primero_lo_que_mas_se_vende(self):
+        conn = base()
+        poco = producto(conn, "Alfa", stock=9, categoria="quesos")
+        mucho = producto(conn, "Zeta", stock=9, categoria="quesos")
+        producto(conn, "Beta sin ventas", stock=9, categoria="quesos")
+        viejo = producto(conn, "Gama", stock=9, categoria="quesos")
+        encargo = producto(conn, "Omega", stock=0, categoria="quesos", compra="2026-09-30")
+        venta(conn, "2026-09-20", mucho, poco)
+        venta(conn, "2026-09-21", mucho)
+        venta(conn, "2026-10-01", encargo)
+        for _ in range(5):                      # muchas, pero hace más de 90 días
+            venta(conn, "2026-05-01", viejo)
+        (s,) = reglas.secciones(reglas.productos_visibles(conn, HOY))
+        self.assertEqual([p["nombre"] for p in s["productos"]],
+                         ["Zeta", "Alfa", "Beta sin ventas", "Gama", "Omega"])
 
 
 class Inventario(unittest.TestCase):
@@ -204,9 +241,19 @@ class Pagina(unittest.TestCase):
         a = producto(conn, "Anis", stock=9, categoria="licores")
         producto(conn, "Cacique", stock=9, categoria="licores")
         html = generar.construir(conn, "3137013735", ahora=self.AHORA, fotos={a: f"{a}.webp"})
-        self.assertIn(f'<img src="fotos/{a}.webp"', html)
+        self.assertIn(f'<img src="fotos/{a}.webp" class="recorte"', html)     # sin fondo: se ve completa
         self.assertIn('<span aria-hidden="true">C</span>', html)
         self.assertIn("Prohíbese el expendio de bebidas embriagantes", html)
+
+    def test_la_foto_propia_llena_el_recuadro_y_le_gana_a_la_oficial(self):
+        conn = base()
+        a = producto(conn, "Anis", stock=9, categoria="licores")
+        html = generar.construir(conn, "3137013735", ahora=self.AHORA, fotos={a: f"{a}.jpg"})
+        self.assertIn(f'<img src="fotos/{a}.jpg" alt=""', html)                # sin la clase "recorte"
+        with tempfile.TemporaryDirectory() as carpeta:
+            for nombre in ("29.webp", "29.jpg", "42.webp"):
+                (Path(carpeta) / nombre).write_bytes(b"x")
+            self.assertEqual(generar.fotos_disponibles(Path(carpeta)), {29: "29.jpg", 42: "42.webp"})
 
     def test_sin_productos_no_se_publica_un_catalogo_vacio(self):
         with self.assertRaises(SystemExit):

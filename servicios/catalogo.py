@@ -41,7 +41,11 @@ MODOS = [
 MODO_POR_DEFECTO = "auto"
 
 MESES_SIN_COMPRA = 2      # agotado y sin comprarse en este tiempo: se oculta
+DIAS_DE_VENTAS = 90       # dentro de cada categoría, primero lo que más se vendió en estos días
 POCAS_UNIDADES = 5        # con este stock o menos: "Últimas unidades"
+# Los que se venden por kilo y también por medio kilo (por id: 29 es el
+# Queso Costeño). En el catálogo se piden de medio en medio kilo.
+POR_MEDIO_KILO = {29}
 
 _CLAVES_CATEGORIA = {clave for clave, _ in CATEGORIAS}
 _CLAVES_MODO = {clave for clave, _, _ in MODOS}
@@ -87,11 +91,17 @@ def estado_del_producto(stock):
 
 
 def productos_visibles(conn, hoy=None):
-    """Los productos del catálogo, en orden alfabético: dicts con id, nombre,
-    precio, categoria (clave) y estado ('disponible', 'pocas' o 'encargo')."""
+    """Los productos del catálogo, primero los que salieron en más ventas en
+    los últimos DIAS_DE_VENTAS días (y entre iguales, por nombre): dicts con id, nombre,
+    precio, categoria (clave), estado ('disponible', 'pocas' o 'encargo') y
+    medio_kilo (si también se vende por medio kilo)."""
     hoy = (hoy or date.today()).isoformat()
     filas = conn.execute(f"""
-        SELECT p.id, p.name, p.price, p.stock, p.categoria
+        SELECT p.id, p.name, p.price, p.stock, p.categoria,
+               (SELECT COUNT(DISTINCT sd.sale_id) FROM sale_details sd
+                  JOIN sales s ON s.id = sd.sale_id
+                 WHERE sd.product_id = p.id
+                   AND date(s.created_at) >= date(?, '-{int(DIAS_DE_VENTAS)} days')) AS ventas
           FROM products p
          WHERE p.price > 0
            AND COALESCE(p.catalogo, 'auto') <> 'nunca'
@@ -101,9 +111,10 @@ def productos_visibles(conn, hoy=None):
                              JOIN purchases pu ON pu.id = pd.purchase_id
                             WHERE pd.product_id = p.id
                               AND date(pu.date) >= date(?, '-{int(MESES_SIN_COMPRA)} months')))
-         ORDER BY p.name COLLATE NOCASE""", (hoy,)).fetchall()
+         ORDER BY ventas DESC, p.name COLLATE NOCASE""", (hoy, hoy)).fetchall()
     return [{"id": f[0], "nombre": f[1], "precio": round(f[2] or 0),
-             "categoria": normalizar_categoria(f[4]), "estado": estado_del_producto(f[3])}
+             "categoria": normalizar_categoria(f[4]), "estado": estado_del_producto(f[3]),
+             "medio_kilo": f[0] in POR_MEDIO_KILO}
             for f in filas]
 
 
@@ -115,7 +126,7 @@ def secciones(productos):
         suyos = [p for p in productos if p["categoria"] == clave]
         if not suyos:
             continue
-        suyos.sort(key=lambda p: p["estado"] == "encargo")      # estable: conserva el alfabético
+        suyos.sort(key=lambda p: p["estado"] == "encargo")      # estable: conserva el de las ventas
         resultado.append({"clave": clave, "nombre": nombre, "productos": suyos,
                           "leyenda_licor": clave in CATEGORIAS_CON_LEYENDA_DE_LICOR})
     return resultado

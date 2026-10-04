@@ -5,7 +5,7 @@ import json
 import secrets
 from datetime import date, timedelta
 
-from flask import abort, redirect, render_template, request, session, url_for
+from flask import abort, jsonify, redirect, render_template, request, session, url_for
 
 from servicios import catalogo as reglas_catalogo
 from servicios.compras import editar_compra, eliminar_compra, registrar_lote
@@ -14,6 +14,7 @@ from servicios.gastos import (TIPOS_PERDIDA, crear_gasto, editar_gasto, eliminar
 from servicios.inventario import (crear_producto, editar_producto, eliminar_producto,
                                   usos_del_producto)
 from utils.conciliacion import MESES_ES
+from web import fotos_catalogo
 from web.aviso_catalogo import avisar as avisar_catalogo
 from web.app import (_dia_largo, _json_seguro, _leer_decimal, _leer_monto, _revisar_csrf,
                      _usuario_admin, app, db, pesos, requiere_gastos, requiere_ingreso)
@@ -73,6 +74,17 @@ def _catalogo_del_formulario(conn):
     return {"categoria": f.get("categoria", ""), "catalogo": f.get("catalogo", "")}
 
 
+def _foto_del_producto(product_id):
+    """Para la sección de la foto en el formulario; None si no está
+    configurada (sin token de GitHub en la página no hay dónde guardarla)."""
+    if not fotos_catalogo.configurado():
+        return None
+    try:
+        return {"imagen": fotos_catalogo.consultar(product_id), "error": None}
+    except fotos_catalogo.ErrorFoto as e:
+        return {"imagen": None, "error": str(e)}
+
+
 @app.route("/producto/nuevo", methods=["GET", "POST"])
 @requiere_ingreso
 def producto_nuevo():
@@ -107,7 +119,7 @@ def producto_editar(product_id):
                  "stock": f"{p['stock']:g}".replace(".", ","), "costo": p["cost_price"],
                  **(reglas_catalogo.opciones_del_producto(conn, product_id) or {})}
         return render_template("producto_form.html", p=datos, error=None, usos=usos,
-                               cat=_campos_catalogo(conn))
+                               cat=_campos_catalogo(conn), foto=_foto_del_producto(product_id))
     _revisar_csrf()
     texto_stock = request.form.get("stock", "").strip()
     try:
@@ -137,6 +149,39 @@ def producto_eliminar(product_id):
     except ValueError:
         conn.rollback()
     return redirect(url_for("inventario"))
+
+
+def _cambiar_foto(product_id, cambio):
+    """Sube o quita la foto. Lo llama el formulario por detrás (fetch), así
+    que responde en JSON: {"ok": true} o {"error": "..."}."""
+    if not fotos_catalogo.configurado():
+        abort(404)
+    if (request.content_length or 0) > fotos_catalogo.TAMANO_MAXIMO + 100_000:
+        return jsonify(error="La foto es demasiado grande."), 413
+    _revisar_csrf()
+    fila = db().execute("SELECT name FROM products WHERE id = ?", (product_id,)).fetchone()
+    if fila is None:
+        abort(404)
+    try:
+        cambio(fila["name"])
+    except fotos_catalogo.ErrorFoto as e:
+        return jsonify(error=str(e)), 400
+    return jsonify(ok=True)
+
+
+@app.post("/producto/<int:product_id>/foto")
+@requiere_ingreso
+def producto_foto(product_id):
+    def subir(nombre):
+        archivo = request.files.get("foto")       # se lee después de revisar el tamaño
+        fotos_catalogo.subir(product_id, archivo.read() if archivo else b"", nombre)
+    return _cambiar_foto(product_id, subir)
+
+
+@app.post("/producto/<int:product_id>/foto/quitar")
+@requiere_ingreso
+def producto_foto_quitar(product_id):
+    return _cambiar_foto(product_id, lambda nombre: fotos_catalogo.quitar(product_id, nombre))
 
 
 # ── Compras ──────────────────────────────────────────────────────────────────

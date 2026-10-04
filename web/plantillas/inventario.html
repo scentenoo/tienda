@@ -27,9 +27,9 @@
 </form>
 
 {% if productos %}
-<ul class="lista">
+<ul class="lista" id="lista"{% if ocultos|length == productos|length %} hidden{% endif %}>
   {% for p in productos %}
-  <li><a class="fila" href="{{ url_for('producto_editar', product_id=p['id']) }}">
+  <li data-nombre="{{ p['name'] }}"{% if p['id'] in ocultos %} hidden{% endif %}><a class="fila" href="{{ url_for('producto_editar', product_id=p['id']) }}">
     <div class="izq"><b>{{ p['name'] }}</b><span>{{ p['price']|pesos }}</span></div>
     <div class="der">
       {% if p['stock'] <= 0 %}<span class="etiqueta debe">Agotado</span>
@@ -39,7 +39,34 @@
   </a></li>
   {% endfor %}
 </ul>
+<p class="vacio" id="ninguno"{% if ocultos|length < productos|length %} hidden{% endif %}>No hay productos con ese nombre.</p>
 {% else %}
-<p class="vacio">No hay productos con ese nombre.</p>
+<p class="vacio">Todavía no hay productos.</p>
 {% endif %}
+
+<script>
+// Filtra mientras se escribe, sin importar tildes ni mayúsculas (como en
+// Clientes). Sin JavaScript el formulario sigue buscando al dar Enter.
+(function () {
+  var campo = document.querySelector("form.buscar input"), lista = document.getElementById("lista");
+  if (!campo || !lista) return;
+  function sinTildes(t) { return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); }
+  var filas = Array.prototype.map.call(lista.children, function (li) {
+    return { li: li, nombre: sinTildes(li.dataset.nombre || "") };
+  });
+  function filtrar() {
+    var q = sinTildes(campo.value.trim()), hay = 0;
+    filas.forEach(function (f) {
+      var ver = !q || f.nombre.indexOf(q) >= 0;
+      f.li.hidden = !ver;
+      if (ver) hay++;
+    });
+    lista.hidden = !hay;
+    document.getElementById("ninguno").hidden = hay > 0;
+  }
+  campo.addEventListener("input", filtrar);
+  campo.form.addEventListener("submit", function (e) { e.preventDefault(); campo.blur(); });
+  filtrar();
+})();
+</script>
 {% endblock %}
