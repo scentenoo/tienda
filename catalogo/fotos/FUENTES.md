@@ -75,7 +75,7 @@ si alguna reclama la suya, se quita.
 | 44.webp | Bandeja De Queso Amarrillo | TuZonaMarket | https://tuzonamarket.com/carabobo/producto/queso-amarillo-rebanado-tipo-cheddar-maria-gorda-200g |
 | 46.webp | Salsa friz sobre | Cuatro sobres Fritz (tocineta, tártara, maíz y cheddar) juntados en una imagen | https://mibodega.com.ve/categoria-producto/alimentos/salsas/ · https://mibodega.com.ve/producto/mezcla-para-salsa-tartara-45gr-fritz/ · https://saboresmarket.com/products/fritz-mezcla-para-preparar-salsa-maiz · https://tuzonamarket.com/carabobo/producto/mezcla-para-salsa-cheddar-fritz-45g |
 | 48.webp | Caroreña Sangria | Licores :: Vinos y Espumantes :: Sangrías :: Sangría Original Caroreña ... | https://vivaenlinea.com/licores/vinos-y-espumantes/sangrias/sangria-original-carorena-1-75-lt/ |
-| 49.webp | Chimu Amarillo | Tabaquería archivos - Mi Bodega Express | https://mibodega.com.ve/categoria-producto/licor-y-tabaco/tabaqueria/ |
+| 49.webp | Chimu Amarillo (foto del chimó azul El Apureñito, enviada por el dueño) | Google Imágenes | https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQaCuCenZrVyxC_OQIuAwvCC81fFGd0y_P307lPOTbVPg&s=10 |
 | 50.webp | Mortadela Tapara | Mortadela Tapara con Pistacho Ricci 250g - Tienda TRIO Maracaibo | https://triomcbo.com/producto/mortadela-tapara-con-pistacho-ricci-250g/ |
 | 51.webp | Ovomaltina | Ovomaltina Tubo, 35gr - Walmart.com | https://www.walmart.com/ip/Ovomaltina-Tubo-35gr/5619620076 |
 | 52.webp | Galletas de Guayaba | Galletera Independencia Galletas Rellenas 85g — Sabores Market | https://saboresmarket.com/products/gatterera-independencia-galletas-rellenas-85g |
@@ -91,3 +91,4 @@ si alguna reclama la suya, se quita.
 | 73.webp | Chicha Medio litro | Chicha El Chichero 500ml Parmalat · Grupo San Anselmo | https://farmanselmo.com.ve/producto/principal/unica/chicha-el-chichero-500ml-parmalat |
 | 76.webp | Caja de Palitos de Chocolate | DANIBISK Palitos Chocolate Box, Crunchy Vanilla Cookie Sticks Coated in ... | https://www.walmart.com/ip/Palitos-Chocolate-Box-5231-12-18x30gr-1-5oz/11351210826 |
 | 78.webp | Chocomalt | Rikomalt Bebida Malteada Chocolatada · Grupo San Anselmo | https://farmanselmo.com.ve/producto/principal/unica/riko-malt-uht-500ml-parmalat |
+| 79.webp | Ricomalt litro (Riko Malt 1 L, Parmalat; enviada por el dueño) | Google Imágenes | https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSZZo7l9EKe-aUm1q-90zdPD0ltq2qQ5mb-nlY2KvTulA&s=10 |
