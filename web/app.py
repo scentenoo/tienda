@@ -27,7 +27,8 @@ from flask import (Flask, abort, g, redirect, render_template, request,
                    send_file, session, url_for)
 
 from config.nube import conexion_directa
-from utils import cobros, domicilio as domicilio_semana, estado_cuenta, perfil_clientes
+from utils import (cobros, domicilio as domicilio_semana, estado_cuenta, perfil_clientes,
+                   visitas_catalogo)
 from utils.conciliacion import MESES_ES, deudores, telefonos_clientes
 from utils.informe_movil import html_pendientes
 from servicios.abonos import registrar_abono
@@ -416,10 +417,14 @@ def domicilio():
     escribir, deben, sin_telefono = domicilio_semana.clientes(conn, hoy)
     ya = domicilio_semana.enviados(conn, hoy)
     guardado = domicilio_semana.mensaje_guardado(conn)
+    url = domicilio_semana.url_catalogo()
+    mensaje = guardado or domicilio_semana.mensaje(url)
+    # A cada uno su enlace con código, para saber en Visitas al catálogo quién entró
+    for c in escribir:
+        c["mensaje"] = visitas_catalogo.poner_codigo(mensaje, url, c["id"], app.secret_key)
     return render_template(
         "domicilio.html", escribir=escribir, deben=deben, sin_telefono=sin_telefono,
-        enviados=ya, n_enviados=sum(c["id"] in ya for c in escribir),
-        mensaje=guardado or domicilio_semana.mensaje(domicilio_semana.url_catalogo()),
+        enviados=ya, n_enviados=sum(c["id"] in ya for c in escribir), mensaje=mensaje,
         personalizado=guardado is not None, aviso=session.pop("aviso_domicilio", None),
         error=session.pop("error_domicilio", None), largo_maximo=domicilio_semana.LARGO_MAXIMO,
         tope_deuda=domicilio_semana.TOPE_DEUDA, tope_dias=domicilio_semana.TOPE_DIAS)
@@ -985,6 +990,7 @@ def _no_existe(_e):
 # Inventario, compras, gastos, pérdidas y caja; cobros; ventas por audio; historial
 import web.operaciones  # noqa: E402,F401
 import web.cobros  # noqa: E402,F401
+import web.visitas  # noqa: E402,F401
 import web.audios  # noqa: E402,F401
 import web.historial  # noqa: E402,F401
 

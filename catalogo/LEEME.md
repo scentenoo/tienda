@@ -106,6 +106,10 @@ primera, las que no tengan salen con la inicial del producto.
 Quien trabaje en el repositorio desde el PC tiene que hacer `git pull` antes
 de subir cambios, porque las fotos llegan a GitHub directamente.
 
+## Visitas
+
+Para saber quién entra, qué busca y si envía el pedido, ver `visitas/LEEME.md`.
+
 ## Probarlo en el PC
 
     python -m catalogo.generar --db copia.db --whatsapp 3001234567 --salida sitio

@@ -33,7 +33,7 @@
       <span>{% if c['deuda'] > 0 %}Debe {{ c['deuda']|pesos }} · {% endif %}compró hace {{ c['dias_sin_venir'] }} d</span>
       <span class="falla" hidden>No se guardó la marca; toque de nuevo</span></div>
     <div class="der"><a class="boton chico enviar" style="margin:0"
-       href="{{ c['whatsapp'] }}?text={{ mensaje|urlencode }}"
+       href="{{ c['whatsapp'] }}?text={{ c['mensaje']|urlencode }}"
        target="_blank" rel="noopener">{{ 'Enviado ✓' if c['id'] in enviados else 'Enviar' }}</a></div>
   </div></li>
   {% endfor %}

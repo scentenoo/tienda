@@ -1,0 +1,9 @@
+# El recibidor de visitas del catálogo en Cloudflare (ver LEEME.md).
+# TURSO_URL y TURSO_TOKEN no van aquí: se ponen como secretos
+# (npx wrangler secret put TURSO_URL / TURSO_TOKEN) y no se borran al volver a subirlo.
+name = "visitas-hye"
+main = "worker.js"
+compatibility_date = "2025-06-01"
+
+[vars]
+ORIGEN = "https://scentenoo.github.io"

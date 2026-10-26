@@ -141,7 +141,7 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
   color: var(--naranja); font-size: .88rem; font-weight: 600; }
 </style>
 </head>
-<body data-whatsapp="{{ whatsapp }}">
+<body data-whatsapp="{{ whatsapp }}"{% if visitas %} data-visitas="{{ visitas }}"{% endif %}>
 
 <header class="cabecera">
   <div class="ancho">
@@ -248,6 +248,55 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
     orden.push(id);
   });
 
+  // ── Visitas: qué hace el cliente aquí, para mejorar el catálogo (ver
+  // visitas/LEEME.md). Va sin nombre: el código del enlace (?c=…) solo lo
+  // entiende la página privada de la tienda. Se junta y se manda cada pocos
+  // segundos y al salir, sin hacer esperar a nadie.
+  var anotar = (function () {
+    var destino = document.body.dataset.visitas;
+    function nada() {}
+    nada.ya = nada;
+    if (!destino || !navigator.sendBeacon || !window.URLSearchParams) return nada;
+    function leido(clave) { try { return localStorage.getItem(clave) || ""; } catch (e) { return ""; } }
+    function anotado(clave, valor) { try { localStorage.setItem(clave, valor); } catch (e) { /* sin almacenamiento */ } return valor; }
+    function azar() {
+      var t = "";
+      while (t.length < 16) t += Math.random().toString(36).slice(2);
+      return t.slice(0, 16);
+    }
+    var codigo = (new URLSearchParams(location.search).get("c") || "").toLowerCase();
+    if (/^[a-z0-9]{4,16}$/.test(codigo)) {
+      anotado("cliente-hye", codigo);
+      // Que no siga en la dirección: si reenvía el enlace desde el navegador, no va con su código
+      try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* igual sirve */ }
+    } else {
+      codigo = leido("cliente-hye");
+    }
+    var vuelve = !!leido("visitante-hye");
+    var visitante = leido("visitante-hye") || anotado("visitante-hye", azar());
+    var visita = azar(), inicio = Date.now(), cola = [], reloj = null;
+    function mandar() {
+      clearTimeout(reloj);
+      reloj = null;
+      if (!cola.length) return;
+      try {
+        navigator.sendBeacon(destino, JSON.stringify({ v: visitante, s: visita, c: codigo || null, e: cola.splice(0) }));
+      } catch (e) { cola = []; }
+    }
+    function anotar(tipo, dato, numero) {
+      cola.push({ t: tipo, d: dato == null ? null : String(dato).slice(0, 120), n: typeof numero === "number" ? numero : null });
+      if (!reloj) reloj = setTimeout(mandar, 3000);
+    }
+    anotar.ya = mandar;
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState !== "hidden") return;
+      anotar("salida", null, Math.round((Date.now() - inicio) / 1000));
+      mandar();
+    });
+    anotar("entrada", vuelve ? "vuelve" : "nuevo");
+    return anotar;
+  })();
+
   function simple(texto) {
     return String(texto).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   }
@@ -279,6 +328,7 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
     if (n > 0) pedido[id] = n; else delete pedido[id];
     guardar();
     pintar();
+    anotar(delta > 0 ? "agregar" : "quitar", productos[id].nombre, Math.max(n, 0));
   }
 
   function boton(clase, html, etiqueta, alTocar) {
@@ -303,6 +353,7 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
   }
 
   var barra = document.getElementById("barra"), hoja = document.getElementById("hoja");
+  var totalPedido = 0, unidadesPedido = 0;
   function pintar() {
     var unidades = 0, suma = 0, hayEncargo = false, renglones = [];
     var lineas = document.getElementById("lineas");
@@ -338,6 +389,8 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
       lineas.appendChild(li);
     });
 
+    totalPedido = suma;
+    unidadesPedido = unidades;
     barra.hidden = unidades === 0;
     document.getElementById("barra-cantidad").textContent = unidades === 1 ? "1 producto" : unidades + " productos";
     document.getElementById("barra-total").textContent = pesos(suma);
@@ -358,6 +411,14 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
 
   document.getElementById("ver-pedido").addEventListener("click", function () {
     if (hoja.showModal) hoja.showModal(); else hoja.setAttribute("open", "");
+    anotar("ver_pedido", null, totalPedido);
+  });
+  document.getElementById("enviar").addEventListener("click", function () {
+    anotar("enviar", unidadesPedido === 1 ? "1 producto" : unidadesPedido + " productos", totalPedido);
+    anotar.ya();    // ya: puede que no vuelva a la página
+  });
+  document.querySelectorAll('a[href^="https://wa.me/"]:not(#enviar)').forEach(function (a) {
+    a.addEventListener("click", function () { anotar("escribir", buscadoTexto || null); anotar.ya(); });
   });
   function cerrar() { if (hoja.close) hoja.close(); else hoja.removeAttribute("open"); }
   document.getElementById("cerrar").addEventListener("click", cerrar);
@@ -366,12 +427,13 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
     pedido = {};
     guardar();
     pintar();
+    anotar("vaciar");
   });
 
   // ── Buscar y filtrar por categoría
-  var categoria = "", buscado = "";
+  var categoria = "", buscado = "", buscadoTexto = "", anotadoBuscar = "", esperaBuscar = null;
   function filtrar() {
-    var alguno = false;
+    var alguno = false, encontrados = 0;
     document.querySelectorAll(".seccion").forEach(function (seccion) {
       var visibles = 0;
       var deLaCategoria = !categoria || seccion.dataset.categoria === categoria;
@@ -382,8 +444,10 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
       });
       seccion.hidden = visibles === 0;
       if (visibles) alguno = true;
+      encontrados += visibles;
     });
     document.getElementById("sin-resultados").hidden = alguno;
+    return encontrados;
   }
   document.querySelectorAll(".chip").forEach(function (chip) {
     chip.addEventListener("click", function () {
@@ -393,11 +457,20 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
       });
       filtrar();
       window.scrollTo({ top: 0 });
+      anotar("categoria", chip.textContent.trim());
     });
   });
   document.getElementById("buscar").addEventListener("input", function (e) {
-    buscado = simple(e.target.value.trim());
-    filtrar();
+    buscadoTexto = e.target.value.trim().toLowerCase();
+    buscado = simple(buscadoTexto);
+    var encontrados = filtrar();
+    // Se anota lo buscado cuando deja de escribir, no cada letra
+    clearTimeout(esperaBuscar);
+    esperaBuscar = setTimeout(function () {
+      if (buscadoTexto.length < 2 || buscadoTexto === anotadoBuscar) return;
+      anotadoBuscar = buscadoTexto;
+      anotar("busqueda", buscadoTexto, encontrados);
+    }, 1500);
   });
 
   // ── "Actualizado hoy a las 11:30 a. m.", en hora de Colombia

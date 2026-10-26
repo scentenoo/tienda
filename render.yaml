@@ -25,3 +25,7 @@ services:
         sync: false             # respaldo de Gemini; se saca en console.groq.com
       - key: SECRETO
         generateValue: true     # Render inventa uno al azar
+      - key: VISITAS_TURSO_URL
+        sync: false             # opcional: la base de visitas al catálogo (ver visitas/LEEME.md)
+      - key: VISITAS_TURSO_TOKEN
+        sync: false             # token de SOLO LECTURA de esa base

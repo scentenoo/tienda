@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block titulo %}Visitas al catálogo · Charcutería HYE{% endblock %}
+{% macro ranking(filas, vacio) -%}
+  {% if filas %}
+  <ol class="ranking">
+    {% for texto, n in filas %}<li><span>{{ texto }}</span><b>{{ n }}</b></li>{% endfor %}
+  </ol>
+  {% else %}<p class="sub" style="margin:8px 0 0">{{ vacio }}</p>{% endif %}
+{%- endmacro %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('mas') }}">‹ Más</a>
+<h1>Visitas al catálogo</h1>
+<p class="sub">Quién entró, qué buscó, qué agregó y si envió el pedido.</p>
+
+<div class="filtros">
+  {% for d, nombre in periodos.items() %}
+  <a class="{{ 'on' if d == dias }}" href="{{ url_for('visitas_catalogo_pagina', dias=d) }}">{{ nombre }}</a>
+  {% endfor %}
+</div>
+
+{% if falta_configurar %}
+<div class="error">Falta conectar la base de visitas: en Render van las variables
+  <b>VISITAS_TURSO_URL</b> y <b>VISITAS_TURSO_TOKEN</b> (ver visitas/LEEME.md).</div>
+{% else %}
+
+<div class="tarjeta embudo">
+  {% set primero = r.embudo[0][1] or 1 %}
+  {% for nombre, n in r.embudo %}
+  <div class="paso">
+    <div><span>{{ nombre }}</span><b>{{ n }}</b></div>
+    <div class="barrita"><i style="width: {{ (100 * n / primero)|round|int }}%"></i></div>
+  </div>
+  {% endfor %}
+  <p class="sub" style="margin:10px 0 0">Personas distintas: {{ r.con_nombre }} con nombre (del enlace de Domicilio)
+    y {{ r.sin_nombre }} sin nombre (estados, enlaces reenviados).</p>
+</div>
+
+<p class="seccion">Clientes ({{ r.personas|length }})</p>
+{% if r.personas %}
+<ul class="lista">
+  {% for p in r.personas %}
+  <li><details>
+    <summary class="fila">
+      <div class="izq"><b>{{ p.nombre }}</b>
+        <span>{{ p.ultima|fecha }}{% if p.visitas > 1 %} · entró {{ p.visitas }} veces{% endif %}</span></div>
+      <div class="der">
+        {% if p.estado == 'envio' %}<span class="etiqueta pagado">Envió{% if p.total_enviado %} {{ p.total_enviado|pesos }}{% endif %}</span>
+        {% elif p.estado == 'armo' %}<span class="etiqueta fiado">Armó y no envió</span>
+        {% else %}<span class="etiqueta gris">Solo miró</span>{% endif %}
+      </div>
+    </summary>
+    <div class="detalle">
+      {% if p.en_pedido and p.estado == 'armo' %}<div><span>Dejó en el pedido</span><span>{{ p.en_pedido|join(', ') }}</span></div>{% endif %}
+      {% if p.agrego and not (p.estado == 'armo' and p.agrego == p.en_pedido) %}<div><span>Agregó</span><span>{{ p.agrego|join(', ') }}</span></div>{% endif %}
+      {% if p.busco %}<div><span>Buscó</span><span>{{ p.busco|join(', ') }}</span></div>{% endif %}
+      {% if p.minutos %}<div><span>Tiempo</span><span>{{ p.minutos }} min</span></div>{% endif %}
+      <a class="sub" style="display:block; margin:8px 0 0" href="{{ url_for('cliente', client_id=p.id) }}">Ver cliente ›</a>
+    </div>
+  </details></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">Ningún cliente ha entrado con su enlace en este periodo. Los enlaces con nombre salen del botón
+  Enviar de <a href="{{ url_for('domicilio') }}">Domicilio</a>.</p>
+{% endif %}
+
+<p class="seccion">Buscaron y no encontraron</p>
+<div class="tarjeta">{{ ranking(r.sin_resultado, "Nadie se quedó sin encontrar lo que buscaba.") }}</div>
+
+<p class="seccion">Lo más agregado al pedido</p>
+<div class="tarjeta">{{ ranking(r.agregados, "Nadie ha agregado nada todavía.") }}</div>
+
+<p class="seccion">Lo más buscado</p>
+<div class="tarjeta">{{ ranking(r.busquedas, "Nadie ha usado el buscador todavía.") }}</div>
+
+{% if r.categorias %}
+<p class="seccion">Categorías que tocaron</p>
+<div class="tarjeta">{{ ranking(r.categorias, "") }}</div>
+{% endif %}
+
+<p class="sub" style="margin-top:18px">Cada cosa cuenta una vez por persona. "Tocaron enviar" quiere decir que se
+  les abrió WhatsApp con el pedido: si lo mandaron, se ve en el chat. Si alguien reenvía su enlace, lo que haga
+  la otra persona sale con su nombre.</p>
+{% endif %}
+
+<style>
+.filtros { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 12px; }
+.filtros a { padding: 6px 12px; border-radius: 999px; background: var(--chip); color: var(--texto);
+  text-decoration: none; font-size: .85rem; }
+.filtros a.on { background: var(--acento); color: var(--sobre-acento); font-weight: 600; }
+.embudo .paso + .paso { margin-top: 10px; }
+.embudo .paso > div:first-child { display: flex; justify-content: space-between; font-size: .9rem; }
+.embudo .paso b { font: 800 1.05rem var(--rd); font-variant-numeric: tabular-nums; }
+.barrita { height: 8px; margin-top: 4px; border-radius: 999px; background: var(--chip); overflow: hidden; }
+.barrita i { display: block; height: 100%; border-radius: 999px; background: var(--acento); }
+.etiqueta.gris { background: var(--chip); color: var(--suave); }
+.lista summary.fila { cursor: pointer; list-style: none; }
+.lista summary.fila::-webkit-details-marker { display: none; }
+.detalle { padding: 0 16px 12px; font-size: .88rem; }
+.detalle > div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.detalle > div > span:first-child { flex: none; color: var(--suave); }
+.detalle > div > span:last-child { text-align: right; }
+.ranking { list-style: none; margin: 0; padding: 0; counter-reset: r; }
+.ranking li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: .9rem;
+  border-top: 1px solid var(--borde); }
+.ranking li:first-child { border-top: 0; padding-top: 0; }
+.ranking li b { font-variant-numeric: tabular-nums; }
+</style>
+{% endblock %}

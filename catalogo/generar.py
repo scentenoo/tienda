@@ -13,6 +13,8 @@ Variables de entorno:
   WHATSAPP_NEGOCIO      el número al que llegan los pedidos (10 dígitos)
   CATALOGO_URL          la dirección pública del catálogo (opcional: para la
                         vista previa cuando se comparte el enlace)
+  VISITAS_URL           el recibidor de visitas en Cloudflare (opcional; ver
+                        visitas/LEEME.md). Sin ella, el catálogo no anota nada.
 
 Para probarlo en el PC con una copia de la base, sin internet:
 
@@ -89,7 +91,7 @@ def conectar(db=None):
     return conexion_directa(url, token, solo_lectura=True)
 
 
-def construir(conn, whatsapp, url_publica="", ahora=None, fotos=None):
+def construir(conn, whatsapp, url_publica="", ahora=None, fotos=None, visitas=""):
     """El HTML del catálogo."""
     ahora = ahora or datetime.now(ZONA)
     fotos = fotos or {}
@@ -110,14 +112,22 @@ def construir(conn, whatsapp, url_publica="", ahora=None, fotos=None):
     return entorno.get_template("plantilla.html").render(
         secciones=reglas.secciones(productos), whatsapp=numero_whatsapp(whatsapp),
         hay_fotos=any(p["foto"] for p in productos),
-        url_publica=(url_publica or "").rstrip("/"),
+        url_publica=(url_publica or "").rstrip("/"), visitas=_url_visitas(visitas),
         generado_iso=ahora.isoformat(timespec="seconds"), generado_texto=momento_en_texto(ahora))
 
 
-def generar(salida, conn, whatsapp, url_publica="", ahora=None):
+def _url_visitas(url):
+    """Solo una dirección https (o una del PC, para probar): va dentro de la página."""
+    url = (url or "").strip()
+    if url and not url.startswith(("https://", "http://127.0.0.1", "http://localhost")):
+        raise SystemExit("VISITAS_URL tiene que empezar por https://")
+    return url
+
+
+def generar(salida, conn, whatsapp, url_publica="", ahora=None, visitas=""):
     salida = Path(salida)
     fotos = fotos_disponibles(AQUI / "fotos")
-    html = construir(conn, whatsapp, url_publica, ahora, fotos)
+    html = construir(conn, whatsapp, url_publica, ahora, fotos, visitas)
     salida.mkdir(parents=True, exist_ok=True)
     (salida / "index.html").write_text(html, encoding="utf-8")
     for nombre in ("logo-he.png", "icono-192.png"):
@@ -135,10 +145,13 @@ def main():
     opciones.add_argument("--db", help="un archivo .db local, en vez de la base en la nube")
     opciones.add_argument("--whatsapp", default=os.environ.get("WHATSAPP_NEGOCIO"))
     opciones.add_argument("--url", default=os.environ.get("CATALOGO_URL", ""))
+    opciones.add_argument("--visitas", default=os.environ.get("VISITAS_URL", ""),
+                          help="el recibidor de visitas (https://…workers.dev)")
     args = opciones.parse_args()
     conn = conectar(args.db)
     try:
-        print("Catálogo generado en", generar(args.salida, conn, args.whatsapp, args.url))
+        print("Catálogo generado en", generar(args.salida, conn, args.whatsapp, args.url,
+                                                     visitas=args.visitas))
     finally:
         conn.close()
 

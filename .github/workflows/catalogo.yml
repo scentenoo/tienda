@@ -51,6 +51,7 @@ jobs:
           TURSO_TOKEN_LECTURA: ${{ secrets.TURSO_TOKEN_LECTURA }}
           WHATSAPP_NEGOCIO: ${{ vars.WHATSAPP_NEGOCIO }}
           CATALOGO_URL: ${{ steps.pages.outputs.base_url }}
+          VISITAS_URL: ${{ vars.VISITAS_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: sitio
