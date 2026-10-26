@@ -61,11 +61,18 @@
   {% endfor %}
 </div>
 
+{% if toca or cobrados %}
+<form class="buscar" onsubmit="return false" style="margin-top:12px">
+  <input type="search" id="buscar" placeholder="Buscar cliente…" autocomplete="off" aria-label="Buscar cliente">
+</form>
+<p class="vacio" id="sin-resultados" hidden>Nadie con ese nombre.</p>
+{% endif %}
+
 <p class="seccion">Toca cobrar <span id="cuenta">({{ toca|length }})</span></p>
 {% if toca %}
 <ul class="lista" id="toca">
   {% for c in toca %}
-  <li data-id="{{ c['id'] }}"><div class="fila">
+  <li data-id="{{ c['id'] }}" data-nombre="{{ c['nombre'] }}"><div class="fila">
     <div class="izq"><b>{{ c['nombre'] }}</b>
       <span>{{ etiqueta_frecuencia(c['frecuencia']) }} Debe {{ c['deuda']|pesos }}</span>
       <span class="falla" hidden>No se guardó la marca; toque de nuevo</span></div>
@@ -87,9 +94,9 @@
 {% if cobrados %}
 <details class="ya">
   <summary class="seccion">Ya se les cobró ({{ cobrados|length }}) ›</summary>
-  <ul class="lista" style="margin-top:12px">
+  <ul class="lista" id="cobrados" style="margin-top:12px">
     {% for c in cobrados %}
-    <li><a class="fila" href="{{ url_for('cliente', client_id=c['id']) }}">
+    <li data-nombre="{{ c['nombre'] }}"><a class="fila" href="{{ url_for('cliente', client_id=c['id']) }}">
       <div class="izq"><b>{{ c['nombre'] }}</b>
         <span>{{ etiqueta_frecuencia(c['frecuencia']) }} Enviado {{ c['enviado']|fecha }}</span></div>
       <div class="der">{{ c['deuda']|pesos }}</div>
@@ -142,6 +149,27 @@ details.ya summary { margin-top: 22px; }
   });
   window.addEventListener("beforeunload", function (e) { if (caja.value !== original) e.preventDefault(); });
   document.getElementById("form-mensaje").addEventListener("submit", function () { original = caja.value; });
+
+  // Buscador: filtra las dos listas mientras se escribe, sin importar tildes
+  // ni mayúsculas. Si el nombre está entre los ya cobrados, abre esa parte.
+  var campo = document.getElementById("buscar");
+  if (campo) {
+    var ya = document.querySelector("details.ya");
+    function sinTildes(t) { return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); }
+    var filas = Array.prototype.map.call(document.querySelectorAll("#toca > li, #cobrados > li"), function (li) {
+      return { li: li, nombre: sinTildes(li.dataset.nombre || ""), cobrado: !!li.closest("#cobrados") };
+    });
+    campo.addEventListener("input", function () {
+      var q = sinTildes(campo.value.trim()), hay = 0, enYa = 0;
+      filas.forEach(function (f) {
+        var ver = !q || f.nombre.indexOf(q) >= 0;
+        f.li.hidden = !ver;
+        if (ver) { hay++; if (f.cobrado) enYa++; }
+      });
+      document.getElementById("sin-resultados").hidden = !q || hay > 0;
+      if (ya && q && enYa) ya.open = true;
+    });
+  }
 
   var lista = document.getElementById("toca");
   if (!lista) return;
