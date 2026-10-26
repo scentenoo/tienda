@@ -103,14 +103,39 @@ def _cerrar_db(_error):
 # ── Seguridad ────────────────────────────────────────────────────────────────
 # Después de 5 intentos fallidos en 15 minutos se bloquea el ingreso 15
 # minutos. Es un solo usuario: el bloqueo es para todos, no por dirección.
+# La página corre en varios procesos (ver Dockerfile), así que los intentos se
+# anotan en un archivo que todos comparten; en el PC (sin fcntl), en memoria.
 FALLOS_MAXIMOS, VENTANA_FALLOS = 5, 15 * 60
-_fallos = []
+_ARCHIVO_FALLOS = Path(os.environ.get("TMPDIR", "/tmp")) / "charcuteria-fallos.txt"
+_fallos_memoria = []
+
+
+def _con_fallos(cambiar=None):
+    """Los momentos de los intentos fallidos recientes; cambiar(lista) los
+    modifica bajo candado."""
+    try:
+        import fcntl
+    except ImportError:
+        fallos = _fallos_memoria
+        fallos[:] = [t for t in fallos if time.time() - t < VENTANA_FALLOS]
+        if cambiar:
+            cambiar(fallos)
+        return list(fallos)
+    with open(_ARCHIVO_FALLOS, "a+") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
+        ahora = time.time()
+        fallos = [float(t) for t in f.read().split() if ahora - float(t) < VENTANA_FALLOS]
+        if cambiar:
+            cambiar(fallos)
+            f.seek(0)
+            f.truncate()
+            f.write("\n".join(str(t) for t in fallos))
+        return fallos
 
 
 def _bloqueado():
-    ahora = time.time()
-    _fallos[:] = [t for t in _fallos if ahora - t < VENTANA_FALLOS]
-    return len(_fallos) >= FALLOS_MAXIMOS
+    return len(_con_fallos()) >= FALLOS_MAXIMOS
 
 
 def _token_csrf():
@@ -187,7 +212,7 @@ def ingresar():
         if _bloqueado():
             error = "Demasiados intentos. Espere 15 minutos."
         elif es_dueno or es_hermana:
-            _fallos.clear()
+            _con_fallos(list.clear)
             session.clear()
             session.permanent = True
             session["ingreso"] = True
@@ -199,7 +224,7 @@ def ingresar():
                 siguiente = "/"
             return redirect(siguiente)
         else:
-            _fallos.append(time.time())
+            _con_fallos(lambda fallos: fallos.append(time.time()))
             error = "Contraseña incorrecta."
     return render_template("ingresar.html", error=error)
 

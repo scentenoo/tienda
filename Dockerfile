@@ -20,5 +20,10 @@ COPY utils/__init__.py utils/conciliacion.py utils/pdf.py utils/estado_cuenta.py
 COPY servicios/ servicios/
 COPY web/ web/
 
-# Un solo proceso: la protección contra intentos de contraseña vive en memoria
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 60 web.app:app
+# Varios procesos de un hilo, no un proceso de varios hilos: la librería de
+# Turso no suelta a Python mientras espera a la base, así que los hilos de un
+# proceso se turnan, y si uno espera a que otro termine de guardar, se traban
+# los dos y la página entera se queda cargando. Si una visita pasa de 60 s, se
+# corta y su proceso se cambia por otro. Los intentos de contraseña se
+# comparten en un archivo (ver _con_fallos en web/app.py).
+CMD exec gunicorn --bind :$PORT --workers 4 --timeout 60 web.app:app

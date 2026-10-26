@@ -410,7 +410,14 @@ def conexion_directa(url, token, solo_lectura=False):
     solo_lectura: para un token de solo lectura (el catálogo), que Turso
     no deja ni cambiar las llaves foráneas; tampoco hace falta, si no escribe."""
     import libsql
-    conn = libsql.connect(url, auth_token=token)
-    if not solo_lectura:
-        conn.execute("PRAGMA foreign_keys=OFF")
-    return Conexion(conn, None)
+    for intento in range(3):
+        try:
+            conn = libsql.connect(url, auth_token=token)
+            # Sirve también de prueba: a veces Turso corta la conexión recién
+            # abierta ("connection closed before message completed"); se abre otra.
+            conn.execute("SELECT 1" if solo_lectura else "PRAGMA foreign_keys=OFF")
+            return Conexion(conn, None)
+        except ValueError as e:
+            if intento == 2:
+                raise _traducir_error(e) from e
+            time.sleep(0.2)
