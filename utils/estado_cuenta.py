@@ -25,7 +25,9 @@ from utils.conciliacion import MESES_ES
 from utils.pdf import _moneda, _ruta
 
 NEGOCIO = "Charcutería H&E"
-PAGO_NEQUI = "Puede pagar por Nequi al 311 875 8761 a nombre de Samir Centeno."
+# La cuenta para pagar es la misma de los cobros por WhatsApp: el dueño la
+# cambia en la página del celular (Cobros → número de cuenta).
+PAGO = "Puede pagarnos a: {cuenta}"
 # Notas que se ponen solas al registrar un pago y no le dicen nada al cliente
 NOTAS_VACIAS = {"abono", "pago", "pago total", "pago parcial", "abono parcial"}
 
@@ -53,6 +55,15 @@ def _productos(conn, sale_id):
               FROM sale_details_eliminados WHERE sale_id = ? ORDER BY id""",
                              (sale_id,)).fetchall()
     return [tuple(f) for f in filas]
+
+
+def _cuenta(conn):
+    """La cuenta para pagar guardada en Cobros; vacía si no hay."""
+    try:
+        fila = conn.execute("SELECT valor FROM ajustes WHERE clave = 'cobro_cuenta'").fetchone()
+    except Exception:       # una base vieja, sin la tabla de ajustes
+        return ""
+    return (fila[0] or "").strip() if fila else ""
 
 
 def calcular(conn, client_id) -> dict:
@@ -120,7 +131,7 @@ def calcular(conn, client_id) -> dict:
         m["productos"] = _productos(conn, m["sale_id"]) if m["sale_id"] else []
 
     return {"nombre": nombre, "deuda": max(saldo, 0.0), "en_ceros": en_ceros,
-            "movimientos": movimientos}
+            "movimientos": movimientos, "cuenta": _cuenta(conn)}
 
 
 def nombre_archivo(datos) -> str:
@@ -154,8 +165,12 @@ def _logo():
     return None
 
 
-def _pie(canvas, doc):
+def _pie(cuenta):
     """En cada hoja: una línea dorada, cómo pagar y el número de página."""
+    return lambda canvas, doc: _dibujar_pie(canvas, doc, cuenta)
+
+
+def _dibujar_pie(canvas, doc, cuenta):
     canvas.saveState()
     ancho, _ = A4
     canvas.setStrokeColor(DORADO)
@@ -163,7 +178,7 @@ def _pie(canvas, doc):
     canvas.line(15 * mm, 12 * mm, ancho - 15 * mm, 12 * mm)
     canvas.setFont("Helvetica", 8.5)
     canvas.setFillColor(SUAVE)
-    canvas.drawString(15 * mm, 8 * mm, f"{NEGOCIO} · Nequi 311 875 8761 · Samir Centeno")
+    canvas.drawString(15 * mm, 8 * mm, " · ".join(filter(None, (NEGOCIO, cuenta))))
     canvas.drawRightString(ancho - 15 * mm, 8 * mm, f"Página {doc.page}")
     canvas.restoreState()
 
@@ -183,6 +198,7 @@ def exportar_pdf(datos, destino=None):
                             leftMargin=15 * mm, rightMargin=15 * mm,
                             topMargin=12 * mm, bottomMargin=18 * mm,
                             title=f"Su cuenta - {datos['nombre']}", author=NEGOCIO)
+    pie = _pie(datos.get("cuenta", ""))
     ancho = 180 * mm
     normal = ParagraphStyle("normal", parent=getSampleStyleSheet()["Normal"],
                             fontSize=12, leading=16, textColor=CAFE)
@@ -238,7 +254,7 @@ def exportar_pdf(datos, destino=None):
                                   ("ROUNDEDCORNERS", [8, 8, 8, 8]),
                                   ("TOPPADDING", (0, 0), (-1, -1), 16),
                                   ("BOTTOMPADDING", (0, 0), (-1, -1), 16)]))
-        doc.build(contenido + [caja], onFirstPage=_pie, onLaterPages=_pie)
+        doc.build(contenido + [caja], onFirstPage=pie, onLaterPages=pie)
         return ruta
 
     # Lo primero: cuánto debe y cómo pagarlo
@@ -248,9 +264,9 @@ def exportar_pdf(datos, destino=None):
         [Paragraph(f"<b>{_moneda(datos['deuda'])}</b>", ParagraphStyle(
             "monto", parent=centro, fontName="Helvetica-Bold", fontSize=34, leading=40,
             textColor=SOBRE_DORADO))],
-        [Paragraph(PAGO_NEQUI, ParagraphStyle("nequi", parent=centro, fontSize=11.5,
-                                              leading=15, textColor=CAFE))],
-    ], colWidths=[ancho])
+    ] + ([[Paragraph(escape(PAGO.format(cuenta=datos.get("cuenta"))), ParagraphStyle(
+        "pago", parent=centro, fontSize=11.5, leading=15, textColor=CAFE))]]
+         if datos.get("cuenta") else []), colWidths=[ancho])
     caja.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 1), DORADO),
         ("BACKGROUND", (0, 2), (-1, 2), MARCA_FONDO),
@@ -438,7 +454,7 @@ def exportar_pdf(datos, destino=None):
                                  ("BOTTOMPADDING", (0, 0), (-1, -1), 11)]))
     contenido += [Spacer(1, 4 * mm), KeepTogether([gracias])]
 
-    doc.build(contenido, onFirstPage=_pie, onLaterPages=_pie)
+    doc.build(contenido, onFirstPage=pie, onLaterPages=pie)
     return ruta
 
 
