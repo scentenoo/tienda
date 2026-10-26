@@ -183,6 +183,23 @@ class Rutas(unittest.TestCase):
         self.assertIn("Falta el número de cuenta", html)
         self.assertIn("Saldo pendiente: $50.000", unquote(html))
 
+    def test_filtro_por_frecuencia(self):
+        cliente(self.conn, 3, "Beto", 90000, "quincenal")
+        cliente(self.conn, 4, "Eva", 10000, "semanal")
+
+        def lista(ver=None):
+            html = self.cliente.get("/cobros", query_string={"ver": ver} if ver else {}).get_data(as_text=True)
+            toca = html.split('id="toca"')[1].split("</ul>")[0]
+            return [n for n in ("Ana", "Beto", "Eva") if n in toca], html
+        # Todos: primero los semanales, cada grupo del que más debe al que menos
+        nombres, html = lista()
+        self.assertEqual(sorted(nombres, key=html.index), ["Ana", "Eva", "Beto"])
+        self.assertIn("Semanal (2)", html)
+        self.assertIn("Quincenal (1)", html)
+        self.assertEqual(lista("semanal")[0], ["Ana", "Eva"])
+        self.assertEqual(lista("quincenal")[0], ["Beto"])
+        self.assertEqual(lista("otra")[0], ["Ana", "Beto", "Eva"])
+
     def test_marcar_frecuencia_desde_la_pagina(self):
         r = self.cliente.post("/cobros/frecuencia", data={"csrf": "c", "client_id": "2", "cobro": "quincenal"})
         self.assertEqual(r.status_code, 302)

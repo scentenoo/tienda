@@ -54,6 +54,13 @@
 </div>
 {% endif %}
 
+<div class="filtros" id="filtros">
+  <span class="titulo">Ver</span>
+  {% for valor, nombre in filtros %}
+  <a class="{{ 'on' if valor == ver }}" href="{{ url_for('cobros_pagina', ver=None if valor == 'todos' else valor) }}#filtros">{{ nombre }} ({{ cuantos[valor] }})</a>
+  {% endfor %}
+</div>
+
 <p class="seccion">Toca cobrar <span id="cuenta">({{ toca|length }})</span></p>
 {% if toca %}
 <ul class="lista" id="toca">
@@ -74,7 +81,7 @@
   {% endfor %}
 </ul>
 {% else %}
-<p class="vacio">A todos ya se les cobró en este periodo.</p>
+<p class="vacio">A todos{{ ' los ' ~ ver ~ 'es' if ver != 'todos' }} ya se les cobró en este periodo.</p>
 {% endif %}
 
 {% if cobrados %}
@@ -107,6 +114,11 @@
 .marcar form { display: flex; gap: 6px; }
 .marcar .boton { margin: 0; }
 .botones:has(> :only-child) { grid-template-columns: 1fr; }
+.filtros { display: flex; gap: 6px; flex-wrap: wrap; margin: 22px 0 4px; }
+.filtros a { padding: 6px 12px; border-radius: 999px; background: var(--chip); color: var(--texto);
+  text-decoration: none; font-size: .85rem; }
+.filtros a.on { background: var(--acento); color: var(--sobre-acento); font-weight: 600; }
+.filtros .titulo { align-self: center; color: var(--suave); font-size: .8rem; margin-right: 2px; }
 details.ya summary { margin-top: 22px; }
 .fijo { white-space: pre-line; background: var(--chip); color: var(--suave); border-radius: 10px;
   padding: 10px 12px; margin-top: 8px; font-size: .88rem; overflow-wrap: anywhere; }

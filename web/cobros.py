@@ -37,6 +37,13 @@ def cobros_pagina():
     conn = _db_cobros()
     ajustes = cobros.ajustes(conn)
     toca, cobrados, sin_frecuencia = cobros.clientes(conn, hoy, ajustes["dia_semanal"])
+    # Primero los semanales y luego los quincenales; dentro, del que más debe
+    # al que menos (sort es estable). Con ?ver= se ve solo una frecuencia.
+    ver = request.args.get("ver") if request.args.get("ver") in cobros.FRECUENCIAS else "todos"
+    cuantos = {f: sum(c["frecuencia"] == f for c in toca + cobrados) for f in cobros.FRECUENCIAS}
+    cuantos["todos"] = len(toca) + len(cobrados)
+    toca, cobrados = ([c for c in sorted(lista, key=lambda c: c["frecuencia"] != "semanal")
+                       if ver == "todos" or c["frecuencia"] == ver] for lista in (toca, cobrados))
     for c in toca:
         c["mensaje"] = cobros.mensaje(ajustes["mensaje"], c["nombre"], c["deuda"],
                                       enlace_estado(c["id"]), ajustes["cuenta"])
@@ -45,7 +52,8 @@ def cobros_pagina():
     semanal = cobros.inicio_periodo("semanal", hoy, ajustes["dia_semanal"])
     quincenal = cobros.inicio_periodo("quincenal", hoy)
     return render_template(
-        "cobros.html", toca=toca, cobrados=cobrados, sin_frecuencia=sin_frecuencia,
+        "cobros.html", toca=toca, cobrados=cobrados, sin_frecuencia=sin_frecuencia, ver=ver,
+        filtros=[("todos", "Todos")] + list(cobros.FRECUENCIAS.items()), cuantos=cuantos,
         ajustes=ajustes, ejemplo=ejemplo, dias=cobros.DIAS, largo_maximo=cobros.LARGO_MAXIMO,
         desde_semanal=_dia_largo(semanal), desde_quincenal=_dia_largo(quincenal),
         dias_enlace=DIAS_ENLACE, aviso=session.pop("aviso_cobros", None),
