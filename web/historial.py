@@ -228,6 +228,10 @@ def _visita(conn):
         "perdidas": lambda: "Abrió Pérdidas" + (f" de {a['mes']}" if a.get("mes") else ""),
         "perdida_nueva": lambda: "Abrió el formulario de pérdida nueva",
         "caja": lambda: "Abrió Caja" + dia(),
+        "cobros_pagina": lambda: "Abrió Cobros",
+        "cobros_cuenta": lambda: "Abrió el número de cuenta de los cobros",
+        "estado_publico": lambda: "Abrió un enlace de estado de cuenta de los cobros",
+        "domicilio": lambda:"Abrió Domicilio de la semana" + (dia() if a.get("dia") else ""),
         "audios": lambda: "Abrió Ventas por audio",
         "audio_archivo": lambda: f"Escuchó el audio #{_id('audio_id')}",
         "audios_diagnostico": lambda: "Abrió el diagnóstico de audios",
@@ -407,6 +411,39 @@ def _accion(conn, plantillas, resp):
     if ep == "catalogo_actualizar":
         return ("cambio", "Pidió actualizar el catálogo", "",
                 "" if session.get("aviso_catalogo") == "listo" else "GitHub no recibió el aviso")
+
+    # ── Domicilio de la semana
+    if ep == "domicilio_mensaje":
+        del_dia = f" del domicilio del {fecha(f.get('dia', ''), False)}" if f.get("dia") else ""
+        if f.get("restaurar"):
+            return "cambio", "Volvió al mensaje de siempre" + del_dia, "", resultado
+        return ("cambio" if conn.guardo else "fallido", "Cambió el mensaje" + del_dia,
+                f.get("mensaje", ""), resultado if conn.guardo else (session.get("error_domicilio") or resultado))
+    if ep == "domicilio_enviado":
+        try:
+            nombre = _nombre(conn, "clients", int(f.get("client_id", "")))
+        except ValueError:
+            nombre = "?"
+        return ("nuevo" if conn.guardo else "fallido", f"Le envió el domicilio a {nombre}", "", resultado)
+
+    # ── Cobros
+    if ep in ("cobros_frecuencia", "cobros_enviado"):
+        try:
+            nombre = _nombre(conn, "clients", int(f.get("client_id", "")))
+        except ValueError:
+            nombre = "?"
+        clase = "cambio" if conn.guardo else "fallido"
+        if ep == "cobros_enviado":
+            return clase, f"Le envió el cobro a {nombre}", "", resultado
+        return clase, f"Marcó a {nombre} con cobro {f.get('cobro') or 'sin definir'}", "", resultado
+    if ep == "cobros_mensaje":
+        if f.get("restaurar"):
+            return "cambio", "Volvió al mensaje de cobro de siempre", "", resultado
+        return ("cambio" if conn.guardo else "fallido", "Cambió el mensaje de los cobros",
+                f.get("mensaje", ""), resultado if conn.guardo else (session.get("error_cobros") or resultado))
+    if ep == "cobros_cuenta":
+        return ("cambio" if conn.guardo else "fallido", "Cambió el número de cuenta de los cobros",
+                _escrito(("cuenta", "Cuenta"), ("dia_semanal", "Día semanal (0 = lunes)")), resultado)
 
     # ── Audios
     if ep == "audios_subir":

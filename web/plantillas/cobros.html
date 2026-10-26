@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block titulo %}Cobros · Charcutería HYE{% endblock %}
+{% macro etiqueta_frecuencia(f) -%}
+  <span class="etiqueta {{ 'fiado' if f == 'semanal' else 'pagado' }}">{{ 'Semanal' if f == 'semanal' else 'Quincenal' }}</span>
+{%- endmacro %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('mas') }}">‹ Más</a>
+<h1>Cobros</h1>
+<p class="sub">Semanales: cada {{ dias[ajustes['dia_semanal']] }}. Quincenales: el 15 y el último día del mes.
+  Toque <b>Enviar</b>: se abre su chat con el cobro listo y solo falta mandarlo.</p>
+
+{% if aviso %}<div class="exito">{{ aviso }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if not ajustes['cuenta'] %}
+<div class="error">Falta el número de cuenta: el mensaje sale sin él.
+  {% if ve_gastos() %}<a href="{{ url_for('cobros_cuenta') }}">Ponerlo ›</a>{% else %}Pídale al dueño que lo ponga.{% endif %}</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('cobros_mensaje') }}" id="form-mensaje">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <label class="campo" for="mensaje">Mensaje</label>
+  <textarea id="mensaje" name="mensaje" rows="4" maxlength="{{ largo_maximo }}" required>{{ ajustes['mensaje'] }}</textarea>
+  <p class="sub" id="sin-guardar" hidden style="color:var(--aviso); margin:6px 0 0">
+    Cambios sin guardar. Guárdelos para poder enviar.</p>
+  <div class="fijo" aria-label="Lo que se agrega solo al final">{{ ejemplo }}</div>
+  <p class="sub" style="margin:6px 0 0">Lo de gris se agrega solo debajo de su mensaje, con el saldo y el
+    estado de cuenta de cada cliente{% if ve_gastos() %} · <a href="{{ url_for('cobros_cuenta') }}">número de cuenta y día de cobro</a>{% endif %}.</p>
+  <div class="botones" style="margin:10px 0 0">
+    <button class="boton chico" style="margin:0">Guardar mensaje</button>
+    {% if ajustes['personalizado'] %}
+    <button class="boton chico secundario" name="restaurar" value="1" formnovalidate style="margin:0"
+            onclick="return confirm('¿Volver al mensaje de siempre?')">Mensaje de siempre</button>
+    {% endif %}
+  </div>
+</form>
+
+{% if sin_frecuencia %}
+<div class="tarjeta pendiente" id="sin-frecuencia">
+  <b>{{ sin_frecuencia|length }} cliente{{ '' if sin_frecuencia|length == 1 else 's' }} deben y no tienen frecuencia</b>
+  <span>Márquelos para que les llegue el cobro.</span>
+  <ul class="marcar">
+    {% for c in sin_frecuencia %}
+    <li>
+      <a href="{{ url_for('cliente', client_id=c['id']) }}"><b>{{ c['nombre'] }}</b> · {{ c['deuda']|pesos }}</a>
+      <form method="post" action="{{ url_for('cobros_frecuencia') }}">
+        <input type="hidden" name="csrf" value="{{ csrf() }}">
+        <input type="hidden" name="client_id" value="{{ c['id'] }}">
+        <button class="boton chico secundario" name="cobro" value="semanal">Semanal</button>
+        <button class="boton chico secundario" name="cobro" value="quincenal">Quincenal</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<p class="seccion">Toca cobrar <span id="cuenta">({{ toca|length }})</span></p>
+{% if toca %}
+<ul class="lista" id="toca">
+  {% for c in toca %}
+  <li data-id="{{ c['id'] }}"><div class="fila">
+    <div class="izq"><b>{{ c['nombre'] }}</b>
+      <span>{{ etiqueta_frecuencia(c['frecuencia']) }} Debe {{ c['deuda']|pesos }}</span>
+      <span class="falla" hidden>No se guardó la marca; toque de nuevo</span></div>
+    <div class="der">
+      {% if c['whatsapp'] %}
+      <a class="boton chico enviar" style="margin:0" href="{{ c['whatsapp'] }}?text={{ c['mensaje']|urlencode }}"
+         target="_blank" rel="noopener">Enviar</a>
+      {% else %}
+      <a class="sub" style="margin:0" href="{{ url_for('cliente_editar', client_id=c['id']) }}">Sin teléfono ›</a>
+      {% endif %}
+    </div>
+  </div></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">A todos ya se les cobró en este periodo.</p>
+{% endif %}
+
+{% if cobrados %}
+<details class="ya">
+  <summary class="seccion">Ya se les cobró ({{ cobrados|length }}) ›</summary>
+  <ul class="lista" style="margin-top:12px">
+    {% for c in cobrados %}
+    <li><a class="fila" href="{{ url_for('cliente', client_id=c['id']) }}">
+      <div class="izq"><b>{{ c['nombre'] }}</b>
+        <span>{{ etiqueta_frecuencia(c['frecuencia']) }} Enviado {{ c['enviado']|fecha }}</span></div>
+      <div class="der">{{ c['deuda']|pesos }}</div>
+    </a></li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+
+<p class="sub" style="margin-top:18px">Periodo semanal desde el {{ desde_semanal }}; quincenal desde el {{ desde_quincenal }}.
+  El enlace al estado de cuenta sirve {{ dias_enlace }} días.
+  Si a alguien no se le envió ese día, sigue aquí hasta que se le envíe. Lo enviado se ve igual desde cualquier celular.</p>
+
+<style>
+.pendiente { border: 2px solid var(--acento); margin-bottom: 4px; }
+.pendiente > b { display: block; font: 800 1.02rem var(--rd); }
+.pendiente > span { color: var(--suave); font-size: .85rem; }
+.marcar { list-style: none; margin: 10px 0 0; padding: 0; }
+.marcar li { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 8px 0; border-top: 1px solid var(--borde); flex-wrap: wrap; }
+.marcar li a { color: var(--texto); text-decoration: none; font-size: .9rem; min-width: 0; }
+.marcar form { display: flex; gap: 6px; }
+.marcar .boton { margin: 0; }
+.botones:has(> :only-child) { grid-template-columns: 1fr; }
+details.ya summary { margin-top: 22px; }
+.fijo { white-space: pre-line; background: var(--chip); color: var(--suave); border-radius: 10px;
+  padding: 10px 12px; margin-top: 8px; font-size: .88rem; overflow-wrap: anywhere; }
+.sin-guardar #toca .enviar { opacity: .4; pointer-events: none; }
+#toca li.enviado { opacity: .55; }
+#toca li.enviado .enviar { background: var(--bien-fondo); color: var(--bien); }
+#toca .falla { display: block; color: var(--alerta); }
+#toca .falla[hidden] { display: none; }
+</style>
+<script>
+// Al tocar Enviar se abre WhatsApp y queda anotado en la base que a este
+// cliente ya se le cobró en este periodo.
+(function () {
+  // Mientras el mensaje tenga cambios sin guardar no se puede enviar: así a
+  // todos les llega el mismo, el que quedó guardado.
+  var caja = document.getElementById("mensaje"), original = caja.value;
+  caja.addEventListener("input", function () {
+    var cambio = caja.value !== original;
+    document.getElementById("sin-guardar").hidden = !cambio;
+    document.body.classList.toggle("sin-guardar", cambio);
+  });
+  window.addEventListener("beforeunload", function (e) { if (caja.value !== original) e.preventDefault(); });
+  document.getElementById("form-mensaje").addEventListener("submit", function () { original = caja.value; });
+
+  var lista = document.getElementById("toca");
+  if (!lista) return;
+  var csrf = "{{ csrf() }}";
+  function contar() {
+    var total = lista.children.length, listos = lista.querySelectorAll("li.enviado").length;
+    document.getElementById("cuenta").textContent =
+      listos ? "(" + listos + " de " + total + " enviados)" : "(" + total + ")";
+  }
+  lista.querySelectorAll(".enviar").forEach(function (a) {
+    a.addEventListener("click", function () {
+      var li = a.closest("li"), datos = new FormData();
+      datos.append("csrf", csrf);
+      datos.append("client_id", li.dataset.id);
+      li.classList.add("enviado");
+      a.textContent = "Enviado ✓";
+      contar();
+      fetch("{{ url_for('cobros_enviado') }}", { method: "POST", body: datos,
+                                                 credentials: "same-origin", keepalive: true })
+        .then(function (r) { if (!r.ok) throw r; li.querySelector(".falla").hidden = true; })
+        .catch(function () {
+          li.classList.remove("enviado");
+          a.textContent = "Enviar";
+          li.querySelector(".falla").hidden = false;
+          contar();
+        });
+    });
+  });
+})();
+</script>
+{% endblock %}

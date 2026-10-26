@@ -27,6 +27,15 @@
     <input type="text" name="limite" id="limite" value="{{ c.get('limite', '') if c else '' }}" inputmode="numeric" placeholder="$0">
   </label>
   <p class="sub" style="margin:4px 0 0">Solo hace falta para agregarle deuda a mano, sin venta.</p>
+  {% set cobro = c.get('cobro', '') if c else '' %}
+  <label class="campo">Cobro por WhatsApp
+    <select name="cobro">
+      <option value="" {{ 'selected' if not cobro }}>Sin definir</option>
+      <option value="semanal" {{ 'selected' if cobro == 'semanal' }}>Semanal</option>
+      <option value="quincenal" {{ 'selected' if cobro == 'quincenal' }}>Quincenal</option>
+    </select>
+  </label>
+  <p class="sub" style="margin:4px 0 0">Cada cuánto se le manda el cobro cuando debe.</p>
   <label class="campo">Notas
     <textarea name="notas" rows="3" maxlength="500">{{ c.get('notas', '') if c else '' }}</textarea>
   </label>

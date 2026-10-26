@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block titulo %}Domicilio de la semana · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('mas') }}">‹ Más</a>
+<h1>Domicilio de la semana</h1>
+<p class="sub">A cada cliente le llega el catálogo para que diga qué le llevamos.
+  Toque <b>Enviar</b>: se abre su chat con el mensaje listo y solo falta mandarlo.</p>
+
+<div class="filtros">
+  <span class="titulo">Día</span>
+  {% for valor, nombre in dias %}
+  <a class="{{ 'on' if valor == dia }}" href="{{ url_for('domicilio', dia=valor) }}">{{ nombre }}</a>
+  {% endfor %}
+</div>
+
+{% if aviso %}<div class="exito">{{ aviso }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ url_for('domicilio_mensaje') }}" id="form-mensaje">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <input type="hidden" name="dia" value="{{ dia }}">
+  <label class="campo" for="mensaje">Mensaje para el {{ dia_texto }}</label>
+  <textarea id="mensaje" name="mensaje" rows="5" maxlength="{{ largo_maximo }}" required>{{ mensaje }}</textarea>
+  <p class="sub" id="sin-guardar" hidden style="color:var(--aviso); margin:6px 0 0">
+    Cambios sin guardar. Guárdelos para poder enviar.</p>
+  <div class="botones" style="margin:8px 0 0">
+    <button class="boton chico" id="guardar" style="margin:0">Guardar mensaje</button>
+    {% if personalizado %}
+    <button class="boton chico secundario" name="restaurar" value="1" formnovalidate style="margin:0"
+            onclick="return confirm('¿Volver al mensaje de siempre?')">Mensaje de siempre</button>
+    {% endif %}
+  </div>
+</form>
+
+<p class="seccion">Escribirles <span id="cuenta">({% if n_enviados %}{{ n_enviados }} de {{ escribir|length }} enviados{% else %}{{ escribir|length }}{% endif %})</span></p>
+{% if escribir %}
+<ul class="lista" id="escribir">
+  {% for c in escribir %}
+  <li data-id="{{ c['id'] }}" class="{{ 'enviado' if c['id'] in enviados }}"><div class="fila">
+    <div class="izq"><b>{{ c['nombre'] }}</b>
+      <span>{% if c['deuda'] > 0 %}Debe {{ c['deuda']|pesos }} · {% endif %}compró hace {{ c['dias_sin_venir'] }} d</span>
+      <span class="falla" hidden>No se guardó la marca; toque de nuevo</span></div>
+    <div class="der"><a class="boton chico enviar" style="margin:0"
+       href="{{ c['whatsapp'] }}?text={{ mensaje|urlencode }}"
+       target="_blank" rel="noopener">{{ 'Enviado ✓' if c['id'] in enviados else 'Enviar' }}</a></div>
+  </div></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vacio">No hay clientes con teléfono a quien escribirle.</p>
+{% endif %}
+
+{% if deben %}
+<p class="seccion">No se les escribe: deben ({{ deben|length }})</p>
+<ul class="lista">
+  {% for c in deben %}
+  <li><a class="fila" href="{{ url_for('cliente', client_id=c['id']) }}">
+    <div class="izq"><b>{{ c['nombre'] }}</b>
+      <span>{% if c['dias_debe'] is not none %}Debe hace {{ c['dias_debe'] }} día{{ '' if c['dias_debe'] == 1 else 's' }}{% else %}Deuda agregada a mano{% endif %}</span></div>
+    <div class="der"><span class="etiqueta {{ 'debe' if c['motivo'] == 'monto' else 'fiado' }}">{{ c['deuda']|pesos }}</span></div>
+  </a></li>
+  {% endfor %}
+</ul>
+<p class="sub" style="margin-top:8px">Quedan por fuera los que deben más de {{ tope_deuda|pesos }} o tienen
+  una venta sin pagar de hace más de {{ tope_dias }} días. Cuando se pongan al día, salen arriba solos.</p>
+{% endif %}
+
+{% if sin_telefono %}
+<p class="seccion">Sin teléfono ({{ sin_telefono|length }})</p>
+<ul class="lista">
+  {% for c in sin_telefono %}
+  <li><a class="fila" href="{{ url_for('cliente_editar', client_id=c['id']) }}">
+    <div class="izq"><b>{{ c['nombre'] }}</b><span>Compró hace {{ c['dias_sin_venir'] }} d</span></div>
+    <div class="der sub" style="margin:0">Agregar teléfono ›</div>
+  </a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<p class="sub" style="margin-top:18px">Salen los clientes que compraron en los últimos 4 meses,
+  del que más compra al que menos. Lo enviado se ve igual desde cualquier celular.</p>
+
+<style>
+.filtros { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.filtros a { padding: 6px 12px; border-radius: 999px; background: var(--chip); color: var(--texto);
+  text-decoration: none; font-size: .85rem; }
+.filtros a.on { background: var(--acento); color: var(--sobre-acento); font-weight: 600; }
+.filtros .titulo { align-self: center; color: var(--suave); font-size: .8rem; margin-right: 2px; }
+.botones:has(> :only-child) { grid-template-columns: 1fr; }
+#escribir li.enviado { opacity: .55; }
+#escribir li.enviado .enviar { background: var(--bien-fondo); color: var(--bien); }
+#escribir .falla { display: block; color: var(--alerta); }
+#escribir .falla[hidden] { display: none; }
+.sin-guardar .enviar { opacity: .4; pointer-events: none; }
+</style>
+<script>
+(function () {
+  var caja = document.getElementById("mensaje"), original = caja.value;
+  var lista = document.getElementById("escribir");
+  var csrf = document.querySelector("#form-mensaje [name=csrf]").value;
+
+  // Mientras el mensaje tenga cambios sin guardar no se puede enviar: así a
+  // todos les llega el mismo, el que quedó guardado.
+  caja.addEventListener("input", function () {
+    var cambio = caja.value !== original;
+    document.getElementById("sin-guardar").hidden = !cambio;
+    document.body.classList.toggle("sin-guardar", cambio);
+  });
+  window.addEventListener("beforeunload", function (e) {
+    if (caja.value !== original) e.preventDefault();
+  });
+  document.getElementById("form-mensaje").addEventListener("submit", function () {
+    original = caja.value;
+  });
+
+  function contar() {
+    var total = lista.children.length, listos = lista.querySelectorAll("li.enviado").length;
+    document.getElementById("cuenta").textContent =
+      listos ? "(" + listos + " de " + total + " enviados)" : "(" + total + ")";
+  }
+
+  // Al tocar Enviar se abre WhatsApp y, al mismo tiempo, queda anotado en la
+  // base que a este cliente ya se le envió.
+  if (lista) lista.querySelectorAll(".enviar").forEach(function (a) {
+    a.addEventListener("click", function () {
+      var li = a.closest("li"), datos = new FormData();
+      datos.append("csrf", csrf);
+      datos.append("dia", "{{ dia }}");
+      datos.append("client_id", li.dataset.id);
+      li.classList.add("enviado");
+      a.textContent = "Enviado ✓";
+      contar();
+      fetch("{{ url_for('domicilio_enviado') }}", { method: "POST", body: datos,
+                                                    credentials: "same-origin", keepalive: true })
+        .then(function (r) { if (!r.ok) throw r; li.querySelector(".falla").hidden = true; })
+        .catch(function () {
+          li.classList.remove("enviado");
+          a.textContent = "Enviar";
+          li.querySelector(".falla").hidden = false;
+          contar();
+        });
+    });
+  });
+})();
+</script>
+{% endblock %}

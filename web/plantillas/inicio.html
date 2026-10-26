@@ -39,6 +39,15 @@
   {% endif %}
 </div>
 
+{% if cobros_toca or cobros_sin_frecuencia %}
+<a class="destacado" href="{{ url_for('cobros_pagina') }}">
+  <span class="ico">{{ icono('caja', 26) }}</span>
+  <div><b>Cobros{% if cobros_toca %} · {{ cobros_toca }} por enviar{% endif %}</b>
+    <span>{% if cobros_sin_frecuencia %}<b>{{ cobros_sin_frecuencia }}</b> deben y no tienen frecuencia: márquelos{% else %}Les toca el cobro de la semana o la quincena{% endif %}</span></div>
+  {{ icono('flecha', 20) }}
+</a>
+{% endif %}
+
 {% if por_pedir_clientes %}
 <a class="destacado" href="{{ url_for('clientes_por_pedir') }}">
   <span class="ico">{{ icono('pedir', 26) }}</span>

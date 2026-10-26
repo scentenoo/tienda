@@ -15,11 +15,16 @@
 
 <p class="seccion">Vender más</p>
 <ul class="lista">
+  {{ enlace(url_for('domicilio'), 'compras', 'Domicilio de la semana', 'Mandarles el catálogo por WhatsApp') }}
   {{ enlace(url_for('clientes_por_pedir'), 'pedir', 'Por pedir', 'Suelen pedir y no han pedido esta semana') }}
 </ul>
 
 <p class="seccion">Cobrar</p>
 <ul class="lista">
+  {{ enlace(url_for('cobros_pagina'), 'caja', 'Cobros', 'Mandar el cobro semanal o quincenal') }}
+  {% if ve_gastos() %}
+  {{ enlace(url_for('cobros_cuenta'), 'gastos', 'Número de cuenta', 'A dónde pagan, y el día del cobro semanal') }}
+  {% endif %}
   {{ enlace(url_for('pendientes'), 'pendientes', 'Pendientes', 'Quién debe y desde cuándo') }}
   {{ enlace(url_for('clientes'), 'clientes', 'Clientes', 'Abonos, estado de cuenta, historial') }}
 </ul>

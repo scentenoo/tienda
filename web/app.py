@@ -27,7 +27,7 @@ from flask import (Flask, abort, g, redirect, render_template, request,
                    send_file, session, url_for)
 
 from config.nube import conexion_directa
-from utils import estado_cuenta, perfil_clientes
+from utils import cobros, domicilio as domicilio_semana, estado_cuenta, perfil_clientes
 from utils.conciliacion import MESES_ES, deudores, telefonos_clientes
 from utils.informe_movil import html_pendientes
 from servicios.abonos import registrar_abono
@@ -271,12 +271,15 @@ def inicio():
         (mes,)).fetchone()[0]
     agotados = conn.execute("SELECT COUNT(*) FROM products WHERE stock <= 0").fetchone()[0]
     toca = [p for p in perfil_clientes.perfiles(conn, date.today()) if p["estado"] == "toca"]
+    cobrar_hoy, _, sin_frecuencia = cobros.clientes(
+        _db_cobros(), date.today(), cobros.ajustes(conn)["dia_semanal"])
     return render_template(
         "inicio.html", hoy=_dia_largo(date.today()), saludo=_saludo(), mes=MESES_ES[int(mes[5:]) - 1],
         clientes_deben=cobrar[0], por_cobrar=cobrar[1],
         ventas_hoy=ventas_hoy[0], vendido_hoy=ventas_hoy[1], fiado_hoy=ventas_hoy[2],
         abonos_hoy=abonos_hoy, contado_hoy=contado_hoy, vendido_mes=ventas_mes, agotados=agotados,
-        por_pedir_clientes=len(toca), por_pedir_total=sum(p["tipica"] for p in toca))
+        por_pedir_clientes=len(toca), por_pedir_total=sum(p["tipica"] for p in toca),
+        cobros_toca=len(cobrar_hoy), cobros_sin_frecuencia=len(sin_frecuencia))
 
 
 @app.get("/mas")
@@ -376,6 +379,104 @@ def clientes_por_pedir():
         al_dia=sum(p["estado"] == "normal" for p in lista),
         pocas=sum(p["estado"] == "pocas" for p in lista),
         si_todos=sum(p["tipica"] for p in toca))
+
+
+@app.get("/domicilio")
+@requiere_ingreso
+def domicilio():
+    """El WhatsApp de la semana: a cada cliente, el enlace al catálogo para
+    que diga qué le llevamos el día del domicilio."""
+    hoy = date.today()
+    dias = domicilio_semana.dias_para_elegir(hoy)
+    dia = _dia_domicilio(request.args.get("dia"), hoy) or perfil_clientes.proxima_ruta(hoy)
+    conn = _db_domicilio()
+    escribir, deben, sin_telefono = domicilio_semana.clientes(conn, hoy)
+    ya = domicilio_semana.enviados(conn, dia)
+    nombres = ["Hoy", "Mañana"] + [domicilio_semana.DIAS[d.weekday()].capitalize()[:3] + f" {d.day}"
+                                   for d in dias[2:]]
+    guardado = domicilio_semana.mensaje_guardado(conn, dia)
+    return render_template(
+        "domicilio.html", dia=dia.isoformat(), dias=list(zip([d.isoformat() for d in dias], nombres)),
+        dia_texto=_dia_largo(dia), escribir=escribir, deben=deben, sin_telefono=sin_telefono,
+        enviados=ya, n_enviados=sum(c["id"] in ya for c in escribir),
+        mensaje=guardado or domicilio_semana.mensaje(dia, hoy, domicilio_semana.url_catalogo()),
+        personalizado=guardado is not None, aviso=session.pop("aviso_domicilio", None),
+        error=session.pop("error_domicilio", None), largo_maximo=domicilio_semana.LARGO_MAXIMO,
+        tope_deuda=domicilio_semana.TOPE_DEUDA, tope_dias=domicilio_semana.TOPE_DIAS)
+
+
+_tablas_domicilio = False
+_tablas_cobros = False
+
+
+def _db_cobros():
+    """La conexión, con la columna y las tablas de los cobros creadas (solo la
+    primera vez)."""
+    global _tablas_cobros
+    conn = db()
+    if not _tablas_cobros:
+        cobros.preparar(conn)
+        conn._conn.commit()
+        _tablas_cobros = True
+    return conn
+
+
+def _db_domicilio():
+    """La conexión, con las tablas del domicilio creadas (solo la primera vez)."""
+    global _tablas_domicilio
+    conn = db()
+    if not _tablas_domicilio:
+        domicilio_semana.preparar(conn)
+        conn._conn.commit()
+        _tablas_domicilio = True
+    return conn
+
+
+def _dia_domicilio(texto, hoy):
+    """El día pedido si es uno de los que se pueden elegir; si no, None."""
+    try:
+        dia = date.fromisoformat(texto or "")
+    except ValueError:
+        return None
+    return dia if dia in domicilio_semana.dias_para_elegir(hoy) else None
+
+
+@app.post("/domicilio/mensaje")
+@requiere_ingreso
+def domicilio_mensaje():
+    _revisar_csrf()
+    hoy = date.today()
+    dia = _dia_domicilio(request.form.get("dia"), hoy) or abort(400)
+    conn = _db_domicilio()
+    if request.form.get("restaurar"):
+        conn.execute("DELETE FROM domicilio_mensajes WHERE dia = ?", (dia.isoformat(),))
+        conn.commit()
+        session["aviso_domicilio"] = "Volvió el mensaje de siempre."
+    else:
+        try:
+            domicilio_semana.guardar_mensaje(conn, dia, request.form.get("mensaje"))
+            conn.commit()
+            session["aviso_domicilio"] = "✓ Mensaje guardado: es el que les llega a todos."
+        except ValueError as e:
+            conn.rollback()
+            session["error_domicilio"] = str(e)
+    return redirect(url_for("domicilio", dia=dia.isoformat()))
+
+
+@app.post("/domicilio/enviado")
+@requiere_ingreso
+def domicilio_enviado():
+    """Lo llama la página al tocar Enviar, sin salir de ella."""
+    _revisar_csrf()
+    dia = _dia_domicilio(request.form.get("dia"), date.today()) or abort(400)
+    try:
+        client_id = int(request.form.get("client_id", ""))
+        conn = _db_domicilio()
+        domicilio_semana.marcar_enviado(conn, dia, client_id)
+        conn.commit()
+    except ValueError:
+        abort(400)
+    return "", 204
 
 
 @app.get("/cliente/<int:client_id>/estado-de-cuenta.pdf")
@@ -485,6 +586,13 @@ def abono_confirmar(client_id):
 
 
 # ── Clientes: crear, editar, eliminar, deuda manual ──────────────────────────
+def _guardar_frecuencia(conn, client_id):
+    """Semanal, quincenal o ninguna: cada cuánto se le cobra por WhatsApp."""
+    if "cobro" in request.form:
+        _db_cobros()
+        cobros.poner_frecuencia(conn, client_id, request.form.get("cobro"))
+
+
 def _form_cliente():
     f = request.form
     return (f.get("nombre"), f.get("telefono"), f.get("direccion"),
@@ -501,6 +609,7 @@ def cliente_nuevo():
     conn = db()
     try:
         client_id = crear_cliente(conn, *_form_cliente())
+        _guardar_frecuencia(conn, client_id)
         conn.commit()
     except ValueError as e:
         conn.rollback()
@@ -521,11 +630,12 @@ def cliente_editar(client_id):
     if request.method == "GET":
         datos = {"id": c["id"], "nombre": c["name"], "telefono": c["phone"] or "",
                  "direccion": c["address"] or "", "limite": int(c["credit_limit"] or 0),
-                 "notas": c["notes"] or ""}
+                 "notas": c["notes"] or "", "cobro": cobros.frecuencia(_db_cobros(), client_id) or ""}
         return render_template("cliente_form.html", c=datos, error=None, volver=None)
     _revisar_csrf()
     try:
         editar_cliente(conn, client_id, *_form_cliente())
+        _guardar_frecuencia(conn, client_id)
         conn.commit()
     except ValueError as e:
         conn.rollback()
@@ -864,8 +974,9 @@ def _no_existe(_e):
     return render_template("aviso.html", titulo="No existe", mensaje="Esa página no existe."), 404
 
 
-# Inventario, compras, gastos, pérdidas y caja; ventas por audio; historial
+# Inventario, compras, gastos, pérdidas y caja; cobros; ventas por audio; historial
 import web.operaciones  # noqa: E402,F401
+import web.cobros  # noqa: E402,F401
 import web.audios  # noqa: E402,F401
 import web.historial  # noqa: E402,F401
 

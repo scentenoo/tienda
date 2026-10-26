@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}Número de cuenta · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('cobros_pagina') }}">‹ Cobros</a>
+<h1>Número de cuenta</h1>
+<p class="sub">Sale al final de cada cobro, debajo del mensaje. Revíselo bien: es a donde los clientes van a pagar.</p>
+
+<form method="post" class="tarjeta" style="margin-top:12px">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <label class="campo">Número de cuenta
+    <textarea name="cuenta" rows="3" maxlength="300" placeholder="Ej.: Nequi 300 123 4567 a nombre de …">{{ ajustes['cuenta'] }}</textarea>
+  </label>
+  <p class="sub" style="margin:4px 0 0">Se ve así: «Puedes pagarnos a: {{ ajustes['cuenta'] or '…' }}». Si lo deja vacío, esa línea no sale.</p>
+  <label class="campo">Día del cobro semanal
+    <select name="dia_semanal">
+      {% for d in dias %}<option value="{{ loop.index0 }}" {{ 'selected' if loop.index0 == ajustes['dia_semanal'] }}>{{ d|capitalize }}</option>{% endfor %}
+    </select>
+  </label>
+  <p class="sub" style="margin:4px 0 0">Los quincenales siempre son el 15 y el último día del mes.</p>
+  <button class="boton" style="width:100%; margin-top:14px"
+          onclick="return confirm('¿Guardar? Desde ya, los cobros salen con este número de cuenta.')">Guardar</button>
+</form>
+{% endblock %}
