@@ -88,18 +88,11 @@ class Reparto(unittest.TestCase):
 
 
 class Mensaje(unittest.TestCase):
-    def test_dia(self):
-        self.assertEqual(domicilio.cuando(HOY, HOY), "hoy")
-        self.assertEqual(domicilio.cuando(HOY + timedelta(days=1), HOY), "mañana")
-        self.assertEqual(domicilio.cuando(HOY + timedelta(days=3), HOY), "este domingo")
-
     def test_con_y_sin_catalogo(self):
-        domingo = HOY + timedelta(days=3)
-        con = domicilio.mensaje(domingo, HOY, "https://x.github.io/tienda/")
-        self.assertTrue(con.startswith("¡Hola! Este domingo en la tarde-noche hacemos domicilios."))
-        self.assertTrue(domicilio.mensaje(HOY, HOY).startswith("¡Hola! Hoy en la tarde-noche"))
+        con = domicilio.mensaje("https://x.github.io/tienda/")
+        self.assertTrue(con.startswith("¡Hola! Hoy en la tarde-noche hacemos domicilios."))
         self.assertIn("https://x.github.io/tienda/", con)
-        self.assertNotIn("http", domicilio.mensaje(domingo, HOY, ""))
+        self.assertNotIn("http", domicilio.mensaje(""))
 
     def test_url_del_catalogo(self):
         with mock.patch.dict(os.environ, {"CATALOGO_REPO": "Scentenoo/tienda"}, clear=True):
@@ -117,13 +110,15 @@ class Guardado(unittest.TestCase):
         domicilio.preparar(self.conn)      # la segunda vez no falla
         cliente(self.conn, 1, "Ana")
 
-    def test_mensaje_por_dia(self):
-        domingo, lunes = HOY + timedelta(days=3), HOY + timedelta(days=4)
-        self.assertIsNone(domicilio.mensaje_guardado(self.conn, domingo))
-        domicilio.guardar_mensaje(self.conn, domingo, "  Hola  ")
-        domicilio.guardar_mensaje(self.conn, domingo, "Hola de nuevo")
-        self.assertEqual(domicilio.mensaje_guardado(self.conn, domingo), "Hola de nuevo")
-        self.assertIsNone(domicilio.mensaje_guardado(self.conn, lunes))
+    def test_el_mensaje_queda_para_las_semanas_siguientes(self):
+        self.assertIsNone(domicilio.mensaje_guardado(self.conn))
+        domicilio.guardar_mensaje(self.conn, HOY, "  Hola  ")
+        domicilio.guardar_mensaje(self.conn, HOY, "Hola de nuevo")
+        self.assertEqual(domicilio.mensaje_guardado(self.conn), "Hola de nuevo")
+        domicilio.guardar_mensaje(self.conn, HOY + timedelta(days=7), "Otra semana")
+        self.assertEqual(domicilio.mensaje_guardado(self.conn), "Otra semana")
+        domicilio.restaurar_mensaje(self.conn)
+        self.assertIsNone(domicilio.mensaje_guardado(self.conn))
 
     def test_mensaje_vacio_o_largo(self):
         with self.assertRaisesRegex(ValueError, "vacío"):
@@ -154,41 +149,44 @@ class Rutas(unittest.TestCase):
             parche.start()
             self.addCleanup(parche.stop)
         self.hoy = date.today()
-        self.dia = self.hoy.isoformat()
         self.cliente = w.app.test_client()
         with self.cliente.session_transaction() as sesion:
             sesion["ingreso"] = True
             sesion["csrf"] = "c"
 
     def test_marcar_enviado_se_ve_al_volver(self):
-        r = self.cliente.post("/domicilio/enviado", data={"csrf": "c", "dia": self.dia, "client_id": "2"})
+        r = self.cliente.post("/domicilio/enviado", data={"csrf": "c", "client_id": "2"})
         self.assertEqual(r.status_code, 204)
-        html = self.cliente.get(f"/domicilio?dia={self.dia}").get_data(as_text=True)
+        html = self.cliente.get("/domicilio").get_data(as_text=True)
         self.assertIn("1 de 2 enviados", html)
         self.assertIn('data-id="2" class="enviado"', html)
 
     def test_guardar_mensaje_y_volver_al_de_siempre(self):
-        self.cliente.post("/domicilio/mensaje", data={"csrf": "c", "dia": self.dia, "mensaje": "Hoy hay arepas"})
-        html = self.cliente.get(f"/domicilio?dia={self.dia}").get_data(as_text=True)
+        self.cliente.post("/domicilio/mensaje", data={"csrf": "c", "mensaje": "Hoy hay arepas"})
+        html = self.cliente.get("/domicilio").get_data(as_text=True)
         self.assertIn("Mensaje guardado", html)
         self.assertIn(">Hoy hay arepas</textarea>", html)
         self.assertIn("text=Hoy%20hay%20arepas", html)
-        self.cliente.post("/domicilio/mensaje", data={"csrf": "c", "dia": self.dia, "restaurar": "1"})
-        html = self.cliente.get(f"/domicilio?dia={self.dia}").get_data(as_text=True)
+        self.cliente.post("/domicilio/mensaje", data={"csrf": "c", "restaurar": "1"})
+        html = self.cliente.get("/domicilio").get_data(as_text=True)
         self.assertIn("Hoy en la tarde-noche", html)
 
     def test_mensaje_vacio_avisa(self):
-        self.cliente.post("/domicilio/mensaje", data={"csrf": "c", "dia": self.dia, "mensaje": " "})
-        html = self.cliente.get(f"/domicilio?dia={self.dia}").get_data(as_text=True)
+        self.cliente.post("/domicilio/mensaje", data={"csrf": "c", "mensaje": " "})
+        html = self.cliente.get("/domicilio").get_data(as_text=True)
         self.assertIn("no puede quedar vacío", html)
 
-    def test_sin_csrf_o_dia_raro_no(self):
+    def test_sin_dias_para_elegir(self):
+        html = self.cliente.get("/domicilio").get_data(as_text=True)
+        self.assertNotIn("?dia=", html)
+        self.assertNotIn('name="dia"', html)
+        self.assertIn("Hoy en la tarde-noche", html)
+
+    def test_sin_csrf_o_cliente_raro_no(self):
         domicilio.preparar(self.conn)
-        r = self.cliente.post("/domicilio/enviado", data={"dia": self.dia, "client_id": "1"})
+        r = self.cliente.post("/domicilio/enviado", data={"client_id": "1"})
         self.assertEqual(r.status_code, 400)
-        r = self.cliente.post("/domicilio/enviado", data={"csrf": "c", "dia": "2020-01-01", "client_id": "1"})
-        self.assertEqual(r.status_code, 400)
-        r = self.cliente.post("/domicilio/enviado", data={"csrf": "c", "dia": self.dia, "client_id": "x"})
+        r = self.cliente.post("/domicilio/enviado", data={"csrf": "c", "client_id": "x"})
         self.assertEqual(r.status_code, 400)
         self.assertEqual(domicilio.enviados(self.conn, self.hoy), set())
 

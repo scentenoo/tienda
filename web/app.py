@@ -409,22 +409,17 @@ def clientes_por_pedir():
 @app.get("/domicilio")
 @requiere_ingreso
 def domicilio():
-    """El WhatsApp de la semana: a cada cliente, el enlace al catálogo para
-    que diga qué le llevamos el día del domicilio."""
+    """El WhatsApp del día del domicilio: a cada cliente, el enlace al
+    catálogo para que diga qué le llevamos hoy. Lo enviado es lo de hoy."""
     hoy = date.today()
-    dias = domicilio_semana.dias_para_elegir(hoy)
-    dia = _dia_domicilio(request.args.get("dia"), hoy) or perfil_clientes.proxima_ruta(hoy)
     conn = _db_domicilio()
     escribir, deben, sin_telefono = domicilio_semana.clientes(conn, hoy)
-    ya = domicilio_semana.enviados(conn, dia)
-    nombres = ["Hoy", "Mañana"] + [domicilio_semana.DIAS[d.weekday()].capitalize()[:3] + f" {d.day}"
-                                   for d in dias[2:]]
-    guardado = domicilio_semana.mensaje_guardado(conn, dia)
+    ya = domicilio_semana.enviados(conn, hoy)
+    guardado = domicilio_semana.mensaje_guardado(conn)
     return render_template(
-        "domicilio.html", dia=dia.isoformat(), dias=list(zip([d.isoformat() for d in dias], nombres)),
-        dia_texto=_dia_largo(dia), escribir=escribir, deben=deben, sin_telefono=sin_telefono,
+        "domicilio.html", escribir=escribir, deben=deben, sin_telefono=sin_telefono,
         enviados=ya, n_enviados=sum(c["id"] in ya for c in escribir),
-        mensaje=guardado or domicilio_semana.mensaje(dia, hoy, domicilio_semana.url_catalogo()),
+        mensaje=guardado or domicilio_semana.mensaje(domicilio_semana.url_catalogo()),
         personalizado=guardado is not None, aviso=session.pop("aviso_domicilio", None),
         error=session.pop("error_domicilio", None), largo_maximo=domicilio_semana.LARGO_MAXIMO,
         tope_deuda=domicilio_semana.TOPE_DEUDA, tope_dias=domicilio_semana.TOPE_DIAS)
@@ -457,35 +452,24 @@ def _db_domicilio():
     return conn
 
 
-def _dia_domicilio(texto, hoy):
-    """El día pedido si es uno de los que se pueden elegir; si no, None."""
-    try:
-        dia = date.fromisoformat(texto or "")
-    except ValueError:
-        return None
-    return dia if dia in domicilio_semana.dias_para_elegir(hoy) else None
-
-
 @app.post("/domicilio/mensaje")
 @requiere_ingreso
 def domicilio_mensaje():
     _revisar_csrf()
-    hoy = date.today()
-    dia = _dia_domicilio(request.form.get("dia"), hoy) or abort(400)
     conn = _db_domicilio()
     if request.form.get("restaurar"):
-        conn.execute("DELETE FROM domicilio_mensajes WHERE dia = ?", (dia.isoformat(),))
+        domicilio_semana.restaurar_mensaje(conn)
         conn.commit()
         session["aviso_domicilio"] = "Volvió el mensaje de siempre."
     else:
         try:
-            domicilio_semana.guardar_mensaje(conn, dia, request.form.get("mensaje"))
+            domicilio_semana.guardar_mensaje(conn, date.today(), request.form.get("mensaje"))
             conn.commit()
             session["aviso_domicilio"] = "✓ Mensaje guardado: es el que les llega a todos."
         except ValueError as e:
             conn.rollback()
             session["error_domicilio"] = str(e)
-    return redirect(url_for("domicilio", dia=dia.isoformat()))
+    return redirect(url_for("domicilio"))
 
 
 @app.post("/domicilio/enviado")
@@ -493,11 +477,10 @@ def domicilio_mensaje():
 def domicilio_enviado():
     """Lo llama la página al tocar Enviar, sin salir de ella."""
     _revisar_csrf()
-    dia = _dia_domicilio(request.form.get("dia"), date.today()) or abort(400)
     try:
         client_id = int(request.form.get("client_id", ""))
         conn = _db_domicilio()
-        domicilio_semana.marcar_enviado(conn, dia, client_id)
+        domicilio_semana.marcar_enviado(conn, date.today(), client_id)
         conn.commit()
     except ValueError:
         abort(400)

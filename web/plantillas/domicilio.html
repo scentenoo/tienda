@@ -6,20 +6,12 @@
 <p class="sub">A cada cliente le llega el catálogo para que diga qué le llevamos.
   Toque <b>Enviar</b>: se abre su chat con el mensaje listo y solo falta mandarlo.</p>
 
-<div class="filtros">
-  <span class="titulo">Día</span>
-  {% for valor, nombre in dias %}
-  <a class="{{ 'on' if valor == dia }}" href="{{ url_for('domicilio', dia=valor) }}">{{ nombre }}</a>
-  {% endfor %}
-</div>
-
 {% if aviso %}<div class="exito">{{ aviso }}</div>{% endif %}
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
 <form method="post" action="{{ url_for('domicilio_mensaje') }}" id="form-mensaje">
   <input type="hidden" name="csrf" value="{{ csrf() }}">
-  <input type="hidden" name="dia" value="{{ dia }}">
-  <label class="campo" for="mensaje">Mensaje para el {{ dia_texto }}</label>
+  <label class="campo" for="mensaje">Mensaje</label>
   <textarea id="mensaje" name="mensaje" rows="5" maxlength="{{ largo_maximo }}" required>{{ mensaje }}</textarea>
   <p class="sub" id="sin-guardar" hidden style="color:var(--aviso); margin:6px 0 0">
     Cambios sin guardar. Guárdelos para poder enviar.</p>
@@ -78,14 +70,9 @@
 {% endif %}
 
 <p class="sub" style="margin-top:18px">Salen los clientes que compraron en los últimos 4 meses,
-  del que más compra al que menos. Lo enviado se ve igual desde cualquier celular.</p>
+  del que más compra al que menos. Lo enviado hoy se ve igual desde cualquier celular; mañana la lista empieza de nuevo.</p>
 
 <style>
-.filtros { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-.filtros a { padding: 6px 12px; border-radius: 999px; background: var(--chip); color: var(--texto);
-  text-decoration: none; font-size: .85rem; }
-.filtros a.on { background: var(--acento); color: var(--sobre-acento); font-weight: 600; }
-.filtros .titulo { align-self: center; color: var(--suave); font-size: .8rem; margin-right: 2px; }
 .botones:has(> :only-child) { grid-template-columns: 1fr; }
 #escribir li.enviado { opacity: .55; }
 #escribir li.enviado .enviar { background: var(--bien-fondo); color: var(--bien); }
@@ -125,7 +112,6 @@
     a.addEventListener("click", function () {
       var li = a.closest("li"), datos = new FormData();
       datos.append("csrf", csrf);
-      datos.append("dia", "{{ dia }}");
       datos.append("client_id", li.dataset.id);
       li.classList.add("enviado");
       a.textContent = "Enviado ✓";

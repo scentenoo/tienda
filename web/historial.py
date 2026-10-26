@@ -231,7 +231,7 @@ def _visita(conn):
         "cobros_pagina": lambda: "Abrió Cobros",
         "cobros_cuenta": lambda: "Abrió el número de cuenta de los cobros",
         "estado_publico": lambda: "Abrió un enlace de estado de cuenta de los cobros",
-        "domicilio": lambda:"Abrió Domicilio de la semana" + (dia() if a.get("dia") else ""),
+        "domicilio": lambda:"Abrió Domicilio de la semana",
         "audios": lambda: "Abrió Ventas por audio",
         "audio_archivo": lambda: f"Escuchó el audio #{_id('audio_id')}",
         "audios_diagnostico": lambda: "Abrió el diagnóstico de audios",
@@ -414,7 +414,7 @@ def _accion(conn, plantillas, resp):
 
     # ── Domicilio de la semana
     if ep == "domicilio_mensaje":
-        del_dia = f" del domicilio del {fecha(f.get('dia', ''), False)}" if f.get("dia") else ""
+        del_dia = " del domicilio"
         if f.get("restaurar"):
             return "cambio", "Volvió al mensaje de siempre" + del_dia, "", resultado
         return ("cambio" if conn.guardo else "fallido", "Cambió el mensaje" + del_dia,

@@ -1,8 +1,8 @@
 """El domicilio de la semana: a quién escribirle para que haga su pedido.
 
-Un día a la semana, el que se elija, se hacen domicilios en la tarde. Antes se
-le manda a cada cliente un WhatsApp con el enlace al catálogo para que diga qué
-necesita. Aquí solo se arma la lista y el mensaje: lo envía quien usa la página,
+El día del domicilio (casi siempre domingo o lunes) se le manda a cada
+cliente un WhatsApp con el enlace al catálogo para que diga qué necesita: el
+mensaje dice que los pedidos se entregan hoy. Aquí solo se arma la lista y el mensaje: lo envía quien usa la página,
 uno por uno y desde su propio WhatsApp.
 
 Se le escribe a quien compró en los últimos 4 meses (los mismos que mira
@@ -10,19 +10,18 @@ perfil_clientes) y tiene teléfono, menos a quien debe mucho o desde hace mucho.
 "Desde hace mucho" se cuenta desde la venta sin pagar más vieja, igual que en
 Pendientes.
 
-El mensaje que se edita y a quién ya se le envió quedan en la base, por día de
-domicilio, para que se vea igual desde cualquier celular. Un día sin mensaje
-guardado usa el de siempre. Como el resto de servicios, nada aquí hace commit.
+El mensaje que se edita queda guardado hasta que lo cambien; a quién ya se le
+envió se anota por día (el día en que se envía). Todo queda en la base, para
+que se vea igual desde cualquier celular. Como el resto de servicios, nada aquí hace commit.
 """
 import os
-from datetime import date, timedelta
+from datetime import date
 
 from utils import perfil_clientes
 
 TOPE_DEUDA = 150_000        # debe más de esto: no se le ofrece domicilio
 TOPE_DIAS = 21              # o tiene una venta sin pagar de hace más de esto
 LARGO_MAXIMO = 1000         # del mensaje: WhatsApp corta los enlaces muy largos
-DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 
 
 def url_catalogo():
@@ -38,22 +37,10 @@ def url_catalogo():
     return ""
 
 
-def dias_para_elegir(hoy):
-    """De hoy a dentro de 6 días."""
-    return [hoy + timedelta(days=i) for i in range(7)]
-
-
-def cuando(dia, hoy):
-    if dia == hoy:
-        return "hoy"
-    if dia == hoy + timedelta(days=1):
-        return "mañana"
-    return "este " + DIAS[dia.weekday()]
-
-
-def mensaje(dia, hoy, url=""):
-    # Sin el nombre: muchos están guardados con apodos ("cuñada de Emily")
-    texto = f"¡Hola! {cuando(dia, hoy).capitalize()} en la tarde-noche hacemos domicilios."
+def mensaje(url=""):
+    """El de siempre. Sin el nombre: muchos están guardados con apodos
+    ("cuñada de Emily")."""
+    texto = "¡Hola! Hoy en la tarde-noche hacemos domicilios."
     if url:
         texto += f" Mira lo que tenemos y los precios aquí: {url}"
     return texto + " Escríbenos por aquí lo que necesitas y te lo llevamos."
@@ -63,7 +50,7 @@ def preparar(conn):
     """Crea las tablas la primera vez."""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS domicilio_mensajes (
-            dia TEXT PRIMARY KEY,        -- el día del domicilio, AAAA-MM-DD
+            dia TEXT PRIMARY KEY,        -- cuándo se guardó, AAAA-MM-DD; vale el último
             mensaje TEXT NOT NULL,
             guardado TEXT NOT NULL)""")
     conn.execute("""
@@ -74,10 +61,15 @@ def preparar(conn):
             PRIMARY KEY (dia, client_id))""")
 
 
-def mensaje_guardado(conn, dia):
-    fila = conn.execute("SELECT mensaje FROM domicilio_mensajes WHERE dia = ?",
-                        (dia.isoformat(),)).fetchone()
+def mensaje_guardado(conn):
+    """El último mensaje guardado, o None si se usa el de siempre."""
+    fila = conn.execute("SELECT mensaje FROM domicilio_mensajes "
+                        "ORDER BY guardado DESC, dia DESC LIMIT 1").fetchone()
     return fila[0] if fila else None
+
+
+def restaurar_mensaje(conn):
+    conn.execute("DELETE FROM domicilio_mensajes")
 
 
 def guardar_mensaje(conn, dia, texto):
