@@ -57,6 +57,20 @@ def _productos(conn, sale_id):
     return [tuple(f) for f in filas]
 
 
+def _comentarios(conn, ids):
+    """{sale_id: comentario} de esas ventas (lo que se escribe en la razón del
+    ajuste, haya o no ajuste); también de las eliminadas."""
+    if not ids:
+        return {}
+    marcas = ", ".join("?" * len(ids))
+    filas = conn.execute(f"""
+        SELECT id, adjustment_reason FROM sales_eliminadas WHERE id IN ({marcas})
+        UNION ALL
+        SELECT id, adjustment_reason FROM sales WHERE id IN ({marcas})""",
+                         tuple(ids) * 2).fetchall()
+    return {f[0]: (f[1] or "").strip() for f in filas}
+
+
 def _cuenta(conn):
     """La cuenta para pagar guardada en Cobros; vacía si no hay."""
     try:
@@ -122,6 +136,8 @@ def calcular(conn, client_id) -> dict:
 
     # Abonos a las compras más viejas primero, para decir cuánto queda de cada una
     abonado = sum(m["monto"] for m in movimientos if m["tipo"] == "credit")
+    comentarios = _comentarios(conn, [m["sale_id"] for m in movimientos
+                                      if m["tipo"] == "debit" and m["sale_id"]])
     for m in movimientos:
         if m["tipo"] != "debit":
             continue
@@ -129,6 +145,7 @@ def calcular(conn, client_id) -> dict:
         abonado -= aplicado
         m["abonado"], m["queda"] = aplicado, m["monto"] - aplicado
         m["productos"] = _productos(conn, m["sale_id"]) if m["sale_id"] else []
+        m["comentario"] = comentarios.get(m["sale_id"], "")
 
     return {"nombre": nombre, "deuda": max(saldo, 0.0), "en_ceros": en_ceros,
             "movimientos": movimientos, "cuenta": _cuenta(conn)}
@@ -402,7 +419,9 @@ def exportar_pdf(datos, destino=None):
         for m in del_mes:
             numero = (f" <font size=9.5 color='#6c5e4f'>· Venta #{m['sale_id']}</font>"
                       if m["sale_id"] else "")
-            recibo = [[Paragraph(f"<b>{_nombre_compra(m)}</b>{numero}", normal),
+            nota = (f"<br/><font size=10.5 color='#6c5e4f'><i>Nota: {escape(m['comentario'])}</i></font>"
+                    if m.get("comentario") else "")
+            recibo = [[Paragraph(f"<b>{_nombre_compra(m)}</b>{numero}{nota}", normal),
                        Paragraph(f"<b>{_moneda(m['monto'])}</b>", derecha)]]
             suma = 0.0
             for cant, producto, precio, subtotal in m["productos"]:

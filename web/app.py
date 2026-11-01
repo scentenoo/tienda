@@ -379,7 +379,8 @@ def cliente(client_id):
     todo = request.args.get("todo") == "1"
     movimientos = conn.execute("""
         SELECT t.created_at, t.transaction_type, t.amount, t.description, t.sale_id,
-               EXISTS (SELECT 1 FROM sales s WHERE s.id = t.sale_id) AS venta_existe
+               EXISTS (SELECT 1 FROM sales s WHERE s.id = t.sale_id) AS venta_existe,
+               (SELECT TRIM(s.adjustment_reason) FROM sales s WHERE s.id = t.sale_id) AS comentario
           FROM client_transactions t
          WHERE t.client_id = ? ORDER BY t.created_at DESC, t.id DESC""" + ("" if todo else " LIMIT 26"),
                                (client_id,)).fetchall()
@@ -951,7 +952,8 @@ def ventas():
         dia = date.today()
     conn = db()
     filas = conn.execute("""
-        SELECT s.id, s.created_at, s.total, s.status, s.payment_method, c.name AS cliente
+        SELECT s.id, s.created_at, s.total, s.status, s.payment_method, s.adjustment_reason,
+               c.name AS cliente
           FROM sales s LEFT JOIN clients c ON c.id = s.client_id
          WHERE date(s.created_at) = ? ORDER BY s.created_at DESC, s.id DESC""",
                          (dia.isoformat(),)).fetchall()

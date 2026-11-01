@@ -16,9 +16,10 @@
   <div><span>Estado</span><b>{% if v['status'] == 'paid' %}<span class="etiqueta pagado">Pagada</span>{% else %}<span class="etiqueta fiado">Pendiente</span>{% endif %}</b></div>
   {% endif %}
   {% if v['adjustment'] %}
-  <div><span>{{ 'Cargo' if v['adjustment'] > 0 else 'Descuento' }}{% if v['adjustment_reason'] %} ({{ v['adjustment_reason'] }}){% endif %}</span>
+  <div><span>{{ 'Cargo' if v['adjustment'] > 0 else 'Descuento' }}</span>
        <b>{{ '+' if v['adjustment'] > 0 else '−' }}{{ v['adjustment']|abs|pesos }}</b></div>
   {% endif %}
+  {% if v['adjustment_reason'] %}<div><span>Comentario</span><b style="text-align:right">{{ v['adjustment_reason'] }}</b></div>{% endif %}
   <div class="total"><span>Total</span><b>{{ v['total']|pesos }}</b></div>
 </div>
 

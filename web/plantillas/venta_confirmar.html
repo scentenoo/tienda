@@ -21,9 +21,10 @@
 <div class="tarjeta resumen-abono" style="margin-top:12px">
   {% if fiada and ajuste %}
   <div><span>Productos</span><b>{{ subtotal|pesos }}</b></div>
-  <div><span>{{ 'Cargo' if ajuste > 0 else 'Descuento' }}{% if motivo %} ({{ motivo }}){% endif %}</span>
+  <div><span>{{ 'Cargo' if ajuste > 0 else 'Descuento' }}</span>
        <b>{{ '+' if ajuste > 0 else '−' }}{{ ajuste|abs|pesos }}</b></div>
   {% endif %}
+  {% if motivo %}<div><span>Comentario</span><b style="text-align:right">{{ motivo }}</b></div>{% endif %}
   <div class="total"><span>Total</span><b>{{ total|pesos }}</b></div>
   {% if fiada %}
   <div><span>Deuda de {{ cliente['name'] }} después</span><b class="negativo">{{ (cliente['total_debt'] + total)|pesos }}</b></div>

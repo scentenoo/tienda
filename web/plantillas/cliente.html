@@ -65,6 +65,7 @@
     <div class="izq">
       <b>{% if es_cargo and not m['sale_id'] %}Deuda agregada{% elif es_cargo %}Compra #{{ m['sale_id'] }}{% endif %}{% if not es_cargo %}{% if m['transaction_type'] == 'debit_reversal' %}Venta anulada{% elif m['transaction_type'] == 'credit_balance' %}Saldo a favor{% else %}Abono{% endif %}{% endif %}{% if enlace %} ›{% endif %}</b>
       <span>{{ m['created_at']|fecha }}{% if m['description'] and (not es_cargo or not m['sale_id']) %} · {{ m['description'] }}{% endif %}</span>
+      {% if es_cargo and m['comentario'] %}<span style="display:block">📝 {{ m['comentario'] }}</span>{% endif %}
     </div>
     <div class="der {{ 'negativo' if es_cargo else 'positivo' }}">{{ '+' if es_cargo else '−' }}{{ m['amount']|pesos }}</div>
   </{{ 'a' if enlace else 'div' }}></li>

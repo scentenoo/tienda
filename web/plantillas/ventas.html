@@ -22,6 +22,7 @@
       <div class="izq">
         <b>{{ v['cliente'] or 'Contado' }}</b>
         <span>#{{ v['id'] }} · {{ v['created_at']|fecha }}</span>
+        {% if v['adjustment_reason'] %}<span style="display:block">📝 {{ v['adjustment_reason'] }}</span>{% endif %}
       </div>
       <div class="der">
         {{ v['total']|pesos }}<br>

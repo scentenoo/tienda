@@ -349,7 +349,7 @@ class SalesWindow:
         ).pack(side=tk.LEFT, padx=(5, 0))
         
         # Razón del ajuste
-        ttk.Label(adjustment_frame, text="Razón:", font=FONT_NORMAL).pack(anchor=tk.W, pady=(0, 2))
+        ttk.Label(adjustment_frame, text="Razón o comentario:", font=FONT_NORMAL).pack(anchor=tk.W, pady=(0, 2))
         self.adjustment_reason_var = tk.StringVar()
         self.adjustment_reason_entry = ttk.Entry(
             adjustment_frame,

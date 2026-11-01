@@ -124,8 +124,10 @@ class SaleDetailWindow:
             ttk.Label(info_frame, text=adjustment_text,
                       bootstyle='warning' if sale.adjustment > 0 else 'success').pack(anchor=tk.W)
 
-            if hasattr(sale, 'adjustment_reason') and sale.adjustment_reason:
-                ttk.Label(info_frame, text=f"Razón: {sale.adjustment_reason}").pack(anchor=tk.W)
+        # A veces se usa para dejar un comentario, aunque no haya ajuste
+        if hasattr(sale, 'adjustment_reason') and sale.adjustment_reason:
+            ttk.Label(info_frame, text=f"Comentario: {sale.adjustment_reason}",
+                      wraplength=540).pack(anchor=tk.W)
 
         # Productos
         products_frame = ttk.LabelFrame(main_frame, text="Productos Vendidos", padding=10)
