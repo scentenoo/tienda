@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block titulo %}Conteo del martes · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('mas') }}">‹ Más</a>
+<h1>Conteo del martes</h1>
+<p class="sub">Cuenten lo que hay de verdad, producto por producto. El queso se pesa.
+  La app no muestra lo que dice hasta guardar, para que no se copie. Lo que dejen vacío no se toca.</p>
+{% if hecho and ultimo %}
+<div class="exito">✓ Ya se contó esta semana ({{ ultimo['hecho']|fecha }}).
+  <a href="{{ url_for('conteo_resultado', conteo_id=ultimo['id']) }}">Ver el resultado ›</a></div>
+{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+{% set total = grupos.values()|map('length')|sum %}
+{% if total %}
+<form method="post" id="conteo">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  {% for clave, productos in grupos.items() if productos %}
+  <h2>{{ nombres[clave] }}</h2>
+  <ul class="lista">
+    {% for p in productos %}
+    <li class="fila contar">
+      <label class="izq" for="c{{ p['id'] }}"><b>{{ p['nombre'] }}</b></label>
+      <span class="entrada">
+        <input type="text" id="c{{ p['id'] }}" name="c_{{ p['id'] }}" value="{{ datos.get('c_' ~ p['id'], '') }}"
+               inputmode="decimal" autocomplete="off" placeholder="?">
+        {% if clave == 'queso' %}<small>kg</small>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+
+  <div class="pie-conteo">
+    <span class="sub" style="margin:0"><b id="contados">0</b> de {{ total }} contados</span>
+    <button class="boton" id="guardar">Guardar conteo</button>
+  </div>
+</form>
+{% else %}
+<p class="vacio">No hay productos para contar. En Inventario, abra cada producto y elija de dónde viene (Cúcuta, Medellín o Queso).</p>
+{% endif %}
+
+<style>
+.contar { padding: 8px 14px; }
+.contar .izq { flex: 1; cursor: pointer; }
+.contar .izq b { white-space: normal; }
+.contar .entrada { display: flex; align-items: center; gap: 6px; flex: none; }
+.contar input { width: 84px; text-align: center; font-weight: 700; padding: 10px 6px; }
+.contar input:not(:placeholder-shown) { border-color: var(--bien); background: var(--bien-fondo); }
+.contar small { color: var(--suave); }
+.pie-conteo { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; margin: 20px -16px -40px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: var(--tarjeta); border-top: 1px solid var(--borde); }
+.pie-conteo .boton { margin: 0; }
+</style>
+<script>
+(function () {
+  var form = document.getElementById("conteo");
+  if (!form) return;
+  var campos = form.querySelectorAll(".contar input");
+  function contar() {
+    var n = 0;
+    campos.forEach(function (c) { if (c.value.trim()) n++; });
+    document.getElementById("contados").textContent = n;
+    return n;
+  }
+  form.addEventListener("input", contar);
+  // Enter pasa al siguiente producto, como en una planilla
+  campos.forEach(function (c, i) {
+    c.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); (campos[i + 1] || c).focus(); }
+    });
+  });
+  form.addEventListener("submit", function (e) {
+    var n = contar(), faltan = campos.length - n;
+    if (!n) { e.preventDefault(); alert("Escriba lo que contó de al menos un producto."); return; }
+    if (!confirm(faltan ? "Faltan " + faltan + " por contar: esos no se tocan. ¿Guardar así?"
+                        : "¿Guardar el conteo? Lo que no cuadre queda anotado.")) { e.preventDefault(); return; }
+    var b = document.getElementById("guardar");
+    setTimeout(function () { b.disabled = true; b.textContent = "Guardando…"; }, 0);
+  });
+  contar();
+})();
+</script>
+{% endblock %}

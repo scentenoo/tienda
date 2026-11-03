@@ -92,6 +92,10 @@ def _foto_producto(conn, i):
         return None
     foto = {"Nombre": p["name"], "Precio": pesos(p["price"]), "Stock": cantidad(p["stock"]),
             "Costo": pesos(p["cost_price"])}
+    grupo = conn.execute("SELECT grupo, caja FROM products WHERE id = ?", (i,)).fetchone()         if "grupo" in {c[1] for c in conn.execute("PRAGMA table_info(products)").fetchall()} else None
+    if grupo:
+        foto["Se le pide a"] = {"cucuta": "Cúcuta", "medellin": "Medellín", "queso": "Queso"}.get(grupo[0], "Nadie")
+        foto["De a"] = cantidad(grupo[1]) if grupo[1] else ""
     opciones = reglas_catalogo.opciones_del_producto(conn, i)
     if opciones:
         foto["Categoría"] = dict(reglas_catalogo.CATEGORIAS)[opciones["categoria"]]
@@ -236,6 +240,10 @@ def _visita(conn):
         "audio_archivo": lambda: f"Escuchó el audio #{_id('audio_id')}",
         "audios_diagnostico": lambda: "Abrió el diagnóstico de audios",
         "historial": lambda: "Intentó abrir el Historial",
+        "pedidos_pagina": lambda: "Abrió Qué pedir",
+        "conteo_pagina": lambda: "Abrió el Conteo del martes",
+        "conteo_resultado": lambda: f"Abrió el resultado del conteo #{_id('conteo_id')}",
+        "avisos_pagina": lambda: "Abrió Avisos en este celular",
     }
     return textos[ep]() if ep in textos else f"Abrió {request.path}"
 
@@ -445,6 +453,41 @@ def _accion(conn, plantillas, resp):
         return ("cambio" if conn.guardo else "fallido", "Cambió el número de cuenta de los cobros",
                 _escrito(("cuenta", "Cuenta"), ("dia_semanal", "Día semanal (0 = lunes)")), resultado)
 
+    # ── Qué pedir, conteo y avisos
+    if ep == "pedido_crear":
+        lineas = []
+        for clave, valor in f.items():
+            if clave.startswith("q_") and clave[2:].isdigit() and _leer_decimal(valor) > 0:
+                lineas.append(f"{cantidad(_leer_decimal(valor))} × {_nombre(conn, 'products', int(clave[2:]))}")
+        return ("nuevo" if conn.guardo else "fallido", f"Anotó un pedido a {_GRUPOS.get(_id('grupo'), _id('grupo'))}",
+                "\n".join(lineas) + (f"\nLlega: {f.get('llega')}" if f.get("llega") else ""),
+                resultado if conn.guardo else (session.get("error_pedidos") or resultado))
+    if ep == "pedido_viaje":
+        return ("cambio" if conn.guardo else "fallido", "Puso el día del viaje a Medellín",
+                f.get("viaje", ""), resultado if conn.guardo else (session.get("error_pedidos") or resultado))
+    if ep == "pedido_cancelar":
+        return "borrado" if conn.guardo else "fallido", f"Quitó el pedido #{_id('pedido_id')}", "", resultado
+    if ep == "conteo_guardar":
+        if conn.guardo:
+            u = conn.execute("SELECT id, faltante, sobrante FROM conteos ORDER BY id DESC LIMIT 1").fetchone()
+            return ("nuevo", f"Guardó el conteo #{u[0]}",
+                    f"Faltante: {pesos(u[1])}\nSobrante: {pesos(u[2])}", "")
+        return "fallido", "Intentó guardar el conteo", "", resultado
+    if ep == "conteo_aparecio":
+        try:
+            producto = _nombre(conn, "products", int(f.get("product_id", "")))
+        except ValueError:
+            producto = "?"
+        return ("cambio" if conn.guardo else "fallido",
+                f"Marcó que aparecieron {cantidad(_leer_decimal(f.get('cantidad')))} × {producto} del conteo #{_id('conteo_id')}",
+                "", resultado if conn.guardo else (session.get("error_conteo") or resultado))
+    if ep in ("avisos_suscribir", "avisos_quitar"):
+        return ("cambio" if conn.guardo else "fallido",
+                "Activó los avisos en su celular" if ep == "avisos_suscribir" else "Desactivó los avisos en su celular",
+                "", resultado)
+    if ep == "avisos_probar":
+        return "cambio", "Pidió un aviso de prueba", "", ""
+
     # ── Audios
     if ep == "audios_subir":
         nombres = [a.filename for a in request.files.getlist("audios") if a.filename]
@@ -460,8 +503,11 @@ def _accion(conn, plantillas, resp):
     return ("cambio" if conn.guardo else "fallido", f"Envió {request.path}", "", resultado)
 
 
+_GRUPOS = {"cucuta": "Cúcuta", "medellin": "Medellín", "queso": "Queso"}
+
+
 # ── Los ganchos ──────────────────────────────────────────────────────────────
-NO_ANOTAR = {None, "static", "manifiesto", "audios_recibir"}
+NO_ANOTAR = {None, "static", "manifiesto", "audios_recibir", "trabajador_avisos"}
 # Una recarga o un audio que el navegador pide por partes no se anotan dos veces
 _ultima_visita = {}
 REPETIDA = 20

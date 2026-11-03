@@ -28,7 +28,7 @@ from flask import (Flask, abort, g, redirect, render_template, request,
 
 from config.nube import conexion_directa
 from utils import (cobros, domicilio as domicilio_semana, estado_cuenta, perfil_clientes,
-                   visitas_catalogo)
+                   reposicion, visitas_catalogo)
 from utils.conciliacion import MESES_ES, deudores, telefonos_clientes
 from utils.informe_movil import html_pendientes
 from servicios.abonos import registrar_abono
@@ -299,13 +299,22 @@ def inicio():
     toca = [p for p in perfil_clientes.perfiles(conn, date.today()) if p["estado"] == "toca"]
     cobrar_hoy, _, sin_frecuencia = cobros.clientes(
         _db_cobros(), date.today(), cobros.ajustes(conn)["dia_semanal"])
+    # El conteo de la semana y, ya contado, el pedido a Cúcuta (sin calcular
+    # cuánto: eso está en Qué pedir)
+    _db_reposicion()
+    conteo_pendiente = not reposicion.conteo_hecho(conn, date.today())
+    pedir_cucuta = not conteo_pendiente and not conn.execute(
+        "SELECT 1 FROM pedidos WHERE grupo = 'cucuta' AND creado >= ?",
+        (reposicion.martes_de_la_semana(date.today()).isoformat(),)).fetchone()
     return render_template(
         "inicio.html", hoy=_dia_largo(date.today()), saludo=_saludo(), mes=MESES_ES[int(mes[5:]) - 1],
         clientes_deben=cobrar[0], por_cobrar=cobrar[1],
         ventas_hoy=ventas_hoy[0], vendido_hoy=ventas_hoy[1], fiado_hoy=ventas_hoy[2],
         abonos_hoy=abonos_hoy, contado_hoy=contado_hoy, vendido_mes=ventas_mes, agotados=agotados,
         por_pedir_clientes=len(toca), por_pedir_total=sum(p["tipica"] for p in toca),
-        cobros_toca=len(cobrar_hoy), cobros_sin_frecuencia=len(sin_frecuencia))
+        cobros_toca=len(cobrar_hoy), cobros_sin_frecuencia=len(sin_frecuencia),
+        conteo_pendiente=conteo_pendiente, pedir_cucuta=pedir_cucuta,
+        avisos_clave=os.environ.get("VAPID_PUBLICA", "").strip())
 
 
 @app.get("/mas")
@@ -433,6 +442,19 @@ def domicilio():
 
 _tablas_domicilio = False
 _tablas_cobros = False
+_tablas_reposicion = False
+
+
+def _db_reposicion():
+    """La conexión, con las columnas y tablas de pedidos, conteo y avisos
+    creadas (solo la primera vez)."""
+    global _tablas_reposicion
+    conn = db()
+    if not _tablas_reposicion:
+        reposicion.preparar(conn)
+        conn._conn.commit()
+        _tablas_reposicion = True
+    return conn
 
 
 def _db_cobros():
@@ -995,6 +1017,7 @@ import web.cobros  # noqa: E402,F401
 import web.visitas  # noqa: E402,F401
 import web.audios  # noqa: E402,F401
 import web.historial  # noqa: E402,F401
+import web.reposicion  # noqa: E402,F401
 
 
 if __name__ == "__main__":

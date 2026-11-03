@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block titulo %}Qué pedir · Charcutería HYE{% endblock %}
+{% block contenido %}
+{% macro fila(i) -%}
+<li class="fila producto{{ ' urgente' if i['urgente'] }}" data-nombre="{{ i['nombre'] }}" data-costo="{{ i['costo'] }}">
+  <div class="izq">
+    <b>{{ i['nombre'] }}</b>
+    <span>Hay {{ i['stock']|round(1)|cantidad }}{% if i['camino'] %} · vienen {{ i['camino']|cantidad }}{% endif %}
+      · se venden {{ i['semanal']|round(1)|cantidad }}/sem · de a {{ i['caja']|cantidad }}</span>
+    {% if i['urgente'] %}<span class="etiqueta debe">{{ 'Agotado' if i['agotado'] else 'Se acaba antes de que llegue' }}</span>{% endif %}
+  </div>
+  <input type="number" name="q_{{ i['id'] }}" value="{{ i['pedir']|cantidad if i['pedir'] else '' }}"
+         min="0" step="any" inputmode="decimal" placeholder="0" aria-label="Cantidad de {{ i['nombre'] }}">
+</li>
+{%- endmacro %}
+<a class="volver" href="{{ url_for('mas') }}">‹ Más</a>
+<h1>Qué pedir</h1>
+{% if conteo_hecho %}
+<p class="sub">Con el conteo del {{ ultimo['hecho']|fecha }}. Las cantidades ya vienen en cajas; cámbielas si hace falta.</p>
+{% else %}
+<div class="error">Todavía no se ha contado esta semana: estos números salen de lo que dice la app, y puede estar mal.
+  <a href="{{ url_for('conteo_pagina') }}">Hacer el conteo ›</a></div>
+{% endif %}
+{% if aviso %}<div class="exito">{{ aviso }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+{% for clave in ('cucuta', 'medellin', 'queso') %}
+{% set g = grupos[clave] %}
+<section class="tarjeta grupo" id="{{ clave }}">
+  <h2>{{ g['nombre'] }}</h2>
+  {% if clave == 'cucuta' %}
+  <p class="sub">Si se pide hoy, llega el <b>{{ dia_corto(g['llega']) }}</b>. Mínimo {{ g['minimo']|pesos }} por el flete.</p>
+  {% elif clave == 'medellin' %}
+  <form method="post" action="{{ url_for('pedido_viaje') }}" class="viaje">
+    <input type="hidden" name="csrf" value="{{ csrf() }}">
+    <label>Viaje de esta semana
+      <input type="date" name="viaje" value="{{ g['viaje'].isoformat() if g['viaje'] else '' }}" min="{{ hoy.isoformat() }}" required>
+    </label>
+    <button class="boton chico secundario">Guardar</button>
+  </form>
+  <p class="sub">{% if g['viaje'] %}Lo que se trae el <b>{{ dia_corto(g['viaje']) }}</b>, para que alcance hasta el viaje de la otra semana.
+    {% else %}<b>Pongan el día del viaje</b>; mientras tanto se calcula como si fuera en 2 días.{% endif %}</p>
+  {% else %}
+  <p class="sub">Para comprar el <b>{{ dia_corto(g['llega']) }}</b>: lo del lunes de domicilios y el resto de la semana.</p>
+  {% endif %}
+
+  {% for p in g['en_camino'] %}
+  <p class="nota">Ya hay un pedido en camino: llega el {{ dia_corto(p['llega']) }} ({{ p['items']|length }} producto{{ '' if p['items']|length == 1 else 's' }}). Ya se descontó.</p>
+  {% endfor %}
+
+  {% if g['items'] %}
+  <form method="post" action="{{ url_for('pedido_crear', grupo=clave) }}" class="pedido" data-grupo="{{ g['nombre'] }}" data-minimo="{{ g['minimo'] }}">
+    <input type="hidden" name="csrf" value="{{ csrf() }}">
+    <input type="hidden" name="llega" value="{{ (g['viaje'] or g['llega']).isoformat() if clave == 'medellin' else g['llega'].isoformat() }}">
+    {% set pedir = g['items']|selectattr('pedir')|list %}
+    {% set alcanza = g['items']|rejectattr('pedir')|list %}
+    {% if pedir %}
+    <ul class="lista">
+      {% for i in pedir %}{{ fila(i) }}{% endfor %}
+    </ul>
+    {% else %}
+    <p class="vacio">Con lo que hay alcanza. No hace falta pedir.</p>
+    {% endif %}
+    {% if alcanza %}
+    <details class="alcanza">
+      <summary>{{ alcanza|length }} producto{{ '' if alcanza|length == 1 else 's' }} que alcanzan ›</summary>
+      <ul class="lista">{% for i in alcanza %}{{ fila(i) }}{% endfor %}</ul>
+    </details>
+    {% endif %}
+    <div class="total">
+      <div><span class="sub" style="margin:0">Total aproximado</span><b class="suma">{{ g['total']|pesos }}</b>
+        {% if g['minimo'] %}<small class="minimo"></small>{% endif %}</div>
+    </div>
+    <div class="botones">
+      <button type="button" class="boton secundario compartir">Mandar la lista</button>
+      {% if clave != 'queso' %}
+      <button class="boton" onclick="return confirm('¿Ya se le hizo este pedido a {{ g['nombre'] }}? Queda en «En camino» hasta que llegue.')">Ya lo pedí</button>
+      {% endif %}
+    </div>
+  </form>
+  {% else %}
+  <p class="vacio">Ningún producto está en este grupo. Póngalo en el producto, en Inventario.</p>
+  {% endif %}
+</section>
+{% endfor %}
+
+
+
+<section id="en-camino">
+  <h2>En camino</h2>
+  {% if en_camino %}
+  <ul class="lista">
+    {% for p in en_camino %}
+    <li class="fila camino">
+      <div class="izq">
+        <b>{{ p['nombre_grupo'] }} · llega el {{ dia_corto(p['llega']) }}</b>
+        <span>{{ p['items']|map(attribute='nombre')|join(', ') }}</span>
+        {% if p['llega'] < hoy.isoformat() %}<span class="etiqueta fiado">Ya debía haber llegado</span>{% endif %}
+      </div>
+      <div class="acciones">
+        <a class="boton chico" href="{{ url_for('compra_nueva', pedido=p['id']) }}">Llegó</a>
+        <form method="post" action="{{ url_for('pedido_cancelar', pedido_id=p['id']) }}"
+              onsubmit="return confirm('¿Quitar este pedido? Úselo si no se hizo o no va a llegar.')">
+          <input type="hidden" name="csrf" value="{{ csrf() }}">
+          <button class="quitar">Quitar</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="sub" style="margin-top:8px">«Llegó» abre la compra con lo pedido: revise cantidades, costos y flete, y guárdela.</p>
+  {% else %}
+  <p class="vacio">No hay pedidos en camino.</p>
+  {% endif %}
+</section>
+
+{% if sin_grupo %}
+<p class="sub" style="margin-top:20px">{{ sin_grupo }} producto{{ '' if sin_grupo == 1 else 's' }} no tienen grupo y no salen aquí.
+  Para que salgan, en <a href="{{ url_for('inventario') }}">Inventario</a> abra el producto y elija de dónde viene.</p>
+{% endif %}
+
+<style>
+.grupo { margin-top: 14px; scroll-margin-top: 12px; }
+.grupo h2 { margin: 0 0 4px; }
+.grupo .lista { margin-top: 8px; }
+.grupo .vacio { padding: 12px; }
+.producto { align-items: center; }
+.producto .izq b { white-space: normal; }
+.producto .izq span { display: block; }
+.producto .etiqueta { margin-top: 4px; }
+.producto input { width: 78px; flex: none; text-align: center; padding: 10px 6px; font-weight: 700; }
+.producto.urgente { background: var(--alerta-fondo); }
+.producto.urgente .izq span:not(.etiqueta) { color: var(--texto); }
+.alcanza { margin-top: 10px; }
+.alcanza summary { color: var(--naranja); font-weight: 600; padding: 6px 2px; }
+.total { display: flex; justify-content: space-between; align-items: end; margin-top: 12px; }
+.total b { display: block; font: 800 1.4rem var(--rd); font-variant-numeric: tabular-nums; }
+.total small { display: block; font-size: .82rem; margin-top: 2px; }
+.total small.bajo { color: var(--alerta); }
+.total small.ok { color: var(--bien); }
+.grupo .botones { margin-bottom: 0; }
+.nota { background: var(--aviso-fondo); color: var(--aviso); padding: 8px 10px; border-radius: 10px; font-size: .88rem; margin: 6px 0 0; }
+.viaje { display: flex; gap: 8px; align-items: end; margin: 8px 0 6px; }
+.viaje label { flex: 1; font-size: .88rem; color: var(--suave); }
+.viaje input { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 12px; margin-top: 4px;
+  border: 1.5px solid var(--borde); background: var(--tarjeta); color: var(--texto); }
+.viaje .boton { margin: 0; min-height: 46px; }
+#en-camino { scroll-margin-top: 12px; }
+.camino .izq b, .camino .izq span { white-space: normal; display: block; }
+.camino .acciones { display: flex; flex-direction: column; align-items: end; gap: 6px; flex: none; }
+.camino .acciones .boton { margin: 0; }
+.quitar { background: none; border: 0; color: var(--alerta); font: 600 .85rem system-ui; cursor: pointer; padding: 2px; }
+</style>
+
+<script>
+(function () {
+  function pesos(v) { return "$" + Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+  function num(t) { return parseFloat(String(t || "").replace(",", ".")) || 0; }
+  function cant(q) { return (Math.round(q * 100) / 100).toString().replace(".", ","); }
+
+  document.querySelectorAll("form.pedido").forEach(function (form) {
+    var filas = form.querySelectorAll(".producto"), minimo = +form.dataset.minimo;
+    function sumar() {
+      var total = 0;
+      filas.forEach(function (f) { total += num(f.querySelector("input").value) * (+f.dataset.costo || 0); });
+      form.querySelector(".suma").textContent = pesos(total);
+      var m = form.querySelector(".minimo");
+      if (m) {
+        m.textContent = total >= minimo ? "✓ Pasa el mínimo" : "Falta " + pesos(minimo - total) + " para el mínimo";
+        m.className = "minimo " + (total >= minimo ? "ok" : "bajo");
+      }
+    }
+    form.addEventListener("input", sumar);
+    sumar();
+
+    // La lista para el proveedor: se comparte (WhatsApp, etc.) o se abre WhatsApp
+    form.querySelector(".compartir").addEventListener("click", function () {
+      var lineas = [];
+      filas.forEach(function (f) {
+        var q = num(f.querySelector("input").value);
+        if (q > 0) lineas.push("• " + cant(q) + " " + f.dataset.nombre);
+      });
+      if (!lineas.length) { alert("No hay nada en la lista."); return; }
+      var texto = "Pedido Charcutería HYE (" + form.dataset.grupo + "):\n" + lineas.join("\n");
+      if (navigator.share) { navigator.share({ text: texto }).catch(function () {}); }
+      else { window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank"); }
+    });
+  });
+})();
+</script>
+{% endblock %}

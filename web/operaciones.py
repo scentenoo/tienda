@@ -13,12 +13,14 @@ from servicios.gastos import (TIPOS_PERDIDA, crear_gasto, editar_gasto, eliminar
                               eliminar_perdida, registrar_perdida)
 from servicios.inventario import (crear_producto, editar_producto, eliminar_producto,
                                   usos_del_producto)
+from utils import reposicion
 from utils.conciliacion import MESES_ES
 from web import fotos_catalogo
 from web import aviso_catalogo
 from web.aviso_catalogo import avisar as avisar_catalogo
-from web.app import (_dia_largo, _json_seguro, _leer_decimal, _leer_monto, _revisar_csrf,
-                     _usuario_admin, app, db, pesos, requiere_gastos, requiere_ingreso)
+from web.app import (_db_reposicion, _dia_largo, _json_seguro, _leer_decimal, _leer_monto,
+                     _revisar_csrf, _usuario_admin, app, db, pesos, requiere_gastos,
+                     requiere_ingreso)
 
 
 def _fecha_form(nombre, por_defecto=None):
@@ -86,17 +88,25 @@ def _foto_del_producto(product_id):
         return {"imagen": None, "error": str(e)}
 
 
+def _guardar_grupo(conn, product_id):
+    """De dónde viene y de a cuánto se pide (ver utils/reposicion.py), si
+    llegaron en el formulario."""
+    if "grupo" in request.form:
+        reposicion.poner_grupo(conn, product_id, request.form.get("grupo"), request.form.get("caja"))
+
+
 @app.route("/producto/nuevo", methods=["GET", "POST"])
 @requiere_ingreso
 def producto_nuevo():
-    conn = db()
+    conn = _db_reposicion()
     if request.method == "GET":
         return render_template("producto_form.html", p=None, error=None, usos=None,
                                cat=_campos_catalogo(conn))
     _revisar_csrf()
     try:
-        crear_producto(conn, request.form.get("nombre"), _leer_monto(request.form.get("precio")),
-                       _leer_decimal(request.form.get("stock")), **_catalogo_del_formulario(conn))
+        nuevo_id = crear_producto(conn, request.form.get("nombre"), _leer_monto(request.form.get("precio")),
+                                  _leer_decimal(request.form.get("stock")), **_catalogo_del_formulario(conn))
+        _guardar_grupo(conn, nuevo_id)
         conn.commit()
     except ValueError as e:
         conn.rollback()
@@ -109,7 +119,7 @@ def producto_nuevo():
 @app.route("/producto/<int:product_id>", methods=["GET", "POST"])
 @requiere_ingreso
 def producto_editar(product_id):
-    conn = db()
+    conn = _db_reposicion()
     p = conn.execute("SELECT id, name, price, stock, cost_price FROM products WHERE id = ?",
                      (product_id,)).fetchone()
     if p is None:
@@ -118,7 +128,8 @@ def producto_editar(product_id):
     if request.method == "GET":
         datos = {"id": p["id"], "nombre": p["name"], "precio": round(p["price"] or 0),
                  "stock": f"{p['stock']:g}".replace(".", ","), "costo": p["cost_price"],
-                 **(reglas_catalogo.opciones_del_producto(conn, product_id) or {})}
+                 **(reglas_catalogo.opciones_del_producto(conn, product_id) or {}),
+                 **reposicion.grupo_del_producto(conn, product_id)}
         return render_template("producto_form.html", p=datos, error=None, usos=usos,
                                cat=_campos_catalogo(conn), foto=_foto_del_producto(product_id))
     _revisar_csrf()
@@ -128,6 +139,7 @@ def producto_editar(product_id):
                         _leer_monto(request.form.get("precio")),
                         _leer_decimal(texto_stock) if texto_stock else None,
                         **_catalogo_del_formulario(conn))
+        _guardar_grupo(conn, product_id)
         conn.commit()
     except ValueError as e:
         conn.rollback()
@@ -228,12 +240,24 @@ def compras():
 @app.route("/compra/nueva", methods=["GET", "POST"])
 @requiere_ingreso
 def compra_nueva():
-    conn = db()
+    conn = _db_reposicion()     # con la tabla de pedidos, por si la compra viene de uno
     productos = [{"id": f[0], "n": f[1], "c": f[2] or 0, "s": f[3] or 0} for f in conn.execute(
         "SELECT id, name, cost_price, stock FROM products ORDER BY name COLLATE NOCASE")]
     if request.method == "GET":
+        # Desde «Llegó» en Qué pedir: la compra viene armada con lo pedido
+        borrador, de_pedido = "null", None
+        if request.args.get("pedido", "").isdigit():
+            de_pedido = reposicion.pedido(conn, int(request.args["pedido"]))
+            if de_pedido and de_pedido["estado"] == "en_camino":
+                borrador = _json_seguro({
+                    "factura": "", "iva": "", "flete": "", "pedido": de_pedido["id"],
+                    "lineas": [{"id": i["id"], "nombre": i["nombre"], "q": str(i["cantidad"]),
+                                "costo": str(round(i["costo"]))} for i in de_pedido["items"]]})
+            else:
+                de_pedido = None
         return render_template("compra_nueva.html", productos=_json_seguro(productos),
-                               borrador="null", error=None, codigo=_codigo_unico("compra_codigo"))
+                               borrador=borrador, error=None, codigo=_codigo_unico("compra_codigo"),
+                               de_pedido=de_pedido)
     _revisar_csrf()
     borrador = request.form.get("borrador", "")
     try:
@@ -253,16 +277,20 @@ def compra_nueva():
                   "quantity": _leer_decimal(l.get("q")),
                   "unit_price": float(_leer_monto(str(l.get("costo") or "")))}
                  for l in lote.get("lineas", [])]
-        registrar_lote(conn, items, float(_leer_monto(str(lote.get("iva") or ""))),
-                       float(_leer_monto(str(lote.get("flete") or ""))), lote.get("factura"),
-                       _usuario_admin(conn))
+        lote_id = registrar_lote(conn, items, float(_leer_monto(str(lote.get("iva") or ""))),
+                                 float(_leer_monto(str(lote.get("flete") or ""))), lote.get("factura"),
+                                 _usuario_admin(conn))
+        if str(lote.get("pedido") or "").isdigit():
+            reposicion.cerrar_pedido(conn, int(lote["pedido"]), "recibido", lote_id)
         conn.commit()
     except (ValueError, KeyError, TypeError) as e:
         conn.rollback()
         return render_template("compra_nueva.html", productos=_json_seguro(productos),
                                borrador=_json_seguro(lote), error=str(e),
-                               codigo=_codigo_unico("compra_codigo"))
+                               codigo=_codigo_unico("compra_codigo"), de_pedido=None)
     session["aviso_compra"] = f"Compra de {len(items)} producto{'s' if len(items) != 1 else ''} guardada."
+    if lote.get("pedido"):
+        session["aviso_compra"] += " El pedido salió de «En camino»."
     return redirect(url_for("compras"))
 
 

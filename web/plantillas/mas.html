@@ -37,6 +37,13 @@
   {{ enlace(url_for('caja'), 'caja', 'Caja', 'Efectivo del día y últimos 30 días') }}
 </ul>
 
+<p class="seccion">Pedidos</p>
+<ul class="lista">
+  {{ enlace(url_for('pedidos_pagina'), 'compras', 'Qué pedir', 'Cúcuta, Medellín y el queso, y lo que va en camino') }}
+  {{ enlace(url_for('conteo_pagina'), 'inventario', 'Conteo del martes', 'Contar lo que hay de verdad') }}
+  {{ enlace(url_for('avisos_pagina'), 'pendientes', 'Avisos en este celular', 'Cuándo contar y cuándo pedir') }}
+</ul>
+
 <p class="seccion">Inventario{{ " y gastos" if ve_gastos() }}</p>
 <ul class="lista">
   {{ enlace(url_for('inventario'), 'inventario', 'Inventario', 'Productos, stock y precios') }}

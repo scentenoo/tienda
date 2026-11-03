@@ -19,6 +19,20 @@
     <input type="text" name="stock" value="{{ p.get('stock', '') if p else '' }}" inputmode="decimal" placeholder="0">
   </label>
   {% if editando %}<p class="sub" style="margin:4px 0 0">Déjelo vacío para no cambiarlo. Lo normal es que el stock suba con las compras y baje con las ventas.</p>{% endif %}
+  {% set grupo = p.get('grupo', '') if p else '' %}
+  {% set caja = p.get('caja') if p else None %}
+  <label class="campo">Se le pide a
+    <select name="grupo">
+      <option value=""{{ ' selected' if not grupo }}>Nadie: no sale en Qué pedir ni en el conteo</option>
+      <option value="cucuta"{{ ' selected' if grupo == 'cucuta' }}>Cúcuta (el mayorista)</option>
+      <option value="medellin"{{ ' selected' if grupo == 'medellin' }}>Medellín (masa y charcutería)</option>
+      <option value="queso"{{ ' selected' if grupo == 'queso' }}>Queso</option>
+    </select>
+  </label>
+  <label class="campo">De a cuánto se pide (caja o media caja)
+    <input type="text" name="caja" inputmode="decimal" placeholder="Ej: 12"
+           value="{{ caja|cantidad if caja is number else (caja or '') }}">
+  </label>
   {% if cat %}
   {% set elegida = p.get('categoria', '') if p else '' %}
   {% set modo = (p.get('catalogo') if p else '') or 'auto' %}

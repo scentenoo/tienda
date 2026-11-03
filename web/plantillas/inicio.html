@@ -39,6 +39,41 @@
   {% endif %}
 </div>
 
+{% if conteo_pendiente %}
+<a class="destacado" href="{{ url_for('conteo_pagina') }}">
+  <span class="ico">{{ icono('inventario', 26) }}</span>
+  <div><b>Falta el conteo de esta semana</b>
+    <span>Son 5 minutos. Sin él, la lista de qué pedir sale con números malos</span></div>
+  {{ icono('flecha', 20) }}
+</a>
+{% elif pedir_cucuta %}
+<a class="destacado" href="{{ url_for('pedidos_pagina') }}#cucuta">
+  <span class="ico">{{ icono('compras', 26) }}</span>
+  <div><b>Qué pedir</b>
+    <span>Ya está el conteo: revise el pedido a Cúcuta y el de Medellín</span></div>
+  {{ icono('flecha', 20) }}
+</a>
+{% endif %}
+
+{% if avisos_clave %}
+{# Solo sale si este celular puede recibir avisos y todavía no los activó #}
+<a class="destacado" href="{{ url_for('avisos_pagina') }}" id="activar-avisos" hidden>
+  <span class="ico">{{ icono('pendientes', 26) }}</span>
+  <div><b>Active los avisos en este celular</b>
+    <span>Para que le llegue cuándo contar y cuándo pedir</span></div>
+  {{ icono('flecha', 20) }}
+</a>
+<script>
+(function () {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
+  if (Notification.permission === "denied") return;
+  navigator.serviceWorker.getRegistration("/").then(function (r) {
+    return r ? r.pushManager.getSubscription() : null;
+  }).then(function (s) { if (!s) document.getElementById("activar-avisos").hidden = false; });
+})();
+</script>
+{% endif %}
+
 {% if cobros_toca or cobros_sin_frecuencia %}
 <a class="destacado" href="{{ url_for('cobros_pagina') }}">
   <span class="ico">{{ icono('caja', 26) }}</span>

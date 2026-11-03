@@ -139,7 +139,7 @@ main.con-barra { padding-bottom: 96px; }
 {# La barra de abajo: no va en el ingreso ni en las pantallas que ya tienen
    abajo su propio total y botón de guardar. #}
 {% set ep = request.endpoint or '' %}
-{% set con_barra = session.get('ingreso') and ep not in ('ingresar', 'venta_nueva', 'compra_nueva') %}
+{% set con_barra = session.get('ingreso') and ep not in ('ingresar', 'venta_nueva', 'compra_nueva', 'conteo_pagina', 'conteo_guardar') %}
 {% set pestana = 'inicio' if ep == 'inicio'
    else 'ventas' if ep.startswith('venta')
    else 'clientes' if ep.startswith('cliente') or ep in ('abono', 'abono_confirmar', 'pendientes')

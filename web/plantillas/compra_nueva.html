@@ -4,6 +4,10 @@
 <a class="volver" href="{{ url_for('compras') }}">‹ Compras</a>
 <h1>Nueva compra</h1>
 <p class="sub">Arme el lote con todo lo que llegó en la misma factura.</p>
+{% if de_pedido %}
+<div class="exito">Viene armada con el pedido a {{ de_pedido['nombre_grupo'] }}. Revise que las cantidades y los
+  costos sean los que llegaron, agregue el flete y guárdela.</div>
+{% endif %}
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
 <label class="campo">N° de factura (opcional)

@@ -1,0 +1,43 @@
+# Avisos al celular: cuándo contar, cuándo pedir y cuándo comprar el queso
+# (ver avisos/LEEME.md). Corre en la mañana y en la tarde, hora de Colombia;
+# el programa decide qué toca y no manda nada dos veces.
+name: Avisos
+
+on:
+  schedule:
+    - cron: "17 13 * * *"     # 8:17 a. m. en Colombia
+    - cron: "17 20 * * *"     # 3:17 p. m. en Colombia
+  workflow_dispatch:
+    inputs:
+      prueba:
+        description: "Mandar un aviso de prueba a todos los celulares (si / no)"
+        default: "no"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: avisos
+  cancel-in-progress: false
+
+jobs:
+  avisar:
+    # Mientras no exista la variable VAPID_PUBLICA (avisos/LEEME.md), no hace nada
+    if: ${{ vars.VAPID_PUBLICA != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: avisos/requirements.txt
+      - run: pip install -r avisos/requirements.txt
+      - name: Mandar los avisos
+        run: python -m avisos.enviar ${{ github.event.inputs.prueba == 'si' && '--prueba' || '' }}
+        env:
+          TZ: America/Bogota
+          TURSO_URL: ${{ secrets.TURSO_URL }}
+          TURSO_TOKEN: ${{ secrets.TURSO_TOKEN }}
+          VAPID_PRIVADA: ${{ secrets.VAPID_PRIVADA }}

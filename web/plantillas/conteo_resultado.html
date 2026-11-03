@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block titulo %}Resultado del conteo · Charcutería HYE{% endblock %}
+{% block contenido %}
+<a class="volver" href="{{ url_for('conteo_pagina') }}">‹ Conteo</a>
+<h1>Resultado del conteo</h1>
+<p class="sub">{{ c['hecho']|fecha }}{% if c['quien'] %} · lo hizo {{ 'el dueño' if c['quien'] == 'dueño' else 'la hermana' }}{% endif %}</p>
+{% if aviso %}<div class="exito">{{ aviso }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<div class="kpis">
+  <div class="tarjeta kpi"><b class="{{ 'negativo' if c['sin_explicar'] }}">{{ c['sin_explicar']|pesos }}</b>
+    <span>Falta sin explicar</span><small>a costo{% if c['sin_explicar'] < c['faltante'] %} · faltaban {{ c['faltante']|pesos }}{% endif %}</small></div>
+  <div class="tarjeta kpi"><b>{{ c['cuadran']|length }} de {{ c['filas']|length }}</b>
+    <span>Cuadraron</span><small>{{ c['faltan']|length }} con faltante · {{ c['sobran']|length }} con sobrante</small></div>
+</div>
+
+{% if c['faltan'] %}
+<h2>Faltan</h2>
+<p class="sub">Ya se descontaron del stock y quedaron en Pérdidas como «Faltante en el conteo».
+  Si se acuerdan a quién se le llevó o se le fió: <b>anoten la venta</b> y aquí toquen <b>Apareció</b>, para que no se descuente dos veces.</p>
+{% for f in c['faltan'] %}
+<div class="tarjeta faltante" id="p{{ f['id'] }}">
+  <b>{{ f['nombre'] }}</b>
+  <p class="sub" style="margin:2px 0 0">La app decía {{ f['esperado']|cantidad }}, contaron {{ f['contado']|cantidad }}:
+    faltan <b>{{ (-f['diferencia'])|round(3)|cantidad }}</b>{% if f['costo'] %} ({{ ((-f['diferencia']) * f['costo'])|pesos }}){% endif %}.
+    {% if f['aparecio'] %}<br>Ya aparecieron {{ f['aparecio']|cantidad }}.{% endif %}</p>
+  {% set candidatos = pistas.get(f['id'], []) %}
+  {% if f['pendiente'] > 0 and candidatos %}
+  <p class="pista">¿Se le llevó a alguno de estos? Lo llevan seguido y no tienen venta de él desde el {{ desde }}:</p>
+  <ul class="candidatos">
+    {% for k in candidatos %}
+    <li><a href="{{ url_for('cliente', client_id=k['id']) }}">{{ k['nombre'] }}</a>
+      <span>{{ k['veces'] }} veces en 3 meses</span>
+      {% if k['domicilio'] %}<span class="etiqueta fiado">Le escribieron para el domicilio</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if f['pendiente'] > 0 %}
+  <form method="post" action="{{ url_for('conteo_aparecio', conteo_id=c['id']) }}" class="aparecio">
+    <input type="hidden" name="csrf" value="{{ csrf() }}">
+    <input type="hidden" name="product_id" value="{{ f['id'] }}">
+    <input type="text" name="cantidad" value="{{ f['pendiente']|round(3)|cantidad }}" inputmode="decimal" aria-label="Cuántos aparecieron">
+    <button class="boton chico secundario">Apareció</button>
+  </form>
+  {% else %}
+  <p class="sub" style="margin:8px 0 0; color:var(--bien)">✓ Ya se explicó todo</p>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{% if c['sobran'] %}
+<h2>Sobran</h2>
+<p class="sub">Ya se sumaron al stock. Suele ser una compra sin registrar o una venta anotada de más.</p>
+<ul class="lista">
+  {% for f in c['sobran'] %}
+  <li class="fila"><div class="izq"><b>{{ f['nombre'] }}</b>
+    <span>La app decía {{ f['esperado']|cantidad }}, contaron {{ f['contado']|cantidad }}</span></div>
+    <div class="der positivo">+{{ f['diferencia']|round(3)|cantidad }}</div></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if c['cuadran'] %}
+<details class="cuadran">
+  <summary>{{ c['cuadran']|length }} producto{{ '' if c['cuadran']|length == 1 else 's' }} cuadraron ›</summary>
+  <ul class="lista">
+    {% for f in c['cuadran'] %}
+    <li class="fila"><div class="izq"><b>{{ f['nombre'] }}</b></div><div class="der">{{ f['contado']|cantidad }}</div></li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+
+<a class="boton" style="width:100%; margin-top:22px" href="{{ url_for('pedidos_pagina') }}">Ver qué pedir</a>
+
+<style>
+.kpis { margin-top: 6px; }
+.faltante { margin-top: 10px; scroll-margin-top: 12px; }
+.pista { font-size: .88rem; margin: 10px 0 4px; }
+.candidatos { list-style: none; padding: 0; margin: 0; }
+.candidatos li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 0;
+  border-top: 1px solid var(--borde); font-size: .92rem; }
+.candidatos li:first-child { border-top: 0; }
+.candidatos a { font-weight: 600; text-decoration: none; }
+.candidatos span { color: var(--suave); font-size: .82rem; }
+.candidatos .etiqueta { color: var(--aviso); }
+.aparecio { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.aparecio input { width: 84px; text-align: center; padding: 8px 6px; }
+.aparecio .boton { margin: 0; }
+.cuadran { margin-top: 18px; }
+.cuadran summary { color: var(--naranja); font-weight: 600; padding: 6px 2px; }
+</style>
+{% endblock %}
