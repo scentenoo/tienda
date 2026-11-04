@@ -20,7 +20,7 @@ La regla está en `utils/reposicion.py` (`avisos_de_hoy`). Los manda
 1. **Crear las claves** en el PC, dentro del repositorio:
 
    ```
-   pip install cryptography
+   uv pip install cryptography
    python -m avisos.claves
    ```
 
