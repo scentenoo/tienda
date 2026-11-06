@@ -26,8 +26,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config.nube import conexion_directa  # noqa: E402
 from utils import reposicion  # noqa: E402
 
-# Quién manda los avisos, para los servicios de notificaciones del navegador
-CONTACTO = "https://github.com/scentenoo/tienda"
+# Quién manda los avisos, para los servicios de notificaciones del navegador.
+# pywebpush solo acepta "mailto:…" o "https://dominio" sin nada después: con
+# una ruta (https://github.com/usuario/repo) se cae antes de mandar el primero.
+CONTACTO = "https://github.com"
 
 
 def mandar(conn, aviso, clave_privada):
