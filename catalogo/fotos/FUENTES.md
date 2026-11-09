@@ -92,3 +92,4 @@ si alguna reclama la suya, se quita.
 | 76.webp | Caja de Palitos de Chocolate | DANIBISK Palitos Chocolate Box, Crunchy Vanilla Cookie Sticks Coated in ... | https://www.walmart.com/ip/Palitos-Chocolate-Box-5231-12-18x30gr-1-5oz/11351210826 |
 | 78.webp | Chocomalt | Rikomalt Bebida Malteada Chocolatada · Grupo San Anselmo | https://farmanselmo.com.ve/producto/principal/unica/riko-malt-uht-500ml-parmalat |
 | 79.webp | Ricomalt litro (Riko Malt 1 L, Parmalat; enviada por el dueño) | Google Imágenes | https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSZZo7l9EKe-aUm1q-90zdPD0ltq2qQ5mb-nlY2KvTulA&s=10 |
+| 80.webp | Mayonesa 910gr (Mayonesa Mavesa 910 g) | Mayonesa Mavesa 910g - Tienda TRIO Maracaibo | https://triomcbo.com/producto/mayonesa-mavesa-910g/ |
