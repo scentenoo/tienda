@@ -157,11 +157,11 @@ def frecuencia(conn, client_id):
 
 def clientes(conn, hoy, dia_semanal=DIA_SEMANAL):
     """Los que deben, del que más debe al que menos, repartidos en: a quién
-    toca cobrar, a quién ya se le cobró en este periodo y quién no tiene
-    frecuencia. Los que tocan y no tienen teléfono van con whatsapp None."""
+    toca cobrar, a quién ya se le cobró en este periodo (con lo que debía
+    entonces en deuda_enviada) y quién no tiene frecuencia. Los que tocan y no tienen teléfono van con whatsapp None."""
     from utils.perfil_clientes import enlace_whatsapp
-    enviados = {(cid, p): enviado for cid, p, enviado in conn.execute(
-        "SELECT client_id, periodo, enviado FROM cobros_envios").fetchall()}
+    enviados = {(cid, p): (enviado, deuda) for cid, p, enviado, deuda in conn.execute(
+        "SELECT client_id, periodo, enviado, deuda FROM cobros_envios").fetchall()}
     toca, cobrados, sin_frecuencia = [], [], []
     for cid, nombre, telefono, deuda, cobro in conn.execute("""
             SELECT id, name, phone, total_debt, cobro FROM clients
@@ -172,16 +172,20 @@ def clientes(conn, hoy, dia_semanal=DIA_SEMANAL):
             sin_frecuencia.append(c)
             continue
         c["periodo"] = periodo(cobro, hoy, dia_semanal)
-        c["enviado"] = enviados.get((cid, c["periodo"]))
+        c["enviado"], c["deuda_enviada"] = enviados.get((cid, c["periodo"]), (None, None))
         (cobrados if c["enviado"] else toca).append(c)
     return toca, cobrados, sin_frecuencia
 
 
 def marcar_cobrado(conn, client_id, hoy, dia_semanal=DIA_SEMANAL):
+    """Anota el envío del periodo. Si se le vuelve a enviar (pidió el saldo
+    antes de tiempo, o llevó más), queda el último: la fecha y lo que debía."""
     fila = conn.execute("SELECT total_debt, cobro FROM clients WHERE id = ?", (client_id,)).fetchone()
     if fila is None or fila[1] not in FRECUENCIAS:
         raise ValueError("El cliente no existe o no tiene frecuencia de cobro")
     conn.execute("""
-        INSERT OR IGNORE INTO cobros_envios (client_id, periodo, deuda, enviado)
-        VALUES (?, ?, ?, datetime('now', 'localtime'))""",
+        INSERT INTO cobros_envios (client_id, periodo, deuda, enviado)
+        VALUES (?, ?, ?, datetime('now', 'localtime'))
+        ON CONFLICT (client_id, periodo) DO UPDATE
+           SET deuda = excluded.deuda, enviado = excluded.enviado""",
                  (client_id, periodo(fila[1], hoy, dia_semanal), fila[0] or 0))

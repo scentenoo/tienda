@@ -44,7 +44,9 @@ def cobros_pagina():
     cuantos["todos"] = len(toca) + len(cobrados)
     toca, cobrados = ([c for c in sorted(lista, key=lambda c: c["frecuencia"] != "semanal")
                        if ver == "todos" or c["frecuencia"] == ver] for lista in (toca, cobrados))
-    for c in toca:
+    # A todos se les puede enviar: también a los ya cobrados (piden el saldo
+    # antes de su día o llevaron más) y a los que no tienen frecuencia.
+    for c in toca + cobrados + sin_frecuencia:
         c["mensaje"] = cobros.mensaje(ajustes["mensaje"], c["nombre"], c["deuda"],
                                       enlace_estado(c["id"]), ajustes["cuenta"])
     ejemplo = cobros.parte_fija(toca[0]["deuda"] if toca else 50000, "(enlace a su estado de cuenta)",

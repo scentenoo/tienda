@@ -110,6 +110,16 @@ class Reparto(unittest.TestCase):
         self.hoy = date(2026, 10, 31)                        # sábado: semana nueva
         self.assertEqual(self.nombres()[0], ["Beto", "Ana"])
 
+    def test_enviar_de_nuevo_guarda_lo_ultimo(self):
+        cobros.marcar_cobrado(self.conn, 1, self.hoy)
+        self.conn.execute("UPDATE clients SET total_debt = 80000 WHERE id = 1")   # llevó más
+        _, cobrados, _ = cobros.clientes(self.conn, self.hoy)
+        self.assertEqual((cobrados[0]["deuda"], cobrados[0]["deuda_enviada"]), (80000, 50000))
+        cobros.marcar_cobrado(self.conn, 1, self.hoy)
+        _, cobrados, _ = cobros.clientes(self.conn, self.hoy)
+        self.assertEqual(cobrados[0]["deuda_enviada"], 80000)
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM cobros_envios").fetchone()[0], 1)
+
     def test_sin_frecuencia_no_se_marca(self):
         with self.assertRaises(ValueError):
             cobros.marcar_cobrado(self.conn, 3, self.hoy)
@@ -211,6 +221,17 @@ class Rutas(unittest.TestCase):
         self.assertIn("Ya se les cobró (1)", self.pagina())
         r = self.cliente.post("/cobros/enviado", data={"client_id": "1"})
         self.assertEqual(r.status_code, 400)
+
+    def test_enviar_de_nuevo(self):
+        self.cliente.post("/cobros/enviado", data={"csrf": "c", "client_id": "1"})
+        self.conn.execute("UPDATE clients SET total_debt = 80000 WHERE id = 1")      # llevó más
+        html = self.pagina()
+        ya = html.split('id="cobrados"')[1].split("</ul>")[0]
+        self.assertIn("Enviar de nuevo", ya)
+        self.assertIn("ese día debía $50.000", ya)
+        self.assertIn("Saldo pendiente: $80.000", unquote(ya))
+        # Caro no tiene frecuencia y igual se le puede enviar
+        self.assertIn("Saldo pendiente: $20.000", unquote(html.split('id="sin-frecuencia"')[1]))
 
     def test_mensaje(self):
         self.cliente.post("/cobros/mensaje", data={"csrf": "c", "mensaje": "Hola {nombre}, debes {deuda}."})

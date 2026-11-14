@@ -3,6 +3,15 @@
 {% macro etiqueta_frecuencia(f) -%}
   <span class="etiqueta {{ 'fiado' if f == 'semanal' else 'pagado' }}">{{ 'Semanal' if f == 'semanal' else 'Quincenal' }}</span>
 {%- endmacro %}
+{% macro boton_enviar(c, texto='Enviar', marca=True) -%}
+  {% if c['whatsapp'] %}
+  <a class="boton chico enviar{{ '' if texto == 'Enviar' else ' secundario' }}" style="margin:0"
+     href="{{ c['whatsapp'] }}?text={{ c['mensaje']|urlencode }}" target="_blank" rel="noopener"
+     data-texto="{{ texto }}"{% if marca %} data-marcar{% endif %}>{{ texto }}</a>
+  {% else %}
+  <a class="sub" style="margin:0" href="{{ url_for('cliente_editar', client_id=c['id']) }}">Sin teléfono ›</a>
+  {% endif %}
+{%- endmacro %}
 {% block contenido %}
 <a class="volver" href="{{ url_for('mas') }}">‹ Más</a>
 <h1>Cobros</h1>
@@ -47,6 +56,7 @@
         <input type="hidden" name="client_id" value="{{ c['id'] }}">
         <button class="boton chico secundario" name="cobro" value="semanal">Semanal</button>
         <button class="boton chico secundario" name="cobro" value="quincenal">Quincenal</button>
+        {{ boton_enviar(c, marca=False) }}
       </form>
     </li>
     {% endfor %}
@@ -76,14 +86,7 @@
     <div class="izq"><b>{{ c['nombre'] }}</b>
       <span>{{ etiqueta_frecuencia(c['frecuencia']) }} Debe {{ c['deuda']|pesos }}</span>
       <span class="falla" hidden>No se guardó la marca; toque de nuevo</span></div>
-    <div class="der">
-      {% if c['whatsapp'] %}
-      <a class="boton chico enviar" style="margin:0" href="{{ c['whatsapp'] }}?text={{ c['mensaje']|urlencode }}"
-         target="_blank" rel="noopener">Enviar</a>
-      {% else %}
-      <a class="sub" style="margin:0" href="{{ url_for('cliente_editar', client_id=c['id']) }}">Sin teléfono ›</a>
-      {% endif %}
-    </div>
+    <div class="der">{{ boton_enviar(c) }}</div>
   </div></li>
   {% endfor %}
 </ul>
@@ -96,11 +99,14 @@
   <summary class="seccion">Ya se les cobró ({{ cobrados|length }}) ›</summary>
   <ul class="lista" id="cobrados" style="margin-top:12px">
     {% for c in cobrados %}
-    <li data-nombre="{{ c['nombre'] }}"><a class="fila" href="{{ url_for('cliente', client_id=c['id']) }}">
-      <div class="izq"><b>{{ c['nombre'] }}</b>
-        <span>{{ etiqueta_frecuencia(c['frecuencia']) }} Enviado {{ c['enviado']|fecha }}</span></div>
-      <div class="der">{{ c['deuda']|pesos }}</div>
-    </a></li>
+    {% set cambio = c['deuda_enviada'] is not none and (c['deuda'] - c['deuda_enviada'])|abs > 0.5 %}
+    <li data-id="{{ c['id'] }}" data-nombre="{{ c['nombre'] }}"><div class="fila">
+      <div class="izq"><a href="{{ url_for('cliente', client_id=c['id']) }}"><b>{{ c['nombre'] }} ›</b></a>
+        <span>{{ etiqueta_frecuencia(c['frecuencia']) }} Debe {{ c['deuda']|pesos }}</span>
+        <span>Enviado {{ c['enviado']|fecha }}{% if cambio %} · <b class="cambio">ese día debía {{ c['deuda_enviada']|pesos }}</b>{% endif %}</span>
+        <span class="falla" hidden>No se guardó la marca; toque de nuevo</span></div>
+      <div class="der">{{ boton_enviar(c, 'Enviar de nuevo') }}</div>
+    </div></li>
     {% endfor %}
   </ul>
 </details>
@@ -108,7 +114,8 @@
 
 <p class="sub" style="margin-top:18px">Periodo semanal desde el {{ desde_semanal }}; quincenal desde el {{ desde_quincenal }}.
   El enlace al estado de cuenta sirve {{ dias_enlace }} días.
-  Si a alguien no se le envió ese día, sigue aquí hasta que se le envíe. Lo enviado se ve igual desde cualquier celular.</p>
+  Si a alguien no se le envió ese día, sigue aquí hasta que se le envíe. Si alguien pide su saldo
+  antes de su día, búsquelo en «Ya se les cobró» y toque <b>Enviar de nuevo</b>: va con lo que debe hoy. Lo enviado se ve igual desde cualquier celular.</p>
 
 <style>
 .pendiente { border: 2px solid var(--acento); margin-bottom: 4px; }
@@ -117,7 +124,7 @@
 .marcar { list-style: none; margin: 10px 0 0; padding: 0; }
 .marcar li { display: flex; justify-content: space-between; align-items: center; gap: 8px;
   padding: 8px 0; border-top: 1px solid var(--borde); flex-wrap: wrap; }
-.marcar li a { color: var(--texto); text-decoration: none; font-size: .9rem; min-width: 0; }
+.marcar li > a { color: var(--texto); text-decoration: none; font-size: .9rem; min-width: 0; }
 .marcar form { display: flex; gap: 6px; }
 .marcar .boton { margin: 0; }
 .botones:has(> :only-child) { grid-template-columns: 1fr; }
@@ -129,11 +136,14 @@
 details.ya summary { margin-top: 22px; }
 .fijo { white-space: pre-line; background: var(--chip); color: var(--suave); border-radius: 10px;
   padding: 10px 12px; margin-top: 8px; font-size: .88rem; overflow-wrap: anywhere; }
-.sin-guardar #toca .enviar { opacity: .4; pointer-events: none; }
+.sin-guardar .enviar { opacity: .4; pointer-events: none; }
 #toca li.enviado { opacity: .55; }
-#toca li.enviado .enviar { background: var(--bien-fondo); color: var(--bien); }
-#toca .falla { display: block; color: var(--alerta); }
-#toca .falla[hidden] { display: none; }
+li.enviado .enviar { background: var(--bien-fondo); color: var(--bien); }
+#toca .falla, #cobrados .falla { display: block; color: var(--alerta); }
+#toca .falla[hidden], #cobrados .falla[hidden] { display: none; }
+#cobrados .izq a { color: var(--texto); text-decoration: none; }
+#cobrados .izq span { display: block; }
+#cobrados .cambio { color: var(--aviso); font-weight: 600; }
 </style>
 <script>
 // Al tocar Enviar se abre WhatsApp y queda anotado en la base que a este
@@ -171,15 +181,17 @@ details.ya summary { margin-top: 22px; }
     });
   }
 
+  // Al tocar Enviar (o Enviar de nuevo) queda anotado el envío del periodo.
+  // Sin frecuencia no hay periodo que anotar: solo se abre el chat.
   var lista = document.getElementById("toca");
-  if (!lista) return;
   var csrf = "{{ csrf() }}";
   function contar() {
+    if (!lista) return;
     var total = lista.children.length, listos = lista.querySelectorAll("li.enviado").length;
     document.getElementById("cuenta").textContent =
       listos ? "(" + listos + " de " + total + " enviados)" : "(" + total + ")";
   }
-  lista.querySelectorAll(".enviar").forEach(function (a) {
+  document.querySelectorAll(".enviar[data-marcar]").forEach(function (a) {
     a.addEventListener("click", function () {
       var li = a.closest("li"), datos = new FormData();
       datos.append("csrf", csrf);
@@ -192,7 +204,7 @@ details.ya summary { margin-top: 22px; }
         .then(function (r) { if (!r.ok) throw r; li.querySelector(".falla").hidden = true; })
         .catch(function () {
           li.classList.remove("enviado");
-          a.textContent = "Enviar";
+          a.textContent = a.dataset.texto;
           li.querySelector(".falla").hidden = false;
           contar();
         });
