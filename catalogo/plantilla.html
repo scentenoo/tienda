@@ -84,7 +84,9 @@ main { padding-top: 14px; padding-bottom: 120px; }
    la página según se mueva el celular o el ratón; al bajar por la página, cada
    producto se inclina un poco (donde el navegador lo sabe hacer solo). */
 .foto.con-foto { --rx: 0; --ry: 0; perspective: 520px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.foto.con-foto:focus-visible { outline: 3px solid var(--naranja); outline-offset: -3px; }
+/* El borde de "estoy aquí" es solo para quien anda con teclado: con el dedo no sale */
+.foto.con-foto { outline: none; }
+.foto.con-foto.con-teclado:focus-visible { outline: 2px solid var(--suave); outline-offset: -2px; }
 .foto.con-recorte { background: radial-gradient(120% 95% at 50% 0%, var(--tarjeta), var(--chip) 78%); }
 .foto.con-recorte::before { content: ""; position: absolute; left: 20%; right: 20%; bottom: 5%; height: 10%;
   background: radial-gradient(closest-side, var(--sombra), transparent);
@@ -646,7 +648,12 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
     anotar("ver_producto", p.nombre);
   }
   function cerrarVisor() { if (visor.close) visor.close(); else { visor.removeAttribute("open"); alCerrarVisor(); } }
-  function alCerrarVisor() { cancelAnimationFrame(reloj3d); reloj3d = null; enVisor = null; arrastre = null; pieza.textContent = ""; }
+  function alCerrarVisor() {
+    cancelAnimationFrame(reloj3d); reloj3d = null; enVisor = null; arrastre = null; pieza.textContent = "";
+    // Al cerrar, el navegador vuelve a la foto y le pinta un borde: con el dedo no hace falta
+    var donde = document.activeElement;
+    if (donde && donde.classList && donde.classList.contains("foto") && !donde.classList.contains("con-teclado")) donde.blur();
+  }
   visor.addEventListener("close", alCerrarVisor);
   document.getElementById("visor-cerrar").addEventListener("click", cerrarVisor);
   visor.addEventListener("click", function (e) { if (e.target === visor) cerrarVisor(); });
@@ -679,10 +686,11 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
 
   document.querySelectorAll(".foto.con-foto").forEach(function (foto) {
     var nodo = foto.closest(".producto");
-    foto.addEventListener("click", function () { abrirVisor(nodo); });
+    foto.addEventListener("click", function () { foto.classList.remove("con-teclado"); abrirVisor(nodo); });
     foto.addEventListener("keydown", function (e) {
       if (e.key !== "Enter" && e.key !== " ") return;
       e.preventDefault();
+      foto.classList.add("con-teclado");
       abrirVisor(nodo);
     });
   });
