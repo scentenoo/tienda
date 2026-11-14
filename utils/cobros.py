@@ -1,11 +1,13 @@
 """Cobros por WhatsApp a los clientes que deben, cada semana o cada quincena.
 
-A cada cliente se le marca cómo paga: semanal o quincenal. Le toca cobro una
-vez por periodo:
-  semanal    desde el día de cobro de la semana (sábado, se puede cambiar)
-  quincenal  desde el 15 y desde el último día del mes
-Si no se le envió ese día, sigue saliendo hasta que se le envíe o empiece el
-periodo siguiente. Quien debe y no tiene frecuencia sale aparte, para marcarlo.
+A cada cliente se le marca cómo paga: semanal o quincenal. Todo el que debe
+y tiene frecuencia sale en la lista para cobrarle. Al enviarle queda como
+«enviado» solo por ese día: al día siguiente vuelve a la lista (con la fecha
+del último cobro al lado, para no repetirle sin querer). Quien debe y no tiene
+frecuencia sale aparte, para marcarlo.
+
+Cada envío queda anotado por periodo (uno por semana o por quincena: el
+último de ese periodo), que es el historial de lo cobrado.
 
 Cada mensaje tiene dos partes: la de arriba la escriben ellos (se cambia
 cuando quieran y queda guardada); la de abajo la pone la página y no se edita:
@@ -15,7 +17,7 @@ Lo que se cobró, el número de cuenta y el mensaje quedan en la base. Como el
 resto de servicios, nada aquí hace commit.
 """
 import calendar
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 FRECUENCIAS = {"semanal": "Semanal", "quincenal": "Quincenal"}
 DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
@@ -157,11 +159,16 @@ def frecuencia(conn, client_id):
 
 def clientes(conn, hoy, dia_semanal=DIA_SEMANAL):
     """Los que deben, del que más debe al que menos, repartidos en: a quién
-    toca cobrar, a quién ya se le cobró en este periodo (con lo que debía
-    entonces en deuda_enviada) y quién no tiene frecuencia. Los que tocan y no tienen teléfono van con whatsapp None."""
+    toca cobrar, a quién ya se le envió HOY (mañana vuelve a tocar) y quién no
+    tiene frecuencia. Cada uno lleva su último envío en ultimo (cuándo) y
+    deuda_enviada (lo que debía entonces); None si nunca se le ha enviado.
+    Los que no tienen teléfono van con whatsapp None."""
     from utils.perfil_clientes import enlace_whatsapp
-    enviados = {(cid, p): (enviado, deuda) for cid, p, enviado, deuda in conn.execute(
-        "SELECT client_id, periodo, enviado, deuda FROM cobros_envios").fetchall()}
+    ultimos = {}
+    for cid, enviado, deuda in conn.execute(
+            "SELECT client_id, enviado, deuda FROM cobros_envios ORDER BY enviado").fetchall():
+        ultimos[cid] = (enviado, deuda)          # se queda el más reciente
+    dia = hoy.isoformat()
     toca, cobrados, sin_frecuencia = [], [], []
     for cid, nombre, telefono, deuda, cobro in conn.execute("""
             SELECT id, name, phone, total_debt, cobro FROM clients
@@ -171,21 +178,22 @@ def clientes(conn, hoy, dia_semanal=DIA_SEMANAL):
         if cobro not in FRECUENCIAS:
             sin_frecuencia.append(c)
             continue
-        c["periodo"] = periodo(cobro, hoy, dia_semanal)
-        c["enviado"], c["deuda_enviada"] = enviados.get((cid, c["periodo"]), (None, None))
+        c["ultimo"], c["deuda_enviada"] = ultimos.get(cid, (None, None))
+        c["enviado"] = c["ultimo"] if str(c["ultimo"] or "")[:10] == dia else None
         (cobrados if c["enviado"] else toca).append(c)
     return toca, cobrados, sin_frecuencia
 
 
 def marcar_cobrado(conn, client_id, hoy, dia_semanal=DIA_SEMANAL):
-    """Anota el envío del periodo. Si se le vuelve a enviar (pidió el saldo
-    antes de tiempo, o llevó más), queda el último: la fecha y lo que debía."""
+    """Anota el envío, con la fecha de hoy. Si se le vuelve a enviar en el
+    mismo periodo, queda el último: la fecha y lo que debía."""
     fila = conn.execute("SELECT total_debt, cobro FROM clients WHERE id = ?", (client_id,)).fetchone()
     if fila is None or fila[1] not in FRECUENCIAS:
         raise ValueError("El cliente no existe o no tiene frecuencia de cobro")
     conn.execute("""
         INSERT INTO cobros_envios (client_id, periodo, deuda, enviado)
-        VALUES (?, ?, ?, datetime('now', 'localtime'))
+        VALUES (?, ?, ?, ?)
         ON CONFLICT (client_id, periodo) DO UPDATE
            SET deuda = excluded.deuda, enviado = excluded.enviado""",
-                 (client_id, periodo(fila[1], hoy, dia_semanal), fila[0] or 0))
+                 (client_id, periodo(fila[1], hoy, dia_semanal), fila[0] or 0,
+                  f"{hoy.isoformat()} {datetime.now():%H:%M:%S}"))

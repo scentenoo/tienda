@@ -15,8 +15,8 @@
 {% block contenido %}
 <a class="volver" href="{{ url_for('mas') }}">‹ Más</a>
 <h1>Cobros</h1>
-<p class="sub">Semanales: cada {{ dias[ajustes['dia_semanal']] }}. Quincenales: el 15 y el último día del mes.
-  Toque <b>Enviar</b>: se abre su chat con el cobro listo y solo falta mandarlo.</p>
+<p class="sub">Aquí salen todos los que deben. Toque <b>Enviar</b>: se abre su chat con el cobro listo y
+  solo falta mandarlo. Queda como enviado por hoy; mañana vuelve a la lista.</p>
 
 {% if aviso %}<div class="exito">{{ aviso }}</div>{% endif %}
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
@@ -85,25 +85,26 @@
   <li data-id="{{ c['id'] }}" data-nombre="{{ c['nombre'] }}"><div class="fila">
     <div class="izq"><b>{{ c['nombre'] }}</b>
       <span>{{ etiqueta_frecuencia(c['frecuencia']) }} Debe {{ c['deuda']|pesos }}</span>
+      {% if c['ultimo'] %}<span class="ultimo">Último cobro: {{ c['ultimo']|fecha }}</span>{% endif %}
       <span class="falla" hidden>No se guardó la marca; toque de nuevo</span></div>
     <div class="der">{{ boton_enviar(c) }}</div>
   </div></li>
   {% endfor %}
 </ul>
 {% else %}
-<p class="vacio">A todos{{ ' los ' ~ ver ~ 'es' if ver != 'todos' }} ya se les cobró en este periodo.</p>
+<p class="vacio">{% if cobrados %}A todos{{ ' los ' ~ ver ~ 'es' if ver != 'todos' }} ya se les envió hoy.{% else %}Nadie debe por ahora.{% endif %}</p>
 {% endif %}
 
 {% if cobrados %}
 <details class="ya">
-  <summary class="seccion">Ya se les cobró ({{ cobrados|length }}) ›</summary>
+  <summary class="seccion">Enviados hoy ({{ cobrados|length }}) ›</summary>
   <ul class="lista" id="cobrados" style="margin-top:12px">
     {% for c in cobrados %}
     {% set cambio = c['deuda_enviada'] is not none and (c['deuda'] - c['deuda_enviada'])|abs > 0.5 %}
     <li data-id="{{ c['id'] }}" data-nombre="{{ c['nombre'] }}"><div class="fila">
       <div class="izq"><a href="{{ url_for('cliente', client_id=c['id']) }}"><b>{{ c['nombre'] }} ›</b></a>
         <span>{{ etiqueta_frecuencia(c['frecuencia']) }} Debe {{ c['deuda']|pesos }}</span>
-        <span>Enviado {{ c['enviado']|fecha }}{% if cambio %} · <b class="cambio">ese día debía {{ c['deuda_enviada']|pesos }}</b>{% endif %}</span>
+        <span>Enviado {{ c['enviado']|fecha }}{% if cambio %} · <b class="cambio">debía {{ c['deuda_enviada']|pesos }}</b>{% endif %}</span>
         <span class="falla" hidden>No se guardó la marca; toque de nuevo</span></div>
       <div class="der">{{ boton_enviar(c, 'Enviar de nuevo') }}</div>
     </div></li>
@@ -112,10 +113,10 @@
 </details>
 {% endif %}
 
-<p class="sub" style="margin-top:18px">Periodo semanal desde el {{ desde_semanal }}; quincenal desde el {{ desde_quincenal }}.
-  El enlace al estado de cuenta sirve {{ dias_enlace }} días.
-  Si a alguien no se le envió ese día, sigue aquí hasta que se le envíe. Si alguien pide su saldo
-  antes de su día, búsquelo en «Ya se les cobró» y toque <b>Enviar de nuevo</b>: va con lo que debe hoy. Lo enviado se ve igual desde cualquier celular.</p>
+<p class="sub" style="margin-top:18px">El enlace al estado de cuenta sirve {{ dias_enlace }} días.
+  La marca de enviado dura solo el día: mañana todos vuelven a «Toca cobrar», con la fecha de su último
+  cobro al lado. Si alguien lleva más hoy mismo, búsquelo en «Enviados hoy» y toque <b>Enviar de nuevo</b>:
+  va con lo que debe ahora. Lo enviado se ve igual desde cualquier celular.</p>
 
 <style>
 .pendiente { border: 2px solid var(--acento); margin-bottom: 4px; }
@@ -138,6 +139,7 @@ details.ya summary { margin-top: 22px; }
   padding: 10px 12px; margin-top: 8px; font-size: .88rem; overflow-wrap: anywhere; }
 .sin-guardar .enviar { opacity: .4; pointer-events: none; }
 #toca li.enviado { opacity: .55; }
+#toca .ultimo { display: block; color: var(--suave); font-size: .8rem; }
 li.enviado .enviar { background: var(--bien-fondo); color: var(--bien); }
 #toca .falla, #cobrados .falla { display: block; color: var(--alerta); }
 #toca .falla[hidden], #cobrados .falla[hidden] { display: none; }
@@ -147,7 +149,7 @@ li.enviado .enviar { background: var(--bien-fondo); color: var(--bien); }
 </style>
 <script>
 // Al tocar Enviar se abre WhatsApp y queda anotado en la base que a este
-// cliente ya se le cobró en este periodo.
+// cliente ya se le envió hoy.
 (function () {
   // Mientras el mensaje tenga cambios sin guardar no se puede enviar: así a
   // todos les llega el mismo, el que quedó guardado.
@@ -181,8 +183,8 @@ li.enviado .enviar { background: var(--bien-fondo); color: var(--bien); }
     });
   }
 
-  // Al tocar Enviar (o Enviar de nuevo) queda anotado el envío del periodo.
-  // Sin frecuencia no hay periodo que anotar: solo se abre el chat.
+  // Al tocar Enviar (o Enviar de nuevo) queda anotado el envío de hoy.
+  // Sin frecuencia no se anota: solo se abre el chat.
   var lista = document.getElementById("toca");
   var csrf = "{{ csrf() }}";
   function contar() {

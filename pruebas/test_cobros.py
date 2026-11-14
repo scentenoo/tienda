@@ -103,12 +103,22 @@ class Reparto(unittest.TestCase):
     def test_reparto(self):
         self.assertEqual(self.nombres(), [["Beto", "Ana"], [], ["Caro"]])
 
-    def test_cobrado_sale_aparte_hasta_el_siguiente_periodo(self):
+    def test_enviado_dura_solo_ese_dia(self):
         cobros.marcar_cobrado(self.conn, 1, self.hoy)
         cobros.marcar_cobrado(self.conn, 1, self.hoy)       # dos toques, una marca
-        self.assertEqual(self.nombres(), [["Beto"], ["Ana"], ["Caro"]])
-        self.hoy = date(2026, 10, 31)                        # sábado: semana nueva
-        self.assertEqual(self.nombres()[0], ["Beto", "Ana"])
+        cobros.marcar_cobrado(self.conn, 2, self.hoy)       # el quincenal también
+        self.assertEqual(self.nombres(), [[], ["Beto", "Ana"], ["Caro"]])
+        self.hoy = date(2026, 10, 27)                        # al otro día vuelven los dos
+        toca, cobrados, _ = cobros.clientes(self.conn, self.hoy)
+        self.assertEqual(([c["nombre"] for c in toca], cobrados), (["Beto", "Ana"], []))
+        self.assertEqual({c["ultimo"][:10] for c in toca}, {"2026-10-26"})    # y dice cuándo fue
+        self.assertEqual(toca[0]["deuda_enviada"], 90000)
+
+    def test_el_quincenal_cobrado_a_inicio_de_mes_sale_el_14(self):
+        cobros.marcar_cobrado(self.conn, 2, date(2026, 11, 2))
+        toca, cobrados, _ = cobros.clientes(self.conn, date(2026, 11, 14))
+        self.assertIn("Beto", [c["nombre"] for c in toca])
+        self.assertEqual(cobrados, [])
 
     def test_enviar_de_nuevo_guarda_lo_ultimo(self):
         cobros.marcar_cobrado(self.conn, 1, self.hoy)
@@ -218,7 +228,7 @@ class Rutas(unittest.TestCase):
     def test_enviado(self):
         r = self.cliente.post("/cobros/enviado", data={"csrf": "c", "client_id": "1"})
         self.assertEqual(r.status_code, 204)
-        self.assertIn("Ya se les cobró (1)", self.pagina())
+        self.assertIn("Enviados hoy (1)", self.pagina())
         r = self.cliente.post("/cobros/enviado", data={"client_id": "1"})
         self.assertEqual(r.status_code, 400)
 
@@ -228,7 +238,7 @@ class Rutas(unittest.TestCase):
         html = self.pagina()
         ya = html.split('id="cobrados"')[1].split("</ul>")[0]
         self.assertIn("Enviar de nuevo", ya)
-        self.assertIn("ese día debía $50.000", ya)
+        self.assertIn("debía $50.000", ya)
         self.assertIn("Saldo pendiente: $80.000", unquote(ya))
         # Caro no tiene frecuencia y igual se le puede enviar
         self.assertIn("Saldo pendiente: $20.000", unquote(html.split('id="sin-frecuencia"')[1]))
@@ -246,7 +256,7 @@ class Rutas(unittest.TestCase):
         self.assertEqual(r.status_code, 302)
         html = unquote(self.pagina())
         self.assertIn("Puedes pagarnos a: Nequi 300", html)
-        self.assertIn("Semanales: cada domingo", html)
+        self.assertEqual(cobros.ajustes(self.conn)["dia_semanal"], 6)
         self.assertNotIn("Falta el número de cuenta", html)
 
     def test_la_hermana_no_cambia_la_cuenta(self):

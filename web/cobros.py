@@ -13,8 +13,7 @@ from flask import abort, redirect, render_template, request, send_file, session,
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from utils import cobros, estado_cuenta
-from web.app import (DESARROLLO, _db_cobros, _dia_largo, _revisar_csrf, app, db, requiere_gastos,
-                     requiere_ingreso)
+from web.app import DESARROLLO, _db_cobros, _revisar_csrf, app, db, requiere_gastos, requiere_ingreso
 
 DIAS_ENLACE = 30
 
@@ -44,20 +43,17 @@ def cobros_pagina():
     cuantos["todos"] = len(toca) + len(cobrados)
     toca, cobrados = ([c for c in sorted(lista, key=lambda c: c["frecuencia"] != "semanal")
                        if ver == "todos" or c["frecuencia"] == ver] for lista in (toca, cobrados))
-    # A todos se les puede enviar: también a los ya cobrados (piden el saldo
-    # antes de su día o llevaron más) y a los que no tienen frecuencia.
+    # A todos se les puede enviar: también a los de hoy (llevaron más) y a
+    # los que no tienen frecuencia.
     for c in toca + cobrados + sin_frecuencia:
         c["mensaje"] = cobros.mensaje(ajustes["mensaje"], c["nombre"], c["deuda"],
                                       enlace_estado(c["id"]), ajustes["cuenta"])
     ejemplo = cobros.parte_fija(toca[0]["deuda"] if toca else 50000, "(enlace a su estado de cuenta)",
                                 ajustes["cuenta"], con_saldo="{deuda}" not in ajustes["mensaje"])
-    semanal = cobros.inicio_periodo("semanal", hoy, ajustes["dia_semanal"])
-    quincenal = cobros.inicio_periodo("quincenal", hoy)
     return render_template(
         "cobros.html", toca=toca, cobrados=cobrados, sin_frecuencia=sin_frecuencia, ver=ver,
         filtros=[("todos", "Todos")] + list(cobros.FRECUENCIAS.items()), cuantos=cuantos,
         ajustes=ajustes, ejemplo=ejemplo, dias=cobros.DIAS, largo_maximo=cobros.LARGO_MAXIMO,
-        desde_semanal=_dia_largo(semanal), desde_quincenal=_dia_largo(quincenal),
         dias_enlace=DIAS_ENLACE, aviso=session.pop("aviso_cobros", None),
         error=session.pop("error_cobros", None))
 
