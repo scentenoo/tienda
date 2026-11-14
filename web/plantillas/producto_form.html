@@ -44,6 +44,13 @@
       {% endfor %}
     </select>
   </label>
+  {% if cat.descripcion %}
+  <label class="campo">Descripción corta para el catálogo
+    <input type="text" name="descripcion" value="{{ p.get('descripcion', '') if p else '' }}" maxlength="{{ cat.largo_descripcion }}"
+           placeholder="Ej: Blanco, salado, ideal para arepas">
+  </label>
+  <p class="sub" style="margin:4px 0 0">Opcional. Una línea que sale debajo del precio.</p>
+  {% endif %}
   <fieldset class="modos">
     <legend>¿Aparece en el catálogo?</legend>
     {% for clave, nombre, descripcion in cat.modos %}

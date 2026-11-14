@@ -124,7 +124,7 @@ class ReglaDeVisibilidad(unittest.TestCase):
         conn = base()
         producto(conn, "Queso", precio=30000, stock=14, costo=21000)
         (p,) = reglas.productos_visibles(conn, HOY)
-        self.assertEqual(set(p), {"id", "nombre", "precio", "categoria", "estado", "medio_kilo"})
+        self.assertEqual(set(p), {"id", "nombre", "precio", "categoria", "estado", "medio_kilo", "descripcion"})
 
     def test_solo_el_queso_costeno_se_pide_por_medio_kilo(self):
         conn = base()
@@ -189,6 +189,30 @@ class Inventario(unittest.TestCase):
         editar_producto(conn, i, "Viejo", 6000, 7)
         self.assertEqual(conn.execute("SELECT name, price, stock FROM products").fetchall(), [("Viejo", 6000, 7)])
         self.assertIsNone(reglas.opciones_del_producto(conn, i))
+
+
+class Descripcion(unittest.TestCase):
+    def test_sin_la_columna_todo_sigue_y_sale_vacia(self):
+        conn = base()
+        self.assertFalse(reglas.tiene_descripcion(conn))
+        i = producto(conn, "Queso", stock=9)
+        self.assertEqual(reglas.productos_visibles(conn, HOY)[0]["descripcion"], "")
+        self.assertIsNone(reglas.descripcion_del_producto(conn, i))
+
+    def test_se_guarda_en_una_linea_y_sale_escapada_en_la_pagina(self):
+        conn = base()
+        preparar_catalogo.preparar(conn, aplicar=True)
+        self.assertTrue(reglas.tiene_descripcion(conn))
+        i = crear_producto(conn, "Queso", 30000, 9, descripcion="  Blanco y <b>salado</b>,\n ideal para arepas ")
+        self.assertEqual(reglas.descripcion_del_producto(conn, i), "Blanco y <b>salado</b>, ideal para arepas")
+        editar_producto(conn, i, "Queso", 30000)                    # sin pasarla, no se toca
+        self.assertEqual(reglas.descripcion_del_producto(conn, i), "Blanco y <b>salado</b>, ideal para arepas")
+        html = generar.construir(conn, "3137013735", ahora=datetime(2026, 10, 4, 13, 5, tzinfo=generar.ZONA))
+        self.assertIn("Blanco y &lt;b&gt;salado&lt;/b&gt;, ideal para arepas</p>", html)
+        editar_producto(conn, i, "Queso", 30000, descripcion="x" * 300)
+        self.assertEqual(len(reglas.descripcion_del_producto(conn, i)), reglas.LARGO_DESCRIPCION)
+        editar_producto(conn, i, "Queso", 30000, descripcion="")     # vacía: se quita
+        self.assertEqual(reglas.descripcion_del_producto(conn, i), "")
 
 
 class PrepararLaBase(unittest.TestCase):

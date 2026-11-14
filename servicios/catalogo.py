@@ -3,6 +3,7 @@
 Cada producto tiene dos datos para el catálogo (columnas de products):
   categoria   en qué sección sale (ver CATEGORIAS); vacío = "Otros"
   catalogo    'auto', 'siempre' o 'nunca' (ver MODOS); vacío = 'auto'
+  descripcion una línea corta que sale debajo del precio; vacío = sin ella
 
 La regla de 'auto': aparece si hay stock; agotado, sale como "Por encargo"
 mientras se haya comprado en los últimos MESES_SIN_COMPRA meses; después se
@@ -47,6 +48,8 @@ POCAS_UNIDADES = 5        # con este stock o menos: "Últimas unidades"
 # Queso Costeño). En el catálogo se piden de medio en medio kilo.
 POR_MEDIO_KILO = {29}
 
+LARGO_DESCRIPCION = 90    # una línea corta: lo que cabe en la tarjeta sin taparla
+
 _CLAVES_CATEGORIA = {clave for clave, _ in CATEGORIAS}
 _CLAVES_MODO = {clave for clave, _, _ in MODOS}
 
@@ -59,6 +62,30 @@ def normalizar_categoria(valor):
 def normalizar_modo(valor):
     valor = (valor or "").strip().lower()
     return valor if valor in _CLAVES_MODO else MODO_POR_DEFECTO
+
+
+def normalizar_descripcion(valor):
+    """Una sola línea, sin espacios de sobra y sin pasarse del largo."""
+    return " ".join(str(valor or "").split())[:LARGO_DESCRIPCION].strip()
+
+
+def tiene_descripcion(conn):
+    """¿La base ya tiene la columna de la descripción? Llegó después que
+    las otras dos: mientras no esté, el catálogo sale sin descripciones."""
+    try:
+        conn.execute("SELECT descripcion FROM products LIMIT 0")
+        return True
+    except Exception:
+        return False
+
+
+def descripcion_del_producto(conn, product_id):
+    """La descripción de un producto ('' si no tiene); None si la base
+    todavía no tiene la columna."""
+    if not tiene_descripcion(conn):
+        return None
+    fila = conn.execute("SELECT descripcion FROM products WHERE id = ?", (product_id,)).fetchone()
+    return normalizar_descripcion(fila[0]) if fila else None
 
 
 def tiene_columnas(conn):
@@ -93,11 +120,12 @@ def estado_del_producto(stock):
 def productos_visibles(conn, hoy=None):
     """Los productos del catálogo, primero los que salieron en más ventas en
     los últimos DIAS_DE_VENTAS días (y entre iguales, por nombre): dicts con id, nombre,
-    precio, categoria (clave), estado ('disponible', 'pocas' o 'encargo') y
-    medio_kilo (si también se vende por medio kilo)."""
+    precio, categoria (clave), estado ('disponible', 'pocas' o 'encargo'),
+    medio_kilo (si también se vende por medio kilo) y descripcion ('' si no tiene)."""
     hoy = (hoy or date.today()).isoformat()
+    descripcion = "p.descripcion" if tiene_descripcion(conn) else "NULL"
     filas = conn.execute(f"""
-        SELECT p.id, p.name, p.price, p.stock, p.categoria,
+        SELECT p.id, p.name, p.price, p.stock, p.categoria, {descripcion},
                (SELECT COUNT(DISTINCT sd.sale_id) FROM sale_details sd
                   JOIN sales s ON s.id = sd.sale_id
                  WHERE sd.product_id = p.id
@@ -114,7 +142,7 @@ def productos_visibles(conn, hoy=None):
          ORDER BY ventas DESC, p.name COLLATE NOCASE""", (hoy, hoy)).fetchall()
     return [{"id": f[0], "nombre": f[1], "precio": round(f[2] or 0),
              "categoria": normalizar_categoria(f[4]), "estado": estado_del_producto(f[3]),
-             "medio_kilo": f[0] in POR_MEDIO_KILO}
+             "medio_kilo": f[0] in POR_MEDIO_KILO, "descripcion": normalizar_descripcion(f[5])}
             for f in filas]
 
 

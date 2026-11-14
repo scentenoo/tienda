@@ -100,6 +100,9 @@ def _foto_producto(conn, i):
     if opciones:
         foto["Categoría"] = dict(reglas_catalogo.CATEGORIAS)[opciones["categoria"]]
         foto["Catálogo"] = {clave: nombre for clave, nombre, _ in reglas_catalogo.MODOS}[opciones["catalogo"]]
+    descripcion = reglas_catalogo.descripcion_del_producto(conn, i)
+    if descripcion:
+        foto["Descripción"] = descripcion
     return foto
 
 

@@ -20,6 +20,12 @@ celular y en el PC):
   - *Siempre*: aparece aunque lleve mucho agotado (lo que solo se trae bajo pedido).
   - *Nunca*: no aparece aunque haya stock.
 
+- **Descripción corta** (opcional): una línea que sale debajo del precio, como
+  «Blanco y salado, ideal para arepas». Hasta 90 letras. Esta columna llegó
+  después: se agrega corriendo otra vez `herramientas/preparar_catalogo.py`
+  (paso 1 de abajo) o abriendo el programa del PC actualizado. Mientras no
+  esté, el campo no aparece en el formulario y el catálogo sale sin descripciones.
+
 La regla está en `servicios/catalogo.py` (ahí se cambian los 2 meses, las
 categorías y desde cuántas unidades dice «Últimas unidades»). Al cliente
 nunca le llega el costo ni la cantidad exacta en stock.
@@ -99,6 +105,14 @@ arriba (sin ellas, la sección no aparece). Y como cada foto es un cambio en el
 repositorio, en Render conviene poner en *Settings → Build Filters → Ignored
 Paths* la ruta `catalogo/fotos/**`, para que subir una foto no vuelva a
 desplegar la página de ventas.
+
+**La vitrina (3D).** Los productos con foto salen con profundidad: sombra, se
+inclinan al bajar por la página, con el ratón y (en Android) al mover el
+celular. Al tocar la foto se abre el producto en grande y se gira con el dedo;
+desde ahí también se agrega al pedido. No usa ninguna librería ni modelos 3D:
+son varias copias de la misma foto, una detrás de otra, para darle grosor. Por
+eso gira hasta cierto punto y no se le ve la espalda. Quien tenga el teléfono
+en «reducir movimiento» lo ve quieto.
 
 Mientras no haya ninguna foto, las tarjetas salen sin recuadro; con la
 primera, las que no tengan salen con la inicial del producto.

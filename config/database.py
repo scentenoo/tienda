@@ -358,6 +358,7 @@ def init_database():
             # Catálogo para clientes (ver servicios/catalogo.py)
             ('products', 'categoria', 'TEXT'),
             ('products', 'catalogo', "TEXT DEFAULT 'auto'"),
+            ('products', 'descripcion', 'TEXT'),
         ]
         
         for table, column, definition in safe_add_columns:

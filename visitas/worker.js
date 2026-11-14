@@ -13,7 +13,7 @@
 //   ORIGEN        de dónde se aceptan avisos (en wrangler.toml)
 
 const TIPOS = new Set(["entrada", "categoria", "busqueda", "agregar", "quitar",
-                       "vaciar", "ver_pedido", "enviar", "escribir", "salida"]);
+                       "vaciar", "ver_pedido", "ver_producto", "enviar", "escribir", "salida"]);
 const ID = /^[a-z0-9]{8,32}$/;
 const CODIGO = /^[a-z0-9]{4,16}$/;
 const MAXIMO_CUERPO = 16384, MAXIMO_EVENTOS = 50, LARGO_DATO = 120;

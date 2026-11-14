@@ -4,7 +4,7 @@ inventario del PC. Ninguna función hace commit.
 La categoría y el modo del catálogo (ver servicios/catalogo.py) son
 opcionales: si no se pasan, no se tocan, y así nada de esto falla en una base
 que todavía no tenga esas columnas."""
-from servicios.catalogo import normalizar_categoria, normalizar_modo
+from servicios.catalogo import normalizar_categoria, normalizar_descripcion, normalizar_modo
 
 
 def _validar(conn, nombre, precio, stock, excluir_id=None):
@@ -28,34 +28,37 @@ def _validar(conn, nombre, precio, stock, excluir_id=None):
     return nombre
 
 
-def _campos_catalogo(categoria, catalogo):
+def _campos_catalogo(categoria, catalogo, descripcion=None):
     """Las columnas del catálogo que hay que escribir, con su valor."""
     campos = {}
     if categoria is not None:
         campos["categoria"] = normalizar_categoria(categoria)
     if catalogo is not None:
         campos["catalogo"] = normalizar_modo(catalogo)
+    if descripcion is not None:
+        campos["descripcion"] = normalizar_descripcion(descripcion)
     return campos
 
 
-def crear_producto(conn, nombre, precio, stock=0, categoria=None, catalogo=None):
+def crear_producto(conn, nombre, precio, stock=0, categoria=None, catalogo=None, descripcion=None):
     nombre = _validar(conn, nombre, precio, stock or 0)
     campos = {"name": nombre, "price": precio, "stock": stock or 0,
-              **_campos_catalogo(categoria, catalogo)}
+              **_campos_catalogo(categoria, catalogo, descripcion)}
     cursor = conn.cursor()
     cursor.execute(f"INSERT INTO products ({', '.join(campos)}) "
                    f"VALUES ({', '.join('?' * len(campos))})", tuple(campos.values()))
     return cursor.lastrowid
 
 
-def editar_producto(conn, product_id, nombre, precio, stock=None, categoria=None, catalogo=None):
+def editar_producto(conn, product_id, nombre, precio, stock=None, categoria=None, catalogo=None,
+                    descripcion=None):
     """Sin stock (None) se conserva el que tiene, como en el PC. Lo mismo la
-    categoría y el modo del catálogo."""
+    categoría, el modo del catálogo y la descripción."""
     nombre = _validar(conn, nombre, precio, stock, excluir_id=product_id)
     campos = {"name": nombre, "price": precio}
     if stock is not None:
         campos["stock"] = stock
-    campos.update(_campos_catalogo(categoria, catalogo))
+    campos.update(_campos_catalogo(categoria, catalogo, descripcion))
     conn.execute(f"UPDATE products SET {', '.join(c + ' = ?' for c in campos)} WHERE id = ?",
                  (*campos.values(), product_id))
 

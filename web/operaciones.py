@@ -63,7 +63,9 @@ def _campos_catalogo(conn):
     antes)."""
     if not reglas_catalogo.tiene_columnas(conn):
         return None
-    return {"categorias": reglas_catalogo.CATEGORIAS, "modos": reglas_catalogo.MODOS}
+    return {"categorias": reglas_catalogo.CATEGORIAS, "modos": reglas_catalogo.MODOS,
+            "descripcion": reglas_catalogo.tiene_descripcion(conn),
+            "largo_descripcion": reglas_catalogo.LARGO_DESCRIPCION}
 
 
 def _catalogo_del_formulario(conn):
@@ -74,7 +76,10 @@ def _catalogo_del_formulario(conn):
         return {}
     if not reglas_catalogo.tiene_columnas(conn):
         return {}
-    return {"categoria": f.get("categoria", ""), "catalogo": f.get("catalogo", "")}
+    campos = {"categoria": f.get("categoria", ""), "catalogo": f.get("catalogo", "")}
+    if f.get("descripcion") is not None and reglas_catalogo.tiene_descripcion(conn):
+        campos["descripcion"] = f.get("descripcion")
+    return campos
 
 
 def _foto_del_producto(product_id):
@@ -129,6 +134,7 @@ def producto_editar(product_id):
         datos = {"id": p["id"], "nombre": p["name"], "precio": round(p["price"] or 0),
                  "stock": f"{p['stock']:g}".replace(".", ","), "costo": p["cost_price"],
                  **(reglas_catalogo.opciones_del_producto(conn, product_id) or {}),
+                 "descripcion": reglas_catalogo.descripcion_del_producto(conn, product_id) or "",
                  **reposicion.grupo_del_producto(conn, product_id)}
         return render_template("producto_form.html", p=datos, error=None, usos=usos,
                                cat=_campos_catalogo(conn), foto=_foto_del_producto(product_id))

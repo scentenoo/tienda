@@ -381,6 +381,11 @@ class ProductFormWindow:
         self.category_combo.current(self._claves_categoria.index(reglas_catalogo.CATEGORIA_POR_DEFECTO))
         self.category_combo.pack(fill=tk.X, pady=(0, 15))
 
+        ttk.Label(form_frame, text="Descripción corta para el catálogo (opcional):",
+                  font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
+        self.description_entry = ttk.Entry(form_frame, width=50, font=FONT_NORMAL)
+        self.description_entry.pack(fill=tk.X, pady=(0, 15))
+
         ttk.Label(form_frame, text="¿Aparece en el catálogo?", font=FONT_BOLD).pack(anchor=tk.W, pady=(0, 5))
         self.catalog_var = tk.StringVar(value=reglas_catalogo.MODO_POR_DEFECTO)
         for clave, nombre, descripcion in reglas_catalogo.MODOS:
@@ -415,9 +420,12 @@ class ProductFormWindow:
             try:
                 conn = get_connection()
                 opciones = reglas_catalogo.opciones_del_producto(conn, self.product['id'])
+                descripcion = reglas_catalogo.descripcion_del_producto(conn, self.product['id'])
                 conn.close()
             except Exception:
-                opciones = None
+                opciones = descripcion = None
+            if descripcion:
+                self.description_entry.insert(0, descripcion)
             if opciones:
                 self.category_combo.current(self._claves_categoria.index(opciones["categoria"]))
                 self.catalog_var.set(opciones["catalogo"])
@@ -462,6 +470,7 @@ class ProductFormWindow:
         
         categoria = self._claves_categoria[self.category_combo.current()]
         catalogo = reglas_catalogo.normalizar_modo(self.catalog_var.get())
+        descripcion = reglas_catalogo.normalizar_descripcion(self.description_entry.get())
 
         try:
             conn = get_connection()
@@ -477,9 +486,9 @@ class ProductFormWindow:
                 
                 # Insertar nuevo producto
                 cursor.execute('''
-                    INSERT INTO products (name, price, stock, categoria, catalogo)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (name, price, stock, categoria, catalogo))
+                    INSERT INTO products (name, price, stock, categoria, catalogo, descripcion)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (name, price, stock, categoria, catalogo, descripcion))
                 
                 messagebox.showinfo("Éxito", "Producto agregado correctamente")
                 
@@ -499,15 +508,15 @@ class ProductFormWindow:
                 if stock_str:  # Si se especificó stock, actualizarlo
                     cursor.execute('''
                         UPDATE products 
-                        SET name = ?, price = ?, stock = ?, categoria = ?, catalogo = ?
+                        SET name = ?, price = ?, stock = ?, categoria = ?, catalogo = ?, descripcion = ?
                         WHERE id = ?
-                    ''', (name, price, stock, categoria, catalogo, self.product['id']))
+                    ''', (name, price, stock, categoria, catalogo, descripcion, self.product['id']))
                 else:  # Si no se especificó stock, mantener el actual
                     cursor.execute('''
                         UPDATE products 
-                        SET name = ?, price = ?, categoria = ?, catalogo = ?
+                        SET name = ?, price = ?, categoria = ?, catalogo = ?, descripcion = ?
                         WHERE id = ?
-                    ''', (name, price, categoria, catalogo, self.product['id']))
+                    ''', (name, price, categoria, catalogo, descripcion, self.product['id']))
                 
                 messagebox.showinfo("Éxito", "Producto actualizado correctamente")
             

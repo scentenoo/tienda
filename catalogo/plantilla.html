@@ -24,7 +24,7 @@
   --chip: #f1e7d6; --logo-fondo: #ffffff;
   --bien: #1c7443; --bien-fondo: #d8efde; --sobre-bien: #ffffff;
   --aviso: #7f5300; --aviso-fondo: #fcefc9;
-  --velo: rgba(43, 33, 24, .5);
+  --velo: rgba(43, 33, 24, .5); --sombra: rgba(70, 45, 15, .3);
   --rd: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
@@ -34,7 +34,7 @@
     --chip: #2f251c; --logo-fondo: #ffffff;
     --bien: #84d6a4; --bien-fondo: #163021; --sobre-bien: #0d2416;
     --aviso: #f3d27a; --aviso-fondo: #3a2e10;
-    --velo: rgba(0, 0, 0, .6);
+    --velo: rgba(0, 0, 0, .6); --sombra: rgba(0, 0, 0, .6);
   }
 }
 * { box-sizing: border-box; }
@@ -74,15 +74,45 @@ main { padding-top: 14px; padding-bottom: 120px; }
 .seccion h2 { margin: 0 0 10px; font: 800 1.15rem/1.2 var(--rd); }
 .rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 10px; }
 .producto { display: flex; flex-direction: column; background: var(--tarjeta);
-  border: 1px solid var(--borde); border-radius: 16px; overflow: hidden; }
+  border: 1px solid var(--borde); border-radius: 16px; }
 .foto { position: relative; aspect-ratio: 4 / 3; display: grid; place-items: center; background: var(--chip); color: var(--suave);
-  font: 800 2.4rem var(--rd); }
+  font: 800 2.4rem var(--rd); border-radius: 15px 15px 0 0; }
 .foto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .foto img.recorte { padding: 10px; object-fit: contain; }
+
+/* ── La vitrina: el producto con profundidad. --rx y --ry (en grados) los pone
+   la página según se mueva el celular o el ratón; al bajar por la página, cada
+   producto se inclina un poco (donde el navegador lo sabe hacer solo). */
+.foto.con-foto { --rx: 0; --ry: 0; perspective: 520px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.foto.con-foto:focus-visible { outline: 3px solid var(--naranja); outline-offset: -3px; }
+.foto.con-recorte { background: radial-gradient(120% 95% at 50% 0%, var(--tarjeta), var(--chip) 78%); }
+.foto.con-recorte::before { content: ""; position: absolute; left: 20%; right: 20%; bottom: 5%; height: 10%;
+  background: radial-gradient(closest-side, var(--sombra), transparent);
+  transform: translateX(calc(var(--ry) * -.5px)); }
+.foto.con-recorte img { filter: drop-shadow(0 5px 5px var(--sombra));
+  transform: rotateX(calc(var(--rx) * 1deg)) rotateY(calc(var(--ry) * 1deg)) translateZ(26px);
+  transition: transform 260ms cubic-bezier(.2, .7, .2, 1); }
+.foto.propia { overflow: hidden; }
+.foto.propia img { transform: scale(1.12) translate(calc(var(--ry) * -.3%), calc(var(--rx) * .3%));
+  transition: transform 260ms cubic-bezier(.2, .7, .2, 1); }
+.con-giro .foto img { transition: none; }        /* el celular ya lo mueve cuadro a cuadro */
+.ver-3d { position: absolute; right: 6px; bottom: 6px; display: flex; align-items: center; gap: 3px;
+  padding: 3px 7px; border-radius: 999px; background: var(--tarjeta); border: 1px solid var(--borde);
+  color: var(--suave); font: 800 .66rem/1 var(--rd); letter-spacing: .3px; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .foto.cerca.con-recorte img { animation: asoma linear both; animation-timeline: view(); }
+    .foto.cerca.propia img { animation: desliza linear both; animation-timeline: view(); }
+  }
+  .producto:active .foto.con-recorte img { transform: rotateX(calc(var(--rx) * 1deg)) rotateY(calc(var(--ry) * 1deg)) translateZ(44px); }
+}
+@keyframes asoma { from { rotate: x 9deg; translate: 0 5px; } to { rotate: x -9deg; translate: 0 -5px; } }
+@keyframes desliza { from { translate: 0 3.5%; } to { translate: 0 -3.5%; } }
 .cuerpo { flex-grow: 1; display: flex; flex-direction: column; gap: 6px; padding: 10px; }
 .cuerpo h3 { margin: 0; min-height: 2.6em; font-size: .88rem; font-weight: 600; line-height: 1.3; }
 .precio { margin: 0; font: 800 1.2rem/1.1 var(--rd); font-variant-numeric: tabular-nums; }
 .por-kilo { margin: 2px 0 0; font-size: .75rem; line-height: 1.3; color: var(--suave); }
+.cuerpo .descripcion { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .estado { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .75rem; font-weight: 600; }
 .estado.disponible { background: var(--bien-fondo); color: var(--bien); }
 .estado.pocas { background: var(--aviso-fondo); color: var(--aviso); }
@@ -139,6 +169,38 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
 .nota { margin: 0; text-align: center; font-size: .82rem; color: var(--suave); }
 .vaciar { align-self: center; min-height: 44px; padding: 0 12px; border: 0; background: none;
   color: var(--naranja); font-size: .88rem; font-weight: 600; }
+
+/* ── El visor: un producto en grande, que se gira con el dedo. Va hecho de
+   varias copias de la foto, una detrás de otra, para que tenga grosor. */
+.visor .hoja-titulo h2 { font-size: 1.2rem; }
+.escena { position: relative; height: min(72vw, 44dvh, 340px); border-radius: 20px; overflow: hidden;
+  background: radial-gradient(110% 80% at 50% 12%, var(--tarjeta), var(--chip) 80%);
+  border: 1px solid var(--borde); perspective: 900px; touch-action: none; cursor: grab;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.escena.agarrado { cursor: grabbing; }
+.pieza { --vx: 0; --vy: 0; position: absolute; inset: 9% 12% 15%; transform-style: preserve-3d;
+  transform: rotateX(calc(var(--vx) * 1deg)) rotateY(calc(var(--vy) * 1deg)); will-change: transform; }
+.pieza img, .pieza .brillo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+  pointer-events: none; -webkit-user-drag: none; }
+.pieza img.canto { filter: brightness(.55); }
+.pieza.propia img, .pieza.propia .brillo { object-fit: cover; border-radius: 16px; }
+.pieza .brillo { background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .42) 50%, transparent 62%) no-repeat;
+  background-size: 300% 100%; background-position: calc(50% + var(--vy) * 1.6%) 0;
+  -webkit-mask: var(--foto) center / contain no-repeat; mask: var(--foto) center / contain no-repeat; }
+.pieza.propia .brillo { -webkit-mask: none; mask: none; }
+.piso { position: absolute; left: 22%; right: 22%; bottom: 6%; height: 9%;
+  background: radial-gradient(closest-side, var(--sombra), transparent);
+  transform: translateX(calc(var(--vy) * -.9px)) scaleX(calc(1 - var(--giro, 0) * .25)); }
+.pista { position: absolute; left: 0; right: 0; bottom: 8px; margin: 0; text-align: center; font-size: .75rem;
+  color: var(--suave); pointer-events: none; transition: opacity 300ms ease-out; }
+.pista.vista { opacity: 0; }
+.visor-datos { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.visor-datos p { margin: 0; }
+.visor-datos .precio { font-size: 1.75rem; }
+.visor-descripcion { margin: 0; font-size: .94rem; line-height: 1.4; color: var(--suave); }
+.visor .accion .boton, .visor .accion .contador button { min-height: 52px; }
+.visor .accion .contador button { width: 56px; }
+.visor .accion .contador b { font: 800 1.2rem var(--rd); }
 </style>
 </head>
 <body data-whatsapp="{{ whatsapp }}"{% if visitas %} data-visitas="{{ visitas }}"{% endif %}>
@@ -175,17 +237,23 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
     <h2>{{ s.nombre }}</h2>
     <div class="rejilla">
       {% for p in s.productos %}
-      <article class="producto" data-id="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.precio }}" data-estado="{{ p.estado }}"{% if p.medio_kilo %} data-medio-kilo{% endif %}>
+      <article class="producto" data-id="{{ p.id }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.precio }}" data-estado="{{ p.estado }}"{% if p.medio_kilo %} data-medio-kilo{% endif %}{% if p.descripcion %} data-descripcion="{{ p.descripcion }}"{% endif %}>
         {# Mientras no haya ninguna foto, las tarjetas salen sin el recuadro #}
         {% if hay_fotos %}
-        <div class="foto">
-          {% if p.foto %}<img src="{{ p.foto }}"{% if p.foto_recortada %} class="recorte"{% endif %} alt="" loading="lazy">{% else %}<span aria-hidden="true">{{ p.inicial }}</span>{% endif %}
+        {% if p.foto %}
+        <div class="foto con-foto {{ 'con-recorte' if p.foto_recortada else 'propia' }}" role="button" tabindex="0" aria-label="Ver {{ p.nombre }} en 3D">
+          <img src="{{ p.foto }}"{% if p.foto_recortada %} class="recorte"{% endif %} alt="" loading="lazy">
+          <span class="ver-3d" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5"/><path d="M12 12v9"/><path d="M12 12L4 7.5"/></svg>3D</span>
         </div>
+        {% else %}
+        <div class="foto"><span aria-hidden="true">{{ p.inicial }}</span></div>
+        {% endif %}
         {% endif %}
         <div class="cuerpo">
           <h3>{{ p.nombre }}</h3>
           <p class="precio">{{ p.precio_texto }}</p>
           {% if p.medio_kilo %}<p class="por-kilo">El kilo · también por medio kilo</p>{% endif %}
+          {% if p.descripcion %}<p class="por-kilo descripcion">{{ p.descripcion }}</p>{% endif %}
           <p><span class="estado {{ p.estado }}">{{ p.etiqueta }}</span></p>
           <div class="accion"></div>
         </div>
@@ -225,6 +293,31 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
     </a>
     <p class="nota" id="nota"></p>
     <button type="button" class="vaciar" id="vaciar">Vaciar el pedido</button>
+  </div>
+</dialog>
+
+<dialog class="hoja visor" id="visor" aria-labelledby="visor-nombre">
+  <div class="hoja-cuerpo">
+    <div class="hoja-titulo">
+      <h2 id="visor-nombre"></h2>
+      <button type="button" class="cerrar" id="visor-cerrar" aria-label="Cerrar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="escena" id="escena">
+      <div class="piso" id="piso"></div>
+      <div class="pieza" id="pieza"></div>
+      <p class="pista" id="pista">Arrástralo para girarlo</p>
+    </div>
+    <div class="visor-datos">
+      <div>
+        <p class="precio" id="visor-precio"></p>
+        <p class="por-kilo" id="visor-kilo" hidden>El kilo · también por medio kilo</p>
+      </div>
+      <p><span class="estado" id="visor-estado"></span></p>
+    </div>
+    <p class="visor-descripcion" id="visor-descripcion" hidden></p>
+    <div class="accion" id="visor-accion"></div>
   </div>
 </dialog>
 
@@ -407,7 +500,192 @@ a.enviar { min-height: 56px; display: flex; align-items: center; justify-content
         : "Te confirmamos el pedido y el día de entrega por el chat.";
     var mensaje = "Hola, quiero hacer este pedido:\n" + renglones.join("\n") + "\nTotal: " + pesos(suma);
     document.getElementById("enviar").href = "https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(mensaje);
+    pintarVisor();
   }
+
+  // ── La vitrina: los productos con profundidad (ver los estilos de .foto)
+  var quieto = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cerca = [];                       // los recuadros que están en pantalla o por entrar
+  var giro = { x: 0, y: 0 };            // hacia dónde inclina el celular, en grados
+  function entre(n, minimo, maximo) { return Math.max(minimo, Math.min(maximo, n)); }
+  if ("IntersectionObserver" in window) {
+    var vigia = new IntersectionObserver(function (cambios) {
+      cambios.forEach(function (c) {
+        c.target.classList.toggle("cerca", c.isIntersecting);
+        var i = cerca.indexOf(c.target);
+        if (c.isIntersecting && i === -1) cerca.push(c.target);
+        if (!c.isIntersecting && i !== -1) cerca.splice(i, 1);
+      });
+    }, { rootMargin: "150px 0px" });
+    document.querySelectorAll(".foto.con-foto").forEach(function (f) { vigia.observe(f); });
+  }
+  function inclinar(foto, x, y) {
+    foto.style.setProperty("--rx", x.toFixed(2));
+    foto.style.setProperty("--ry", y.toFixed(2));
+  }
+
+  // Con el ratón (en el PC): el producto mira hacia donde está el puntero
+  (function () {
+    var actual = null;
+    function soltar() { if (actual) inclinar(actual, 0, 0); actual = null; }
+    var main = document.querySelector("main");
+    main.addEventListener("pointermove", function (e) {
+      if (e.pointerType !== "mouse" || quieto) return;
+      var foto = e.target.closest ? e.target.closest(".foto.con-foto") : null;
+      if (foto !== actual) soltar();
+      if (!foto) return;
+      actual = foto;
+      var r = foto.getBoundingClientRect();
+      inclinar(foto, ((e.clientY - r.top) / r.height - .5) * -16, ((e.clientX - r.left) / r.width - .5) * 20);
+    });
+    main.addEventListener("pointerleave", soltar);
+  })();
+
+  // Con el celular: al moverlo, los productos se inclinan. Solo donde no hay
+  // que pedir permiso (en iPhone lo pide, y no vale la pena la pregunta).
+  (function () {
+    if (quieto || !window.DeviceOrientationEvent || typeof DeviceOrientationEvent.requestPermission === "function") return;
+    if (!window.matchMedia || !matchMedia("(hover: none)").matches) return;
+    var base = null, puesto = { x: 0, y: 0 }, pendiente = false;
+    function cuadro() {
+      pendiente = false;
+      puesto.x += (giro.x - puesto.x) * .18;
+      puesto.y += (giro.y - puesto.y) * .18;
+      cerca.forEach(function (foto) { inclinar(foto, puesto.x, puesto.y); });
+      if (Math.abs(giro.x - puesto.x) + Math.abs(giro.y - puesto.y) > .05) pedir();
+    }
+    function pedir() { if (!pendiente) { pendiente = true; requestAnimationFrame(cuadro); } }
+    window.addEventListener("deviceorientation", function (e) {
+      if (e.beta == null || e.gamma == null) return;
+      if (!base) { base = { b: e.beta, g: e.gamma }; document.body.classList.add("con-giro"); }
+      // El centro sigue despacio al celular: cuenta el movimiento, no cómo lo sostiene
+      base.b += (e.beta - base.b) * .015;
+      base.g += (e.gamma - base.g) * .015;
+      giro.x = entre((e.beta - base.b) * -.7, -11, 11);
+      giro.y = entre((e.gamma - base.g) * -.7, -13, 13);
+      if (!visor.open) pedir();
+    });
+  })();
+
+  // ── El visor: el producto en grande, se gira con el dedo
+  var visor = document.getElementById("visor"), escena = document.getElementById("escena");
+  var pieza = document.getElementById("pieza"), piso = document.getElementById("piso");
+  var enVisor = null;                   // el id del producto que se está viendo
+  var CAPAS = 9, GROSOR = 1.5;          // copias de la foto y píxeles entre una y otra
+  var pose = { x: 0, y: 0, vx: 0, vy: 0 }, arrastre = null, reloj3d = null, antes = 0, yaGiro = false;
+
+  function pintarVisor() {
+    if (!enVisor) return;
+    var accion = document.getElementById("visor-accion"), p = productos[enVisor], id = enVisor;
+    accion.textContent = "";
+    if (pedido[id] > 0) accion.appendChild(contador(id));
+    else accion.appendChild(boton(p.encargo ? "boton encargar" : "boton",
+                                  MAS + "<span>" + (p.encargo ? "Encargar" : "Agregar al pedido") + "</span>", null,
+                                  function () { cambiar(id, 1); }));
+  }
+  function armarPieza(foto, propia) {
+    pieza.textContent = "";
+    pieza.className = "pieza" + (propia ? " propia" : "");
+    pieza.style.setProperty("--foto", 'url("' + foto + '")');
+    for (var i = propia ? 4 : CAPAS; i >= 0; i--) {
+      var img = document.createElement("img");
+      img.src = foto; img.alt = ""; img.draggable = false;
+      if (i) { img.className = "canto"; img.style.transform = "translateZ(" + (-i * GROSOR) + "px)"; }
+      pieza.appendChild(img);
+    }
+    var brillo = document.createElement("div");
+    brillo.className = "brillo";
+    brillo.style.transform = "translateZ(.6px)";
+    pieza.appendChild(brillo);
+  }
+  function posar() {
+    pieza.style.setProperty("--vx", pose.x.toFixed(2));
+    pieza.style.setProperty("--vy", pose.y.toFixed(2));
+    piso.style.setProperty("--vy", pose.y.toFixed(2));
+    piso.style.setProperty("--giro", Math.min(Math.abs(pose.y) / 60, 1).toFixed(3));
+  }
+  // Un resorte: al soltarlo vuelve al frente con un rebote corto. Suelto, se
+  // mece solo (o sigue al celular, donde se puede).
+  function cuadro3d(ahora) {
+    var dt = Math.min((ahora - antes) / 1000, .032);
+    antes = ahora;
+    if (!arrastre) {
+      var meta = { x: giro.x * 2.2, y: giro.y * 2.6 };
+      if (!quieto && !document.body.classList.contains("con-giro")) {
+        meta = { x: Math.sin(ahora / 2100) * 3, y: Math.sin(ahora / 1500) * 13 };
+      }
+      pose.vx += ((meta.x - pose.x) * 90 - pose.vx * 11) * dt;
+      pose.vy += ((meta.y - pose.y) * 90 - pose.vy * 11) * dt;
+      pose.x += pose.vx * dt;
+      pose.y += pose.vy * dt;
+      posar();
+    }
+    reloj3d = requestAnimationFrame(cuadro3d);
+  }
+  function abrirVisor(nodo) {
+    var id = nodo.dataset.id, p = productos[id], img = nodo.querySelector(".foto img");
+    if (!p || !img) return;
+    enVisor = id;
+    document.getElementById("visor-nombre").textContent = p.nombre;
+    document.getElementById("visor-precio").textContent = pesos(p.precio);
+    document.getElementById("visor-kilo").hidden = p.paso === 1;
+    var estado = nodo.querySelector(".estado"), copia = document.getElementById("visor-estado");
+    copia.className = estado.className; copia.textContent = estado.textContent;
+    var descripcion = document.getElementById("visor-descripcion");
+    descripcion.textContent = nodo.dataset.descripcion || "";
+    descripcion.hidden = !nodo.dataset.descripcion;
+    armarPieza(img.getAttribute("src"), !img.classList.contains("recorte"));
+    pintarVisor();
+    // Entra girando: el resorte lo trae al frente
+    pose = quieto ? { x: 0, y: 0, vx: 0, vy: 0 } : { x: 6, y: -55, vx: 0, vy: 0 };
+    posar();
+    if (visor.showModal) visor.showModal(); else visor.setAttribute("open", "");
+    antes = performance.now();
+    cancelAnimationFrame(reloj3d);
+    reloj3d = requestAnimationFrame(cuadro3d);
+    anotar("ver_producto", p.nombre);
+  }
+  function cerrarVisor() { if (visor.close) visor.close(); else { visor.removeAttribute("open"); alCerrarVisor(); } }
+  function alCerrarVisor() { cancelAnimationFrame(reloj3d); reloj3d = null; enVisor = null; arrastre = null; pieza.textContent = ""; }
+  visor.addEventListener("close", alCerrarVisor);
+  document.getElementById("visor-cerrar").addEventListener("click", cerrarVisor);
+  visor.addEventListener("click", function (e) { if (e.target === visor) cerrarVisor(); });
+
+  escena.addEventListener("pointerdown", function (e) {
+    arrastre = { id: e.pointerId, x: e.clientX, y: e.clientY, px: pose.x, py: pose.y, t: performance.now() };
+    try { escena.setPointerCapture(e.pointerId); } catch (err) { /* igual sirve */ }
+    escena.classList.add("agarrado");
+    if (!yaGiro) { yaGiro = true; document.getElementById("pista").classList.add("vista"); }
+  });
+  escena.addEventListener("pointermove", function (e) {
+    if (!arrastre || e.pointerId !== arrastre.id) return;
+    var ahora = performance.now(), dt = Math.max((ahora - arrastre.t) / 1000, .001);
+    // Hasta un tope, y cerca del tope cuesta más: no se le ve la espalda, que no tiene
+    var y = 62 * Math.tanh((arrastre.py + (e.clientX - arrastre.x) * .55) / 62);
+    var x = 28 * Math.tanh((arrastre.px - (e.clientY - arrastre.y) * .4) / 28);
+    pose.vx = entre((x - pose.x) / dt, -400, 400);
+    pose.vy = entre((y - pose.y) / dt, -400, 400);
+    pose.x = x; pose.y = y;
+    arrastre.t = ahora;
+    posar();
+  });
+  function soltarPieza(e) {
+    if (!arrastre || e.pointerId !== arrastre.id) return;
+    arrastre = null;
+    escena.classList.remove("agarrado");
+  }
+  escena.addEventListener("pointerup", soltarPieza);
+  escena.addEventListener("pointercancel", soltarPieza);
+
+  document.querySelectorAll(".foto.con-foto").forEach(function (foto) {
+    var nodo = foto.closest(".producto");
+    foto.addEventListener("click", function () { abrirVisor(nodo); });
+    foto.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      abrirVisor(nodo);
+    });
+  });
 
   document.getElementById("ver-pedido").addEventListener("click", function () {
     if (hoja.showModal) hoja.showModal(); else hoja.setAttribute("open", "");

@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from servicios.catalogo import CATEGORIAS, tiene_columnas  # noqa: E402
+from servicios.catalogo import CATEGORIAS, tiene_columnas, tiene_descripcion  # noqa: E402
 
 # Los productos de octubre de 2026. Los que no estén aquí quedan sin
 # categoría (salen en "Otros") hasta que se les ponga en el formulario.
@@ -84,6 +84,12 @@ def preparar(conn, aplicar):
                     conn.execute(f"ALTER TABLE products ADD COLUMN {columna} {definicion}")
                 except sqlite3.OperationalError:
                     pass    # esa ya estaba
+
+    # La descripción llegó después: se agrega aparte, aunque las otras dos ya estén
+    if not tiene_descripcion(conn):
+        informe.append("Se agrega a products la columna descripcion.")
+        if aplicar:
+            conn.execute("ALTER TABLE products ADD COLUMN descripcion TEXT")
 
     con_columnas = listas or aplicar
     sql = ("SELECT id, name, categoria, catalogo FROM products ORDER BY name COLLATE NOCASE"
