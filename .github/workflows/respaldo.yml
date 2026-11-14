@@ -1,0 +1,47 @@
+# Respaldo de la base en Google Drive (ver respaldo/LEEME.md). Corre sola
+# todas las noches, y cuando se toca «Respaldar en Google Drive» en la
+# pestaña Más de la página (o "Run workflow" aquí en GitHub).
+name: Respaldo
+
+on:
+  schedule:
+    - cron: "43 4 * * *"      # 11:43 p. m. en Colombia
+  workflow_dispatch:
+    inputs:
+      origen:
+        description: "Quién lo pidió (lo muestra la página)"
+        default: "a mano desde GitHub"
+
+permissions:
+  contents: read
+
+# Uno a la vez; si piden otro mientras corre, espera y sale después
+concurrency:
+  group: respaldo
+  cancel-in-progress: false
+
+jobs:
+  respaldar:
+    # Mientras no exista la variable RESPALDO_CARPETA (respaldo/LEEME.md), no hace nada
+    if: ${{ vars.RESPALDO_CARPETA != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: respaldo/requirements.txt
+      - run: pip install -r respaldo/requirements.txt
+      - name: Respaldar en Google Drive
+        run: python -m respaldo.respaldar
+        env:
+          TZ: America/Bogota
+          TURSO_URL: ${{ secrets.TURSO_URL }}
+          TURSO_TOKEN: ${{ secrets.TURSO_TOKEN }}
+          GOOGLE_CLIENTE_ID: ${{ secrets.GOOGLE_CLIENTE_ID }}
+          GOOGLE_CLIENTE_SECRETO: ${{ secrets.GOOGLE_CLIENTE_SECRETO }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          RESPALDO_CARPETA: ${{ vars.RESPALDO_CARPETA }}
+          RESPALDO_ORIGEN: ${{ github.event_name == 'schedule' && 'automático' || github.event.inputs.origen }}

@@ -73,6 +73,29 @@
 </ul>
 {% endif %}
 
+{% if respaldo %}
+{% set ultimo = respaldo['ultimo'] %}
+<p class="seccion" id="respaldo">Respaldo</p>
+{% if aviso_respaldo == "listo" %}<div class="exito">✓ Pedido: en uno o dos minutos queda en Google Drive. Vuelva a abrir Más para ver cómo le fue.</div>
+{% elif aviso_respaldo == "fallo" %}<div class="error">GitHub no recibió el pedido. Intente de nuevo en un rato; esta noche se respalda solo igual.</div>{% endif %}
+<form method="post" action="{{ url_for('respaldo_pedir') }}" class="lista">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <button class="fila" onclick="this.disabled=true; this.form.submit()" {{ 'disabled' if respaldo['en_curso'] }}>
+    <div class="izq con-ico"><span class="ico">{{ icono('nube') }}</span>
+      <div><b>{{ 'Respaldando en Google Drive…' if respaldo['en_curso'] else 'Respaldar en Google Drive' }}</b>
+        <span>{% if respaldo['en_curso'] %}Pedido el {{ respaldo['en_curso']|fecha }}; tarda uno o dos minutos
+        {% elif not ultimo %}Todavía no hay ningún respaldo desde la nube. Cada noche se hace solo.
+        {% elif ultimo['error'] %}<b class="mal">El último falló</b> ({{ ultimo['fecha']|fecha }}): {{ ultimo['error'] }}
+        {% else %}Último: {{ ultimo['fecha']|fecha }}, {{ ultimo['origen'] }}. Cada noche se hace solo.{% endif %}</span></div></div>
+    <div class="der sub" style="margin:0">{{ icono('flecha', 18) }}</div>
+  </button>
+</form>
+<style>
+.fila .izq b.mal { display: inline; color: var(--alerta); }
+form.lista button.fila:disabled { opacity: .6; cursor: default; }
+</style>
+{% endif %}
+
 <form method="post" action="{{ url_for('salir') }}" style="margin-top:24px">
   <input type="hidden" name="csrf" value="{{ csrf() }}">
   <button class="boton secundario" style="width:100%">{{ icono('salir', 20) }} Salir</button>

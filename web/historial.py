@@ -420,6 +420,10 @@ def _accion(conn, plantillas, resp):
         return ("cambio", "Pidió actualizar el catálogo", "",
                 "" if session.get("aviso_catalogo") == "listo" else "GitHub no recibió el aviso")
 
+    if ep == "respaldo_pedir":
+        return ("cambio", "Pidió respaldar la base en Google Drive", "",
+                "" if session.get("aviso_respaldo") == "listo" else "GitHub no recibió el pedido")
+
     # ── Domicilio de la semana
     if ep == "domicilio_mensaje":
         del_dia = " del domicilio"

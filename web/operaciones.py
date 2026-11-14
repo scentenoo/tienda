@@ -3,7 +3,7 @@ del celular. Se registran en la misma app de web/app.py (que las importa al
 final); guardan con los mismos servicios que el PC."""
 import json
 import secrets
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from flask import abort, jsonify, redirect, render_template, request, session, url_for
 
@@ -13,7 +13,7 @@ from servicios.gastos import (TIPOS_PERDIDA, crear_gasto, editar_gasto, eliminar
                               eliminar_perdida, registrar_perdida)
 from servicios.inventario import (crear_producto, editar_producto, eliminar_producto,
                                   usos_del_producto)
-from utils import reposicion
+from utils import reposicion, respaldo_drive
 from utils.conciliacion import MESES_ES
 from web import fotos_catalogo
 from web import aviso_catalogo
@@ -206,6 +206,25 @@ def catalogo_actualizar():
     _revisar_csrf()
     session["aviso_catalogo"] = "listo" if aviso_catalogo.actualizar_ya() else "fallo"
     return redirect(url_for("mas"))
+
+
+@app.post("/respaldo")
+@requiere_ingreso
+@requiere_gastos
+def respaldo_pedir():
+    """Pide a GitHub el respaldo en Google Drive ya, sin esperar la noche
+    (respaldo/respaldar.py). Tarda uno o dos minutos."""
+    if not aviso_catalogo.configurado():
+        abort(404)
+    _revisar_csrf()
+    if aviso_catalogo.lanzar_tarea("respaldo.yml", {"origen": "desde la página"}):
+        conn = db()
+        respaldo_drive.pedir(conn, datetime.now())
+        conn.commit()
+        session["aviso_respaldo"] = "listo"
+    else:
+        session["aviso_respaldo"] = "fallo"
+    return redirect(url_for("mas") + "#respaldo")
 
 
 # ── Compras ──────────────────────────────────────────────────────────────────

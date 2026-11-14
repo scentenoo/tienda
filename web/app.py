@@ -28,7 +28,7 @@ from flask import (Flask, abort, g, redirect, render_template, request,
 
 from config.nube import conexion_directa
 from utils import (cobros, domicilio as domicilio_semana, estado_cuenta, perfil_clientes,
-                   reposicion, visitas_catalogo)
+                   reposicion, respaldo_drive, visitas_catalogo)
 from utils.conciliacion import MESES_ES, deudores, telefonos_clientes
 from utils.informe_movil import html_pendientes
 from servicios.abonos import registrar_abono
@@ -320,8 +320,11 @@ def inicio():
 @app.get("/mas")
 @requiere_ingreso
 def mas():
-    return render_template("mas.html", catalogo=catalogo_configurado(),
-                           aviso_catalogo=session.pop("aviso_catalogo", None))
+    # El respaldo en Drive lo ve solo el dueño
+    respaldo = respaldo_drive.estado(db(), datetime.now()) if catalogo_configurado() and ve_gastos() else None
+    return render_template("mas.html", catalogo=catalogo_configurado(), respaldo=respaldo,
+                           aviso_catalogo=session.pop("aviso_catalogo", None),
+                           aviso_respaldo=session.pop("aviso_respaldo", None))
 
 
 @app.get("/pendientes")
