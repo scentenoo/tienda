@@ -43,7 +43,6 @@ traían su logo.
 | 54.webp | Leche Condensada | Leche condensada 397g | https://cdn.treinta.co/new-products/21d85677-f2ce-583b-a909-1d4f3ece89f2.jpeg |
 | 58.webp | Chicha litro | Chicha liq lt | https://cdn.treinta.co/new-products/83248ee2-fd59-5d80-8d4b-ee83770d8a53.jpeg |
 | 60.webp | Harina de trigo | Harina trigo todo uso | https://cdn.treinta.co/new-products/1ec3d9fb-b891-5011-830b-87aaedf75723.jpeg |
-| 71.webp | Tip-Top | Tip-Top Coco | https://cdn.treinta.co/new-products/012f774e-8604-579b-be65-f9cfae67f1fc.jpeg |
 | 72.webp | Frescolita 2L | Frescolita 2 litros | https://cdn.treinta.co/new-products/5b13fc97-e568-54d3-a967-f9c7db22fda6.jpeg |
 | 74.webp | Salsa de Tomate | S tomate heinz 397 | https://us-east-1-prod-treinta-assets-bucket.s3.amazonaws.com/9b85fa68-8fa0-5e46-9dfd-39dba94735e5.jpeg |
 | 75.webp | Sobre de Pirulin | Pirulin 200g | https://cdn.treinta.co/new-products/b0eba08c-b513-5820-9912-e2d00d55e1fb.jpeg |
@@ -88,6 +87,7 @@ si alguna reclama la suya, se quita.
 | 66.webp | Bajo Cero | VODKA DE FRUTOS SALVAJES 0.70LT BAJO CERO - Mi Bodega Express | https://mibodega.com.ve/producto/vodka-de-frutos-salvajes-0-70lt-bajo-cero/ |
 | 68.webp | Santa Teresa | SANTA TERESA GRAN RESERVA 750 ML · Botilleria Los Arcos | https://www.botillerialosarcos.cl/product/santa-teresa-gran-reserva-750-ml |
 | 69.webp | Marilu | Galletas Marilu Vainilla Puig 216gr | https://instamarketca.com/product/galletas-marilu-vainilla-puig-216gr/ |
+| 71.webp | Tip-Top | Caledonia Galletas Tip-Top Maní 96gr | https://www.farmadon.com.ve/producto/caledonia-galletas-tip-top-mani-96gr/ |
 | 73.webp | Chicha Medio litro | Chicha El Chichero 500ml Parmalat · Grupo San Anselmo | https://farmanselmo.com.ve/producto/principal/unica/chicha-el-chichero-500ml-parmalat |
 | 76.webp | Caja de Palitos de Chocolate | DANIBISK Palitos Chocolate Box, Crunchy Vanilla Cookie Sticks Coated in ... | https://www.walmart.com/ip/Palitos-Chocolate-Box-5231-12-18x30gr-1-5oz/11351210826 |
 | 78.webp | Chocomalt | Rikomalt Bebida Malteada Chocolatada · Grupo San Anselmo | https://farmanselmo.com.ve/producto/principal/unica/riko-malt-uht-500ml-parmalat |
